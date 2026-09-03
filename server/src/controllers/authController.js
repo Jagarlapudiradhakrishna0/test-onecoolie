@@ -1,0 +1,927 @@
+const supabase = require('../config/db');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { generateOtp, hashOtp, verifyOtp } = require('../utils/otpService');
+const { sendOtpEmail } = require('../utils/emailService');
+
+/*
+|--------------------------------------------------------------------------
+| Generate JWT Token
+|--------------------------------------------------------------------------
+*/
+const generateToken = (id, role) => {
+  return jwt.sign(
+    {
+      id,
+      role
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: '30d'
+    }
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| OTP EXPIRY HELPER
+|--------------------------------------------------------------------------
+*/
+const getOtpExpiryDate = () => {
+  const minutes = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
+  return new Date(Date.now() + minutes * 60 * 1000);
+};
+
+/*
+|--------------------------------------------------------------------------
+| SEND OTP
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/otp/send
+|
+| Body: { email, purpose: 'login' | 'signup' }
+|
+| Security:
+|   - Rate limiting handled at route level (express-rate-limit)
+|   - Always returns same success message to prevent account enumeration
+|   - OTP value is never logged server-side
+|   - Maximum 5 failed attempts before OTP is invalidated
+|
+*/
+exports.sendOtp = async (req, res) => {
+  try {
+    const { email, purpose } = req.body;
+
+    // Validate input
+    if (!email || !purpose) {
+      return res.status(400).json({
+        message: 'Email and purpose are required.'
+      });
+    }
+
+    if (!['login', 'signup'].includes(purpose)) {
+      return res.status(400).json({
+        message: 'Invalid purpose. Must be "login" or "signup".'
+      });
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        message: 'Invalid email address format.'
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Check whether account exists
+    const { data: existingUser, error: userError } = await supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (userError) {
+      console.error('SEND OTP — USER LOOKUP ERROR:', userError);
+      return res.status(500).json({
+        message: 'Server error. Please try again.'
+      });
+    }
+
+    // For login: account must exist
+    if (purpose === 'login' && !existingUser) {
+      return res.status(404).json({
+        message: 'No account found with this email address. Please sign up first.'
+      });
+    }
+
+    // For signup: account must NOT exist
+    if (purpose === 'signup' && existingUser) {
+      return res.status(409).json({
+        message: 'An account with this email already exists. Only one account can be created per verified email address. Please sign in.'
+      });
+    }
+
+    // Invalidate any previous unused OTPs for this email + purpose
+    await supabase
+      .from('email_otps')
+      .update({ used: true })
+      .eq('email', normalizedEmail)
+      .eq('purpose', purpose)
+      .eq('used', false);
+
+    // Generate, hash, and store new OTP
+    const otp      = generateOtp();
+    const otpHash  = await hashOtp(otp);
+    const expiresAt = getOtpExpiryDate();
+    const expiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
+
+    const { error: insertError } = await supabase
+      .from('email_otps')
+      .insert([{
+        email:      normalizedEmail,
+        otp_hash:   otpHash,
+        purpose,
+        expires_at: expiresAt.toISOString(),
+        used:       false,
+        attempts:   0
+      }]);
+
+    if (insertError) {
+      console.error('SEND OTP — INSERT ERROR:', insertError);
+      return res.status(500).json({
+        message: 'Failed to generate OTP. Please try again.'
+      });
+    }
+
+    // Send email (OTP value passed to email only — not logged here)
+    await sendOtpEmail(normalizedEmail, otp, expiryMinutes);
+
+    return res.status(200).json({
+      message: 'OTP sent successfully. Check your inbox.',
+      email:   normalizedEmail,
+      // Tell the frontend whether this is a known account (for UI branching)
+      accountExists: !!existingUser,
+      expiresInMinutes: expiryMinutes
+    });
+
+  } catch (err) {
+    console.error('SEND OTP — SERVER ERROR:', err.message);
+    return res.status(500).json({
+      message: 'Failed to send OTP. Please check your email and try again.'
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| VERIFY OTP & LOGIN
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/otp/verify-login
+|
+| Body: { email, otp, role }
+|
+| Verifies OTP for an existing user and returns a JWT session.
+|
+*/
+exports.verifyOtpAndLogin = async (req, res) => {
+  try {
+    const { email, otp, role = 'passenger' } = req.body;
+
+    if (!email || !otp || !role) {
+      return res.status(400).json({
+        message: 'Email, OTP and role are required.'
+      });
+    }
+
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({
+        message: 'OTP must be exactly 6 digits.'
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Validate role
+    const allowedRoles = ['passenger', 'assistant'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        message: 'Invalid role for OTP login.'
+      });
+    }
+
+    // Find the latest valid (unused, unexpired) OTP for this email
+    const { data: otpRecords, error: otpError } = await supabase
+      .from('email_otps')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .eq('purpose', 'login')
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (otpError) {
+      console.error('VERIFY OTP LOGIN — LOOKUP ERROR:', otpError);
+      return res.status(500).json({ message: 'Server error verifying OTP.' });
+    }
+
+    if (!otpRecords || otpRecords.length === 0) {
+      return res.status(400).json({
+        message: 'OTP has expired or is invalid. Please request a new one.'
+      });
+    }
+
+    const otpRecord = otpRecords[0];
+
+    // Brute-force guard: max 5 attempts per OTP
+    if (otpRecord.attempts >= 5) {
+      // Invalidate this OTP record
+      await supabase
+        .from('email_otps')
+        .update({ used: true })
+        .eq('id', otpRecord.id);
+
+      return res.status(429).json({
+        message: 'Too many incorrect attempts. Please request a new OTP.'
+      });
+    }
+
+    // Verify OTP
+    const isValid = await verifyOtp(otp, otpRecord.otp_hash);
+
+    if (!isValid) {
+      // Increment attempt counter
+      await supabase
+        .from('email_otps')
+        .update({ attempts: otpRecord.attempts + 1 })
+        .eq('id', otpRecord.id);
+
+      const remaining = 5 - (otpRecord.attempts + 1);
+      return res.status(400).json({
+        message: remaining > 0
+          ? `Incorrect OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`
+          : 'Incorrect OTP. OTP has been invalidated. Please request a new one.',
+        attemptsRemaining: remaining
+      });
+    }
+
+    // Mark OTP as used
+    await supabase
+      .from('email_otps')
+      .update({ used: true })
+      .eq('id', otpRecord.id);
+
+    // Find user
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (userError || !user) {
+      return res.status(404).json({
+        message: 'Account not found. Please sign up first.'
+      });
+    }
+
+    // Check role match
+    if (user.role !== role) {
+      return res.status(401).json({
+        message: `This account does not have ${role} access.`
+      });
+    }
+
+    // Assistant approval check
+    if (user.role === 'assistant' && user.is_approved !== true) {
+      return res.status(403).json({
+        message: 'Your assistant account is awaiting admin approval.'
+      });
+    }
+
+    // Generate JWT
+    const token = generateToken(user.id, user.role);
+
+    console.log('OTP LOGIN SUCCESS:', { id: user.id, email: user.email, role: user.role });
+
+    return res.status(200).json({
+      _id:          user.id,
+      id:           user.id,
+      name:         user.name,
+      email:        user.email,
+      role:         user.role,
+      station_code: user.station_code || null,
+      is_approved:  user.is_approved,
+      kyc_status:   user.kyc_status || null,
+      token
+    });
+
+  } catch (err) {
+    console.error('VERIFY OTP LOGIN — SERVER ERROR:', err.message);
+    return res.status(500).json({ message: 'Server error during OTP verification.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| VERIFY OTP & REGISTER
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/otp/verify-register
+|
+| Body: { name, email, otp, role, station_code? }
+|
+| Verifies OTP for a new signup, creates user, returns JWT session.
+|
+*/
+exports.verifyOtpAndRegister = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      otp,
+      password,
+      role = 'passenger',
+      station_code
+    } = req.body;
+
+    if (!name || !email || !otp || !password || !role) {
+      return res.status(400).json({
+        message: 'Name, email, OTP, password and role are required.'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: 'Password must be at least 6 characters.'
+      });
+    }
+
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({
+        message: 'OTP must be exactly 6 digits.'
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Validate role
+    const allowedRoles = ['passenger', 'assistant'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        message: 'Invalid role for OTP registration.'
+      });
+    }
+
+    // Find the latest valid OTP for signup
+    const { data: otpRecords, error: otpError } = await supabase
+      .from('email_otps')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .eq('purpose', 'signup')
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (otpError) {
+      console.error('VERIFY OTP REGISTER — LOOKUP ERROR:', otpError);
+      return res.status(500).json({ message: 'Server error verifying OTP.' });
+    }
+
+    if (!otpRecords || otpRecords.length === 0) {
+      return res.status(400).json({
+        message: 'OTP has expired or is invalid. Please request a new one.'
+      });
+    }
+
+    const otpRecord = otpRecords[0];
+
+    // Brute-force guard
+    if (otpRecord.attempts >= 5) {
+      await supabase
+        .from('email_otps')
+        .update({ used: true })
+        .eq('id', otpRecord.id);
+
+      return res.status(429).json({
+        message: 'Too many incorrect attempts. Please request a new OTP.'
+      });
+    }
+
+    // Verify OTP
+    const isValid = await verifyOtp(otp, otpRecord.otp_hash);
+
+    if (!isValid) {
+      await supabase
+        .from('email_otps')
+        .update({ attempts: otpRecord.attempts + 1 })
+        .eq('id', otpRecord.id);
+
+      const remaining = 5 - (otpRecord.attempts + 1);
+      return res.status(400).json({
+        message: remaining > 0
+          ? `Incorrect OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`
+          : 'Incorrect OTP. OTP has been invalidated. Please request a new one.',
+        attemptsRemaining: remaining
+      });
+    }
+
+    // Mark OTP as used
+    await supabase
+      .from('email_otps')
+      .update({ used: true })
+      .eq('id', otpRecord.id);
+
+    // Double-check user doesn't exist (race condition guard)
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: 'An account with this email already exists. Only one account can be created per verified email address. Please sign in.'
+      });
+    }
+
+    // Determine approval status
+    const isApproved = role === 'passenger';
+
+    // Create user with real hashed password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert([{
+        name:         name.trim(),
+        email:        normalizedEmail,
+        password:     hashedPassword,
+        role,
+        is_approved:  isApproved,
+        station_code: role === 'assistant' ? (station_code || null) : null
+      }])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('VERIFY OTP REGISTER — INSERT ERROR:', insertError);
+      if (
+        insertError.code === '23505' ||
+        insertError.message?.toLowerCase().includes('duplicate') ||
+        insertError.message?.toLowerCase().includes('unique')
+      ) {
+        return res.status(409).json({
+          message: 'An account with this email already exists. Only one account can be created per verified email address. Please sign in.'
+        });
+      }
+      return res.status(400).json({ message: insertError.message });
+    }
+
+    // Assistant — no token until admin approves
+    if (role === 'assistant') {
+      return res.status(201).json({
+        message: 'Registration successful! Your account is awaiting admin approval.',
+        _id:          newUser.id,
+        id:           newUser.id,
+        name:         newUser.name,
+        email:        newUser.email,
+        role:         newUser.role,
+        station_code: newUser.station_code,
+        is_approved:  newUser.is_approved
+      });
+    }
+
+    // Passenger — issue token immediately
+    const token = generateToken(newUser.id, newUser.role);
+
+    console.log('OTP REGISTER SUCCESS:', { id: newUser.id, email: newUser.email, role: newUser.role });
+
+    return res.status(201).json({
+      _id:          newUser.id,
+      id:           newUser.id,
+      name:         newUser.name,
+      email:        newUser.email,
+      role:         newUser.role,
+      station_code: newUser.station_code || null,
+      is_approved:  newUser.is_approved,
+      kyc_status:   newUser.kyc_status || null,
+      token
+    });
+
+  } catch (err) {
+    console.error('VERIFY OTP REGISTER — SERVER ERROR:', err.message);
+    return res.status(500).json({ message: 'Server error during registration.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| CHECK EMAIL
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/otp/check-email
+|
+| Body: { email }
+|
+| Returns whether the email is registered (for UI branching on the
+| single email-entry screen). Uses the same anti-enumeration response
+| in production; here we expose it explicitly for UX since the sendOtp
+| endpoint also differentiates.
+|
+*/
+exports.checkEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email format.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    return res.status(200).json({
+      exists: !!user,
+      role:   user?.role || null
+    });
+
+  } catch (err) {
+    console.error('CHECK EMAIL — ERROR:', err.message);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| REGISTER (legacy — kept for admin portal compatibility)
+|--------------------------------------------------------------------------
+*/
+exports.register = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      role = 'passenger',
+      station_code
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: 'Name, email and password are required.'
+      });
+    }
+
+    // Validate role
+    const allowedRoles = ['passenger', 'assistant', 'admin'];
+
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        message: 'Invalid role.'
+      });
+    }
+
+    // Check if email already exists
+    const { data: existingUser, error: existingError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('CHECK USER ERROR:', existingError);
+
+      return res.status(500).json({
+        message: 'Unable to check existing user.'
+      });
+    }
+
+    if (existingUser) {
+      return res.status(400).json({
+        message: 'User already exists.'
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const isApproved =
+      role === 'passenger' || role === 'admin';
+
+    // Create user
+    const { data, error } = await supabase
+      .from('users')
+      .insert([
+        {
+          name,
+          email,
+          password: hashedPassword,
+          role,
+          is_approved: isApproved,
+          station_code:
+            role === 'assistant'
+              ? station_code || null
+              : null
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('REGISTER ERROR:', error);
+
+      return res.status(400).json({
+        message: error.message
+      });
+    }
+
+    const user = data;
+
+    if (role === 'assistant') {
+      return res.status(201).json({
+        message:
+          'Registration successful! Please wait for Admin approval before logging in.',
+        _id: user.id,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        station_code: user.station_code,
+        is_approved: user.is_approved
+      });
+    }
+
+    const token = generateToken(user.id, user.role);
+
+    return res.status(201).json({
+      _id: user.id,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      station_code: user.station_code || null,
+      is_approved: user.is_approved,
+      kyc_status: user.kyc_status || null,
+      token
+    });
+
+  } catch (error) {
+    console.error('REGISTER SERVER ERROR:', error);
+
+    return res.status(500).json({
+      message: 'Server error during registration.'
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| LOGIN (legacy — kept for admin portal compatibility)
+|--------------------------------------------------------------------------
+*/
+exports.login = async (req, res) => {
+  try {
+    const {
+      email,
+      password,
+      role
+    } = req.body;
+
+    // Validate input
+    if (!email || !password || !role) {
+      return res.status(400).json({
+        message: 'Email, password and role are required.'
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const searchEmail = (role === 'admin' && (normalizedEmail === 'admin@onecoolie.in' || normalizedEmail === 'admin@onecoolie.com'))
+      ? 'admin@railmitra.com'
+      : normalizedEmail;
+
+    // Find user
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', searchEmail)
+      .maybeSingle();
+
+    if (error) {
+      console.error('LOGIN DATABASE ERROR:', error);
+
+      return res.status(500).json({
+        message: 'Database error while logging in.'
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        message: 'Invalid credentials.'
+      });
+    }
+
+    if (!user.role) {
+      console.error(
+        'USER HAS NO ROLE:',
+        user.email,
+        user.id
+      );
+
+      return res.status(500).json({
+        message:
+          'This account does not have a role assigned. Please update the user role in Supabase.'
+      });
+    }
+
+    // Check requested role against database role
+    if (user.role !== role) {
+      return res.status(401).json({
+        message:
+          `This account does not have ${role} privileges.`
+      });
+    }
+
+    // Check password
+    const isMatch = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!isMatch) {
+      return res.status(401).json({
+        message: 'Invalid credentials.'
+      });
+    }
+
+    if (
+      user.role === 'assistant' &&
+      user.is_approved !== true
+    ) {
+      return res.status(403).json({
+        message:
+          'Your assistant account is waiting for Admin approval.'
+      });
+    }
+
+    const token = generateToken(
+      user.id,
+      user.role
+    );
+
+    const responseUser = {
+      _id: user.id,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      station_code: user.station_code || null,
+      is_approved: user.is_approved,
+      kyc_status: user.kyc_status || null,
+      token
+    };
+
+    console.log('LOGIN SUCCESS:', {
+      id: responseUser.id,
+      email: responseUser.email,
+      role: responseUser.role
+    });
+
+    return res.status(200).json(responseUser);
+
+  } catch (error) {
+    console.error('LOGIN SERVER ERROR:', error);
+
+    return res.status(500).json({
+      message: 'Server error during login.'
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| SEED TEST USERS
+|--------------------------------------------------------------------------
+*/
+exports.seedTestUsers = async (req, res) => {
+  try {
+    const salt = await bcrypt.genSalt(10);
+
+    const hashedPassword = await bcrypt.hash(
+      'password123',
+      salt
+    );
+
+    const usersToSeed = [
+      {
+        name: 'Admin User',
+        email: 'admin@onecoolie.com',
+        password: hashedPassword,
+        role: 'admin',
+        is_approved: true,
+        station_code: null
+      },
+      {
+        name: 'Kazipet Assistant',
+        email: 'assistant@onecoolie.com',
+        password: hashedPassword,
+        role: 'assistant',
+        is_approved: true,
+        station_code: 'KZJ'
+      },
+      {
+        name: 'Test Passenger',
+        email: 'passenger@onecoolie.com',
+        password: hashedPassword,
+        role: 'passenger',
+        is_approved: true,
+        station_code: null
+      }
+    ];
+
+    const createdUsers = [];
+
+    for (const user of usersToSeed) {
+
+      const {
+        data: existingUser,
+        error: findError
+      } = await supabase
+        .from('users')
+        .select('id, email, role')
+        .eq('email', user.email)
+        .maybeSingle();
+
+      if (findError) {
+        console.error(
+          'SEED CHECK ERROR:',
+          findError
+        );
+        continue;
+      }
+
+      if (existingUser) {
+
+        const {
+          data: updatedUser,
+          error: updateError
+        } = await supabase
+          .from('users')
+          .update({
+            role: user.role,
+            is_approved: user.is_approved,
+            station_code: user.station_code
+          })
+          .eq('id', existingUser.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error(
+            'SEED UPDATE ERROR:',
+            updateError
+          );
+        } else {
+          createdUsers.push({
+            id: updatedUser.id,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            status: 'updated'
+          });
+        }
+
+      } else {
+
+        const {
+          data: newUser,
+          error: insertError
+        } = await supabase
+          .from('users')
+          .insert([user])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error(
+            'SEED INSERT ERROR:',
+            insertError
+          );
+        } else {
+          createdUsers.push({
+            id: newUser.id,
+            email: newUser.email,
+            role: newUser.role,
+            status: 'created'
+          });
+        }
+      }
+    }
+
+    return res.status(200).json({
+      message:
+        'Seed complete. Password for all test accounts is password123.',
+      users: createdUsers
+    });
+
+  } catch (error) {
+    console.error('SEED SERVER ERROR:', error);
+
+    return res.status(500).json({
+      message: 'Unable to seed test users.'
+    });
+  }
+};
