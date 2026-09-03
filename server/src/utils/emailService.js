@@ -96,24 +96,63 @@ const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
   console.log(`👉 CODE: [ ${otp} ] (Valid for ${expiryMinutes} mins)`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-  // Option A: If RESEND_API_KEY is available (HTTPS port 443 — NEVER blocked by Render or cloud firewalls)
+  // Option 1: Brevo (Sendinblue) HTTPS REST API (Port 443 — NO custom domain required, delivers to ANY Gmail recipient)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          'accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: {
+            name: FROM_NAME,
+            email: process.env.BREVO_SENDER_EMAIL || process.env.GMAIL_USER || 'onecoolie.noreply@gmail.com',
+          },
+          to: [{ email: to }],
+          subject: `${otp} — Your OneCoolie verification code`,
+          htmlContent: buildOtpHtml(otp, expiryMinutes),
+          textContent: `Your OneCoolie OTP: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.`,
+        }),
+      });
+
+      const resJson = await response.json();
+      if (response.ok) {
+        console.log('BREVO EMAIL SENT SUCCESSFULLY:', resJson);
+        return resJson;
+      } else {
+        console.error('BREVO API ERROR:', resJson);
+      }
+    } catch (err) {
+      console.error('BREVO API DELIVERY ERROR:', err.message);
+    }
+  }
+
+  // Option 2: Resend HTTPS REST API (Port 443 — if domain is verified or recipient matches Resend account)
   if (resendClient) {
     try {
-      const data = await resendClient.emails.send({
+      const { data, error } = await resendClient.emails.send({
         from: process.env.RESEND_FROM || 'OneCoolie <onboarding@resend.dev>',
         to: [to],
         subject: `${otp} — Your OneCoolie verification code`,
         html: buildOtpHtml(otp, expiryMinutes),
         text: `Your OneCoolie OTP: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.`,
       });
-      console.log('RESEND EMAIL SENT SUCCESSFULLY:', data);
-      return data;
+
+      if (error) {
+        console.error('RESEND API NOTICE:', error.message || error);
+      } else {
+        console.log('RESEND EMAIL SENT SUCCESSFULLY:', data);
+        return data;
+      }
     } catch (err) {
       console.error('RESEND API DELIVERY ERROR:', err.message);
     }
   }
 
-  // Option B: Gmail SMTP via Nodemailer
+  // Option 3: Gmail SMTP via Nodemailer (Port 465 SSL)
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     try {
       const transport = nodemailer.createTransport({
@@ -140,7 +179,6 @@ const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
       return info;
     } catch (err) {
       console.error('GMAIL SMTP DELIVERY ERROR:', err.message);
-      // Re-throw so callers know SMTP failed, but OTP remains valid in database and server logs
       throw err;
     }
   }
