@@ -387,7 +387,7 @@ npm run build
 
 | Portal | URL | Demo Credentials |
 | :--- | :--- | :--- |
-| **Public Landing Page** | `http://localhost:5173/` | Public |
-| **Passenger Portal** | `http://localhost:5173/auth` | `passenger@railmitra.com` / `password123`<br>*(or register new account with email OTP)* |
-| **Assistant Portal** | `http://localhost:5173/assistant-auth` | `assistant@railmitra.com` / `password123` |
-| **Admin Operations Console** | `http://localhost:5173/admin-auth` | `admin@onecoolie.in` / `password123`<br>*(or `admin@railmitra.com`)* |
+| **Public Landing Page** | `https://onecoolie.vercel.app/` | Public |
+| **Passenger Portal** | `https://onecoolie.vercel.app/auth` | `passenger@railmitra.com` / `password123`<br>*(or register new account with email OTP)* |
+| **Assistant Portal** | `https://onecoolie.vercel.app/assistant-auth` | `assistant@railmitra.com` / `password123` |
+| **Admin Operations Console** | `https://onecoolie.vercel.app/admin-auth` | `admin@onecoolie.in` / `password123`<br>*(or `admin@railmitra.com`)* |
