@@ -80,35 +80,69 @@ const buildOtpHtml = (otp, expiryMinutes = 10) => `
 </body>
 </html>`;
 
-// Reusable transport with connection pooling and IPv4 pinning
-const transport = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  family: 4, // Force IPv4 to avoid 60s IPv6 DNS lookup timeout on Windows & cloud
-  pool: true,
-  maxConnections: 5,
-  auth: {
-    user: FROM_EMAIL,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+let resendClient = null;
+try {
+  if (process.env.RESEND_API_KEY) {
+    const { Resend } = require('resend');
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+} catch (e) {
+  console.warn('Resend client initialization skipped:', e.message);
+}
 
 const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
-  try {
-    const info = await transport.sendMail({
-      from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to,
-      subject: `${otp} — Your OneCoolie verification code`,
-      html:    buildOtpHtml(otp, expiryMinutes),
-      text:    `Your OneCoolie OTP: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.`,
-    });
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`🔑 ONECOOLIE EMAIL OTP FOR: ${to}`);
+  console.log(`👉 CODE: [ ${otp} ] (Valid for ${expiryMinutes} mins)`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    console.log('OTP EMAIL SENT:', { messageId: info?.messageId, to });
-    return info;
-  } catch (err) {
-    console.error('OTP EMAIL DELIVERY ERROR:', err.message);
-    throw err;
+  // Option A: If RESEND_API_KEY is available (HTTPS port 443 — NEVER blocked by Render or cloud firewalls)
+  if (resendClient) {
+    try {
+      const data = await resendClient.emails.send({
+        from: process.env.RESEND_FROM || 'OneCoolie <onboarding@resend.dev>',
+        to: [to],
+        subject: `${otp} — Your OneCoolie verification code`,
+        html: buildOtpHtml(otp, expiryMinutes),
+        text: `Your OneCoolie OTP: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.`,
+      });
+      console.log('RESEND EMAIL SENT SUCCESSFULLY:', data);
+      return data;
+    } catch (err) {
+      console.error('RESEND API DELIVERY ERROR:', err.message);
+    }
+  }
+
+  // Option B: Gmail SMTP via Nodemailer
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      const transport = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        family: 4,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+        connectionTimeout: 10000,
+      });
+
+      const info = await transport.sendMail({
+        from: `"${FROM_NAME}" <${process.env.GMAIL_USER}>`,
+        to,
+        subject: `${otp} — Your OneCoolie verification code`,
+        html: buildOtpHtml(otp, expiryMinutes),
+        text: `Your OneCoolie OTP: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.`,
+      });
+
+      console.log('GMAIL SMTP SENT SUCCESSFULLY:', { messageId: info?.messageId, to });
+      return info;
+    } catch (err) {
+      console.error('GMAIL SMTP DELIVERY ERROR:', err.message);
+      // Re-throw so callers know SMTP failed, but OTP remains valid in database and server logs
+      throw err;
+    }
   }
 };
 

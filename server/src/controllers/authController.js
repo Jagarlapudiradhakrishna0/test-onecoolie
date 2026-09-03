@@ -117,6 +117,10 @@ exports.sendOtp = async (req, res) => {
     const expiresAt = getOtpExpiryDate();
     const expiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
 
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`🔑 [OTP DISPATCH] Recipient: ${normalizedEmail} | OTP Code: ${otp} | Purpose: ${purpose}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     const { error: insertError } = await supabase
       .from('email_otps')
       .insert([{
