@@ -118,10 +118,16 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/health/email', (req, res) => {
   res.json({
-    hasUser: !!process.env.GMAIL_USER,
-    user: process.env.GMAIL_USER || null,
-    hasPassword: !!process.env.GMAIL_APP_PASSWORD,
-    passwordLength: process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.length : 0,
+    activeProvider: process.env.BREVO_API_KEY
+      ? 'Brevo (HTTPS Port 443)'
+      : process.env.RESEND_API_KEY
+      ? 'Resend (HTTPS Port 443)'
+      : 'Gmail SMTP (Port 465)',
+    hasBrevoKey: !!process.env.BREVO_API_KEY,
+    hasResendKey: !!process.env.RESEND_API_KEY,
+    hasGmailUser: !!process.env.GMAIL_USER,
+    gmailUser: process.env.GMAIL_USER || null,
+    hasGmailPassword: !!process.env.GMAIL_APP_PASSWORD,
   });
 });
 
