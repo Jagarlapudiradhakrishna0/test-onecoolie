@@ -111,6 +111,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/health/email', (req, res) => {
+  res.json({
+    hasUser: !!process.env.GMAIL_USER,
+    user: process.env.GMAIL_USER || null,
+    hasPassword: !!process.env.GMAIL_APP_PASSWORD,
+    passwordLength: process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.length : 0,
+  });
+});
+
 // --------------------------------------------------
 // 404 HANDLER
 // --------------------------------------------------
