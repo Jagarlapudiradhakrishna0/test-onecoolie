@@ -135,8 +135,10 @@ exports.sendOtp = async (req, res) => {
       });
     }
 
-    // Send email (OTP value passed to email only — not logged here)
-    await sendOtpEmail(normalizedEmail, otp, expiryMinutes);
+    // Send email asynchronously in background so frontend transitions to OTP entry instantly
+    sendOtpEmail(normalizedEmail, otp, expiryMinutes).catch((err) => {
+      console.error('BACKGROUND EMAIL DELIVERY FAILED:', err.message);
+    });
 
     return res.status(200).json({
       message: 'OTP sent successfully. Check your inbox.',

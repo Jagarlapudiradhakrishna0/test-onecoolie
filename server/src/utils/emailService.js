@@ -80,25 +80,36 @@ const buildOtpHtml = (otp, expiryMinutes = 10) => `
 </body>
 </html>`;
 
+// Reusable transport with connection pooling and IPv4 pinning
+const transport = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  family: 4, // Force IPv4 to avoid 60s IPv6 DNS lookup timeout on Windows & cloud
+  pool: true,
+  maxConnections: 5,
+  auth: {
+    user: FROM_EMAIL,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
+
 const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
-  // Create fresh transport per email — avoids stale connection errors
-  const transport = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: FROM_EMAIL,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
+  try {
+    const info = await transport.sendMail({
+      from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to,
+      subject: `${otp} — Your OneCoolie verification code`,
+      html:    buildOtpHtml(otp, expiryMinutes),
+      text:    `Your OneCoolie OTP: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.`,
+    });
 
-  const info = await transport.sendMail({
-    from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
-    to,
-    subject: `${otp} — Your OneCoolie verification code`,
-    html:    buildOtpHtml(otp, expiryMinutes),
-    text:    `Your OneCoolie OTP: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.`,
-  });
-
-  console.log('OTP EMAIL SENT:', { messageId: info.messageId, to });
+    console.log('OTP EMAIL SENT:', { messageId: info?.messageId, to });
+    return info;
+  } catch (err) {
+    console.error('OTP EMAIL DELIVERY ERROR:', err.message);
+    throw err;
+  }
 };
 
 module.exports = { sendOtpEmail };
