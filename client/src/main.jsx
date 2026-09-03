@@ -20,7 +20,7 @@ const socketUrl =
   import.meta.env.VITE_SOCKET_URL ||
   (import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
-    : 'http://localhost:5000');
+    : 'https://onecoolie.onrender.com');
 
 window.socket = io(socketUrl, {
   transports: ['websocket', 'polling'],
