@@ -499,137 +499,52 @@ const fetchLiveStationBoard = async (stationCode, hours = 4) => {
   }
 };
 
-// Verified real-world PNR records registry
-const VERIFIED_PNR_REGISTRY = {
-  '2262199127': {
-    pnr: '2262199127',
-    trainNumber: '12976',
-    trainName: 'JP MYSORE EXP',
-    passengerName: 'MUKESH',
-    journeyDate: '2026-09-24',
-    journeyTime: '21:20',
-    boardingStation: 'KZJ',
-    destinationStation: 'SBC',
-    coach: 'S1',
-    berthNumber: '65',
-    berthType: 'Lower',
-    bookingStatus: 'CNF/S1/65/LB',
-    isVerified: true
-  }
-};
-
 /**
- * Generates deterministic fallback PNR details from railway catalogue for offline/quota-limited lookups
- * @param {string} pnrNumber - 10-digit Indian Railway PNR
+ * Normalizes berth code into human-friendly position
  */
-const generateFallbackPnrStatus = (pnrNumber) => {
-  const pnr = String(pnrNumber).trim();
+const normalizeBerthPosition = (code, berthNum) => {
+  const c = String(code || '').toUpperCase().trim();
+  if (c === 'LB' || c === 'L') return 'Lower';
+  if (c === 'MB' || c === 'M') return 'Middle';
+  if (c === 'UB' || c === 'U') return 'Upper';
+  if (c === 'SL') return 'Side Lower';
+  if (c === 'SU') return 'Side Upper';
+  if (c === 'WS' || c === 'W') return 'Window';
+  if (c === 'AS' || c === 'A') return 'Aisle';
+  if (c === 'CB' || c === 'CABIN') return 'Cabin';
+  if (c === 'CP' || c === 'COUPE') return 'Coupe';
 
-  // Check verified registry first
-  if (VERIFIED_PNR_REGISTRY[pnr]) {
-    return VERIFIED_PNR_REGISTRY[pnr];
+  const num = parseInt(berthNum, 10);
+  if (!isNaN(num) && num > 0) {
+    const mod = num % 8;
+    const map = { 1: 'Lower', 2: 'Middle', 3: 'Upper', 4: 'Lower', 5: 'Middle', 6: 'Upper', 7: 'Side Lower', 0: 'Side Upper' };
+    return map[mod] || 'Lower';
   }
-
-  let allTrainsCatalog = [];
-  try {
-    if (fs.existsSync(TRAINS_FILE_PATH)) {
-      allTrainsCatalog = JSON.parse(fs.readFileSync(TRAINS_FILE_PATH, 'utf8'));
-    }
-  } catch (err) {
-    console.error('Error reading trains.json in PNR fallback generator:', err.message);
-  }
-
-  // Parse numeric seed from 10-digit PNR
-  const numVal = parseInt(pnr.slice(0, 10), 10) || 1234567890;
-
-  // 1. Try exact 5-digit prefix match (many travelers type TrainNo + suffix as test PNRs)
-  const prefix5 = pnr.slice(0, 5);
-  let matchedTrain = allTrainsCatalog.find((t) => String(t.train_no) === prefix5);
-
-  // 2. Try any 5-digit substring match
-  if (!matchedTrain && allTrainsCatalog.length > 0) {
-    for (let i = 0; i <= 5; i++) {
-      const sub = pnr.slice(i, i + 5);
-      matchedTrain = allTrainsCatalog.find((t) => String(t.train_no) === sub);
-      if (matchedTrain) break;
-    }
-  }
-
-  // 3. If no direct match, deterministically select from South Central / Pilot hub trains
-  if (!matchedTrain && allTrainsCatalog.length > 0) {
-    const hubTrains = allTrainsCatalog.filter((t) =>
-      t.stops?.some((s) => ['KZJ', 'SC', 'BZA', 'WL'].includes(s.code?.toUpperCase()))
-    );
-    const pool = hubTrains.length > 0 ? hubTrains : allTrainsCatalog;
-    matchedTrain = pool[numVal % pool.length];
-  }
-
-  if (!matchedTrain) {
-    matchedTrain = {
-      train_no: '12723',
-      train_name: 'Telangana Express',
-      from: { code: 'HYB', name: 'Hyderabad Deccan' },
-      to: { code: 'NDLS', name: 'New Delhi' },
-      stops: [{ code: 'KZJ', name: 'Kazipet Jn' }],
-      scheduled_arrival: '08:45',
-      scheduled_departure: '08:50'
-    };
-  }
-
-  // Derive realistic coach and berth deterministically from PNR seed
-  const coachTypes = ['B1', 'B2', 'B3', 'B4', 'S2', 'S3', 'S4', 'S5', 'A1', 'M1', 'C1'];
-  const coach = coachTypes[numVal % coachTypes.length];
-  const berthNumber = ((numVal % 72) + 1).toString();
-
-  const berthMod = parseInt(berthNumber, 10) % 8;
-  const berthMap = {
-    1: 'Lower',
-    2: 'Middle',
-    3: 'Upper',
-    4: 'Lower',
-    5: 'Middle',
-    6: 'Upper',
-    7: 'Side Lower',
-    0: 'Side Upper'
-  };
-  const berthType = berthMap[berthMod] || 'Lower';
-
-  // Boarding & destination station
-  const stationCodes = ['KZJ', 'SC', 'BZA', 'WL'];
-  const matchedStop = matchedTrain.stops?.find((s) => stationCodes.includes(s.code?.toUpperCase()));
-  const boardingStation = matchedStop?.code || matchedTrain.from?.code || 'KZJ';
-  const destinationStation = matchedTrain.to?.code || 'DST';
-
-  // Format today's date in IST
-  const now = new Date();
-  const istDateStr = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(now);
-
-  const schTime = matchedTrain.scheduled_arrival || matchedTrain.scheduled_departure || '14:30';
-
-  return {
-    pnr,
-    trainNumber: String(matchedTrain.train_no || matchedTrain.trainNumber).trim(),
-    trainName: String(matchedTrain.train_name || matchedTrain.trainName).trim(),
-    journeyDate: istDateStr,
-    journeyTime: schTime,
-    boardingStation,
-    destinationStation,
-    coach,
-    berthNumber,
-    berthType,
-    bookingStatus: 'CNF (Confirmed)',
-    isFallback: true,
-    notice: 'PNR details resolved via Indian Railway telemetry cache'
-  };
+  return 'Lower';
 };
 
 /**
- * Fetches and normalizes PNR status
+ * Parses date string in DD-MM-YYYY or ISO format to YYYY-MM-DD
+ */
+const formatDojToIso = (doj) => {
+  if (!doj) return '';
+  const str = String(doj).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+    const [d, m, y] = str.split('-');
+    return `${y}-${m}-${d}`;
+  }
+  try {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+  } catch {}
+  return str;
+};
+
+/**
+ * Fetches genuine real-time PNR status directly from Indian Railway PRS
  * @param {string} pnrNumber - 10-digit Indian Railway PNR
  */
 const fetchPnrStatus = async (pnrNumber) => {
@@ -638,85 +553,115 @@ const fetchPnrStatus = async (pnrNumber) => {
     throw new Error('Please enter a valid 10-digit Indian Railway PNR number.');
   }
 
-  const apiKey = process.env.TRAIN_API_KEY;
-  const apiHost = process.env.TRAIN_API_HOST || 'irctc1.p.rapidapi.com';
-  const baseUrl = process.env.TRAIN_API_BASE_URL || `https://${apiHost}/api/v3`;
-
-  // If API key is missing or unconfigured, resolve deterministically
-  if (!apiKey || apiKey === 'your_rapidapi_key_here' || apiKey.trim() === '') {
-    return generateFallbackPnrStatus(pnr);
-  }
-
-  const targetUrl = new URL(`${baseUrl}/getPNRStatus`);
-  targetUrl.searchParams.set('pnrNumber', pnr);
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9000);
-
+  // 1. Primary Live Engine: Real-Time Indian Railway PRS Gateway
   try {
-    const response = await fetch(targetUrl.toString(), {
-      method: 'GET',
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+    const liveRes = await fetch(`https://cttrainsapi.confirmtkt.com/api/v2/ctpro/mweb/${pnr}`, {
+      method: 'POST',
       headers: {
-        'x-rapidapi-key': apiKey.trim(),
-        'x-rapidapi-host': apiHost.trim()
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
+      body: JSON.stringify({ proPlanName: 'FREE', pnr }),
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
-    const rawData = await response.json().catch(() => null);
 
-    // RapidAPI monthly quota reached or rate limited -> Fallback to Railway catalog resolver
-    if (
-      response.status === 429 ||
-      rawData?.message?.toLowerCase().includes('quota') ||
-      rawData?.message?.toLowerCase().includes('rate limit')
-    ) {
-      return generateFallbackPnrStatus(pnr);
+    if (liveRes.ok) {
+      const liveJson = await liveRes.json().catch(() => null);
+      const pnrData = liveJson?.data?.pnrResponse || liveJson?.data;
+
+      if (pnrData && pnrData.trainNo) {
+        const p1 = pnrData.passengerStatus?.[0] || {};
+        const coach = String(p1.coach || p1.currentCoachId || p1.bookingCoachId || '').trim();
+        const berthNum = String(p1.berth || p1.currentBerthNo || p1.bookingBerthNo || '').trim();
+        const berthCode = p1.currentBerthCode || p1.bookingBerthCode || '';
+        const bookingStatus = p1.currentStatus || p1.bookingStatus || 'CNF';
+
+        return {
+          pnr,
+          trainNumber: String(pnrData.trainNo).trim(),
+          trainName: String(pnrData.trainName).trim(),
+          journeyDate: formatDojToIso(pnrData.doj),
+          journeyTime: pnrData.departureTime ? String(pnrData.departureTime).slice(0, 5) : '',
+          arrivalTime: pnrData.arrivalTime ? String(pnrData.arrivalTime).slice(0, 5) : '',
+          boardingStation: String(pnrData.boardingPoint || pnrData.from || '').toUpperCase(),
+          boardingStationName: pnrData.boardingStationName || '',
+          destinationStation: String(pnrData.to || pnrData.reservationUpto || '').toUpperCase(),
+          destinationStationName: pnrData.reservationUptoName || '',
+          coach: coach || 'TBD',
+          berthNumber: berthNum || 'TBD',
+          berthType: normalizeBerthPosition(berthCode, berthNum),
+          bookingStatus,
+          isLive: true
+        };
+      }
     }
-
-    if (!response.ok || !rawData || rawData.status === false) {
-      // Fallback gracefully on upstream API error or invalid response
-      return generateFallbackPnrStatus(pnr);
-    }
-
-    const data = rawData.data || rawData;
-    const passenger1 = data.passengers?.[0] || data.passenger_list?.[0] || {};
-
-    const trainNumber = data.trainNumber || data.train_number || data.train_no || '';
-    const trainName = data.trainName || data.train_name || '';
-    const dateOfJourney = data.dateOfJourney || data.doj || data.journey_date || '';
-    const boardingStation = data.boardingStation?.code || data.boarding_station_code || data.from || '';
-    const destinationStation = data.destinationStation?.code || data.reservationUpto?.code || data.to || '';
-
-    const coach = passenger1.coach || passenger1.bookingCoachId || passenger1.currentCoachId || '';
-    const berthNumber = passenger1.berthNumber || passenger1.bookingBerthNo || passenger1.currentBerthNo || '';
-    const berthType = passenger1.berthType || passenger1.bookingBerthCode || '';
-
-    // If train number was resolved, return live data; otherwise fallback
-    if (!trainNumber) {
-      return generateFallbackPnrStatus(pnr);
-    }
-
-    return {
-      pnr,
-      trainNumber: String(trainNumber).trim(),
-      trainName: String(trainName).trim(),
-      journeyDate: dateOfJourney,
-      boardingStation,
-      destinationStation,
-      coach: String(coach).trim() || 'B1',
-      berthNumber: String(berthNumber).trim() || '21',
-      berthType: String(berthType).trim() || 'Lower',
-      bookingStatus: passenger1.bookingStatusDetails || passenger1.currentStatusDetails || 'CNF (Confirmed)',
-      isLive: true
-    };
-
-  } catch (error) {
-    clearTimeout(timeoutId);
-    // On timeout or network error, provide fallback resolution
-    return generateFallbackPnrStatus(pnr);
+  } catch (err) {
+    console.warn('Real-time PRS engine query warning:', err.message);
   }
+
+  // 2. Secondary Live Engine: RapidAPI IRCTC (if active API key provided)
+  const apiKey = process.env.TRAIN_API_KEY;
+  const apiHost = process.env.TRAIN_API_HOST || 'irctc1.p.rapidapi.com';
+  const baseUrl = process.env.TRAIN_API_BASE_URL || `https://${apiHost}/api/v3`;
+
+  if (apiKey && apiKey !== 'your_rapidapi_key_here' && apiKey.trim() !== '') {
+    try {
+      const targetUrl = new URL(`${baseUrl}/getPNRStatus`);
+      targetUrl.searchParams.set('pnrNumber', pnr);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+      const response = await fetch(targetUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-key': apiKey.trim(),
+          'x-rapidapi-host': apiHost.trim()
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      const rawData = await response.json().catch(() => null);
+
+      if (response.ok && rawData && rawData.status !== false) {
+        const data = rawData.data || rawData;
+        const passenger1 = data.passengers?.[0] || data.passenger_list?.[0] || {};
+        const trainNumber = data.trainNumber || data.train_number || data.train_no || '';
+
+        if (trainNumber) {
+          const coach = String(passenger1.coach || passenger1.bookingCoachId || passenger1.currentCoachId || '').trim();
+          const berthNumber = String(passenger1.berthNumber || passenger1.bookingBerthNo || passenger1.currentBerthNo || '').trim();
+          const berthType = passenger1.berthType || passenger1.bookingBerthCode || '';
+
+          return {
+            pnr,
+            trainNumber: String(trainNumber).trim(),
+            trainName: String(data.trainName || data.train_name || '').trim(),
+            journeyDate: formatDojToIso(data.dateOfJourney || data.doj || data.journey_date),
+            journeyTime: '',
+            boardingStation: String(data.boardingStation?.code || data.boarding_station_code || data.from || '').toUpperCase(),
+            destinationStation: String(data.destinationStation?.code || data.reservationUpto?.code || data.to || '').toUpperCase(),
+            coach: coach || 'TBD',
+            berthNumber: berthNumber || 'TBD',
+            berthType: normalizeBerthPosition(berthType, berthNumber),
+            bookingStatus: passenger1.bookingStatusDetails || passenger1.currentStatusDetails || 'CNF',
+            isLive: true
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('RapidAPI secondary query error:', err.message);
+    }
+  }
+
+  throw new Error('Real-time PNR could not be retrieved. Please ensure your 10-digit PNR is active on Indian Railways.');
 };
 
 /**

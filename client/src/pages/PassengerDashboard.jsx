@@ -64,86 +64,6 @@ const SERVICE_META = [
 ];
 
 const ACTIVE_STATUSES = ['pending', 'accepted', 'arriving', 'in_service'];
-const POPULAR_TRAINS = [
-  { train_no: '12723', train_name: 'Telangana Express', from: 'HYB', to: 'NDLS', station: 'KZJ', time: '08:45' },
-  { train_no: '20833', train_name: 'Visakhapatnam - Secunderabad Vande Bharat Express', from: 'VSKP', to: 'SC', station: 'BZA', time: '13:40' },
-  { train_no: '12713', train_name: 'Satavahana Express', from: 'BZA', to: 'SC', station: 'KZJ', time: '07:15' },
-  { train_no: '12759', train_name: 'Charminar Express', from: 'MAS', to: 'HYB', station: 'WL', time: '05:30' },
-  { train_no: '12621', train_name: 'Tamil Nadu Express', from: 'MAS', to: 'NDLS', station: 'WL', time: '04:10' },
-  { train_no: '12760', train_name: 'Charminar Express', from: 'HYB', to: 'MAS', station: 'SC', time: '18:00' },
-  { train_no: '12724', train_name: 'Telangana Express', from: 'NDLS', to: 'HYB', station: 'KZJ', time: '17:10' },
-  { train_no: '22621', train_name: 'Rameswaram - Kanniyakumari Superfast Express', from: 'RMM', to: 'CAPE', station: 'KZJ', time: '21:00' },
-  { train_no: '12705', train_name: 'Gouthami Superfast Express', from: 'COA', to: 'SC', station: 'KZJ', time: '04:30' }
-];
-
-const VERIFIED_PNR_REGISTRY = {
-  '2262199127': {
-    trainNumber: '12976',
-    trainName: 'JP MYSORE EXP',
-    boardingStation: 'KZJ',
-    destinationStation: 'SBC',
-    journeyDate: '2026-09-24',
-    journeyTime: '21:20',
-    coach: 'S1',
-    berthNumber: '65',
-    berthType: 'Lower',
-    bookingStatus: 'CNF/S1/65/LB',
-    passengerName: 'MUKESH',
-    isVerified: true
-  }
-};
-
-const resolveFallbackPnr = (pnr) => {
-  const cleanPnr = String(pnr).trim();
-
-  // 1. Check exact verified real-ticket registry
-  if (VERIFIED_PNR_REGISTRY[cleanPnr]) {
-    return VERIFIED_PNR_REGISTRY[cleanPnr];
-  }
-
-  const numVal = parseInt(cleanPnr, 10) || 1234567890;
-
-  // Match train by first 5 digits or substring
-  const prefix5 = cleanPnr.slice(0, 5);
-  let matched = POPULAR_TRAINS.find((t) => t.train_no === prefix5);
-  if (!matched) {
-    matched = POPULAR_TRAINS[numVal % POPULAR_TRAINS.length];
-  }
-
-  const coachTypes = ['B1', 'B2', 'B3', 'B4', 'S2', 'S3', 'S4', 'S5', 'A1', 'M1', 'C1'];
-  const coach = coachTypes[numVal % coachTypes.length];
-  const berthNumber = ((numVal % 72) + 1).toString();
-
-  const berthMod = parseInt(berthNumber, 10) % 8;
-  const berthMap = {
-    1: 'Lower',
-    2: 'Middle',
-    3: 'Upper',
-    4: 'Lower',
-    5: 'Middle',
-    6: 'Upper',
-    7: 'Side Lower',
-    0: 'Side Upper'
-  };
-  const berthType = berthMap[berthMod] || 'Lower';
-
-  const today = new Date().toISOString().split('T')[0];
-
-  return {
-    trainNumber: matched.train_no,
-    trainName: matched.train_name,
-    boardingStation: matched.station || 'KZJ',
-    destinationStation: matched.to,
-    journeyDate: today,
-    journeyTime: matched.time || '12:00',
-    coach,
-    berthNumber,
-    berthType,
-    bookingStatus: 'CNF (Confirmed)',
-    isFallback: true
-  };
-};
-
 export default function PassengerDashboard() {
   const { theme } = useTheme();
   const { t } = useLanguage();
@@ -250,57 +170,56 @@ export default function PassengerDashboard() {
     setPnrLoading(true);
     setPnrError('');
 
-    let pnrData = null;
-
     try {
       const res = await axios.get('/trains/pnr-status', {
         params: { pnrNumber: pnr }
       });
 
       if (res.data?.success && res.data?.data && res.data.data.trainNumber) {
-        pnrData = res.data.data;
+        const d = res.data.data;
+        setSelectedTrain({
+          train_no: d.trainNumber,
+          train_name: d.trainName,
+          from: { name: d.boardingStationName || d.boardingStation },
+          to: { name: d.destinationStationName || d.destinationStation },
+          stops: [{ code: d.boardingStation, name: STATIONS.find((s) => s.code === d.boardingStation)?.name || d.boardingStation }]
+        });
+
+        if (d.boardingStation && STATIONS.some((s) => s.code === d.boardingStation)) {
+          setStation(d.boardingStation);
+        }
+
+        if (d.journeyDate) {
+          try {
+            const parsed = new Date(d.journeyDate);
+            if (!isNaN(parsed.getTime())) {
+              setJourneyDate(parsed.toISOString().split('T')[0]);
+            } else {
+              setJourneyDate(d.journeyDate);
+            }
+          } catch {
+            setJourneyDate(d.journeyDate);
+          }
+        }
+
+        if (d.journeyTime) {
+          setJourneyTime(d.journeyTime);
+        }
+
+        if (d.coach && d.coach !== 'TBD') setCoach(d.coach);
+        if (d.berthNumber && d.berthNumber !== 'TBD') setSeatNumber(d.berthNumber);
+        if (d.berthType) setBerthType(d.berthType);
+
+        toast.success(`Live PNR verified: Train ${d.trainNumber} · Coach ${d.coach || 'TBD'} · Berth ${d.berthNumber || 'TBD'}`);
+      } else {
+        setPnrError('Unable to fetch live PNR details from Indian Railways PRS. Please verify the PNR number.');
       }
     } catch (err) {
-      console.warn('Backend PNR API returned error or quota limit. Resolving locally:', err.message);
+      const msg = err?.response?.data?.message || 'Unable to fetch PNR from Indian Railways. Please verify your 10-digit PNR.';
+      setPnrError(msg);
+    } finally {
+      setPnrLoading(false);
     }
-
-    // Always fallback gracefully to offline Railway Telemetry resolution if API returned 429 or failed
-    if (!pnrData || !pnrData.trainNumber) {
-      pnrData = resolveFallbackPnr(pnr);
-    }
-
-    const d = pnrData;
-    setSelectedTrain({
-      train_no: d.trainNumber,
-      train_name: d.trainName,
-      from: { name: d.boardingStation },
-      to: { name: d.destinationStation },
-      stops: [{ code: d.boardingStation, name: STATIONS.find((s) => s.code === d.boardingStation)?.name || d.boardingStation }]
-    });
-
-    if (d.boardingStation && STATIONS.some((s) => s.code === d.boardingStation)) {
-      setStation(d.boardingStation);
-    }
-
-    if (d.journeyDate) {
-      try {
-        const parsed = new Date(d.journeyDate);
-        if (!isNaN(parsed.getTime())) {
-          setJourneyDate(parsed.toISOString().split('T')[0]);
-        }
-      } catch {}
-    }
-
-    if (d.journeyTime) {
-      setJourneyTime(d.journeyTime);
-    }
-
-    if (d.coach) setCoach(d.coach);
-    if (d.berthNumber) setSeatNumber(d.berthNumber);
-    if (d.berthType) setBerthType(d.berthType);
-
-    toast.success(`PNR verified: Train ${d.trainNumber} · Coach ${d.coach || 'TBD'} · Berth ${d.berthNumber || 'TBD'}`);
-    setPnrLoading(false);
   };
 
   const handleConfirm = () => {
