@@ -13,9 +13,9 @@ const fs = require('fs');
 
 const SUPPORTED_STATIONS = {
   KZJ: 'Kazipet Junction',
-  WL:  'Warangal',
+  WL: 'Warangal',
   BZA: 'Vijayawada Junction',
-  SC:  'Secunderabad Junction'
+  SC: 'Secunderabad Junction'
 };
 
 // In-memory cache: { [cacheKey]: { timestamp: number, data: any } }
@@ -194,15 +194,15 @@ const extractRoute = (raw) => {
  */
 const normalizeTrain = (raw, stationCode) => {
   const trainNumber = String(raw.trainNumber || raw.train_no || raw.train_number || '').trim();
-  const trainName   = String(raw.trainName || raw.train_name || raw.name || 'Express').trim();
+  const trainName = String(raw.trainName || raw.train_name || raw.name || 'Express').trim();
   const stationName = SUPPORTED_STATIONS[stationCode] || stationCode;
 
   const { origin, destination } = extractRoute(raw);
 
-  const scheduledArrival   = raw.arrivalTime || raw.sch_arr || raw.scheduledArrival || raw.arr_time || raw.sta || null;
+  const scheduledArrival = raw.arrivalTime || raw.sch_arr || raw.scheduledArrival || raw.arr_time || raw.sta || null;
   const scheduledDeparture = raw.departureTime || raw.sch_dep || raw.scheduledDeparture || raw.dep_time || raw.std || null;
 
-  const expectedArrival   = raw.act_arr || raw.expectedArrival || raw.eta || raw.liveArrival || scheduledArrival;
+  const expectedArrival = raw.act_arr || raw.expectedArrival || raw.eta || raw.liveArrival || scheduledArrival;
   const expectedDeparture = raw.act_dep || raw.expectedDeparture || raw.etd || raw.liveDeparture || scheduledDeparture;
 
   const delayMinutes = parseDelayMinutes(
@@ -539,13 +539,13 @@ const formatDojToIso = (doj) => {
     if (!isNaN(parsed.getTime())) {
       return parsed.toISOString().split('T')[0];
     }
-  } catch {}
+  } catch { }
   return str;
 };
 
 /**
  * Fetches genuine real-time PNR status directly from Indian Railway PRS
- * @param {string} pnrNumber - 10-digit Indian Railway PNR
+ * @param {string} Number - 10-digit Indian Railway PNR
  */
 const fetchPnrStatus = async (pnrNumber) => {
   const pnr = String(pnrNumber).trim();

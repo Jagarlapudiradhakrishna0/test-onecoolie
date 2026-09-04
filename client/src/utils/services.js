@@ -8,10 +8,10 @@ export const SERVICE_LABELS = {
 };
 
 export const STATIONS = [
-  { code: 'KZJ', name: 'Kazipet Jn' },
-  { code: 'WL', name: 'Warangal' },
-  { code: 'BZA', name: 'Vijayawada Jn' },
-  { code: 'SC', name: 'Secunderabad Jn' },
+  { code: 'KZJ', name: 'Kazipet Jn', division: 'Secunderabad' },
+  { code: 'WL', name: 'Warangal', division: 'Secunderabad' },
+  { code: 'BZA', name: 'Vijayawada Jn', division: 'Vijayawada' },
+  { code: 'SC', name: 'Secunderabad Jn', division: 'Secunderabad' },
 ];
 
 export const activeServices = (services = {}) =>
