@@ -176,7 +176,7 @@ export default function PassengerDashboard() {
           train_name: d.trainName,
           from: { name: d.boardingStation },
           to: { name: d.destinationStation },
-          stops: [{ code: d.boardingStation }]
+          stops: [{ code: d.boardingStation, name: STATIONS.find((s) => s.code === d.boardingStation)?.name || d.boardingStation }]
         });
         if (d.boardingStation && STATIONS.some((s) => s.code === d.boardingStation)) {
           setStation(d.boardingStation);
@@ -188,6 +188,9 @@ export default function PassengerDashboard() {
               setJourneyDate(parsed.toISOString().split('T')[0]);
             }
           } catch {}
+        }
+        if (d.journeyTime) {
+          setJourneyTime(d.journeyTime);
         }
         if (d.coach) setCoach(d.coach);
         if (d.berthNumber) setSeatNumber(d.berthNumber);
