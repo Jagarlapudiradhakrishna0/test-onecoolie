@@ -44,6 +44,7 @@ const assistantWalletRoutes = require('./routes/assistantWalletRoutes');
 // Controllers
 const serviceController = require('./controllers/serviceController');
 const payoutController = require('./controllers/payoutController');
+const paymentController = require('./controllers/paymentController');
 
 const app = express();
 const server = http.createServer(app);
@@ -234,6 +235,10 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/assistant-wallet', assistantWalletRoutes);
 app.use('/api/assistant-payouts', assistantPayoutRoutes);
+
+// Standard Razorpay Checkout Endpoints
+app.post('/api/create-order', paymentController.createStandardOrder);
+app.post('/api/verify-payment', paymentController.verifyStandardPayment);
 
 // --------------------------------------------------
 // 404 HANDLER

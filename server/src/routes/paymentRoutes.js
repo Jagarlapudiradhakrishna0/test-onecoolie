@@ -15,10 +15,16 @@ const {
   getPaymentStatus,
   getBookingRefunds,
   getPaymentByBookingId,
-  getPaymentById
+  getPaymentById,
+  createStandardOrder,
+  verifyStandardPayment
 } = require('../controllers/paymentController');
 
 const { paymentOrderLimiter, paymentVerifyLimiter } = require('../middleware/financialRateLimiter');
+
+// Standard Razorpay Checkout Endpoints (API Specification)
+router.post('/create-standard-order', paymentOrderLimiter, createStandardOrder);
+router.post('/verify-standard-payment', paymentVerifyLimiter, verifyStandardPayment);
 
 // Public or protected preview of service price
 router.post('/preview', previewPrice);

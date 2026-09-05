@@ -772,6 +772,10 @@ export default function PassengerDashboard() {
       };
 
       const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        console.error('Razorpay payment failed:', response.error);
+        toast.error(response.error?.description || response.error?.reason || 'Payment failed. Please try again or select Cash.');
+      });
       rzp.open();
 
     } catch (err) {

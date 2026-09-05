@@ -1020,3 +1020,135 @@ exports.notifyPaymentVerified = (booking) => {
     console.warn('Phase 2 broadcast hook notice:', err.message);
   }
 };
+
+/**
+ * STEP 1: BACKEND - Standard Razorpay Order Creation
+ * POST /api/create-order
+ *
+ * Request:  { amount (in paise), currency (default 'INR'), receipt }
+ * Response: { order_id, amount, currency }
+ * Minimum amount: 100 paise (₹1.00)
+ */
+exports.createStandardOrder = async (req, res) => {
+  try {
+    const { amount, currency = 'INR', receipt = `rcpt_${Date.now()}` } = req.body || {};
+
+    const parsedAmount = Number(amount);
+    if (!Number.isInteger(parsedAmount) || parsedAmount < 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid amount. Minimum amount is 100 paise (₹1.00) and must be an integer.'
+      });
+    }
+
+    if (!isRazorpayConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: 'Razorpay gateway credentials are not configured on server.'
+      });
+    }
+
+    const razorpay = getRazorpayClient();
+    const order = await razorpay.orders.create({
+      amount: parsedAmount,
+      currency: String(currency).toUpperCase(),
+      receipt: String(receipt).slice(0, 40)
+    });
+
+    return res.status(200).json({
+      success: true,
+      order_id: order.id,
+      amount: order.amount,
+      currency: order.currency
+    });
+  } catch (err) {
+    console.error('STANDARD CREATE ORDER ERROR:', err.message || err);
+    if (err.statusCode === 401 || (err.error && err.error.code === 'BAD_REQUEST_ERROR' && err.message.includes('auth'))) {
+      return res.status(401).json({ success: false, message: 'Razorpay authentication failed. Please verify API keys.' });
+    }
+    return res.status(500).json({
+      success: false,
+      message: err.description || err.message || 'Razorpay order creation failed.'
+    });
+  }
+};
+
+/**
+ * STEP 3: BACKEND - Standard Razorpay Signature Verification
+ * POST /api/verify-payment
+ *
+ * Request:  { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+ *           or { order_id, payment_id, signature }
+ * Response: { success: true, message: 'Payment verified successfully' }
+ */
+exports.verifyStandardPayment = async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      order_id,
+      razorpay_payment_id,
+      payment_id,
+      razorpay_signature,
+      signature
+    } = req.body || {};
+
+    const resolvedOrderId = razorpay_order_id || order_id;
+    const resolvedPaymentId = razorpay_payment_id || payment_id;
+    const resolvedSignature = razorpay_signature || signature;
+
+    if (!resolvedOrderId || !resolvedPaymentId || !resolvedSignature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields. Required: order_id, payment_id, signature.'
+      });
+    }
+
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (!keySecret) {
+      return res.status(500).json({
+        success: false,
+        message: 'RAZORPAY_KEY_SECRET is not configured on the server.'
+      });
+    }
+
+    // Compute expected HMAC-SHA256 signature
+    const text = `${resolvedOrderId}|${resolvedPaymentId}`;
+    const generated_signature = crypto
+      .createHmac('sha256', keySecret)
+      .update(text)
+      .digest('hex');
+
+    // Constant-time safe buffer comparison
+    let isSignatureValid = false;
+    try {
+      const generatedBuffer = Buffer.from(generated_signature, 'utf8');
+      const clientBuffer = Buffer.from(resolvedSignature, 'utf8');
+      if (generatedBuffer.length === clientBuffer.length) {
+        isSignatureValid = crypto.timingSafeEqual(generatedBuffer, clientBuffer);
+      }
+    } catch (cmpErr) {
+      isSignatureValid = false;
+    }
+
+    if (!isSignatureValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification failed: Signature mismatch.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Payment verified successfully.',
+      order_id: resolvedOrderId,
+      payment_id: resolvedPaymentId
+    });
+  } catch (err) {
+    console.error('STANDARD VERIFY PAYMENT ERROR:', err.message || err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Server error verifying payment.'
+    });
+  }
+};
+
