@@ -532,8 +532,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 </a>
               </div>
 
-              {/* Action Button: Confirm Booking after returning from UPI app */}
+              {/* Action Button: Launch Razorpay Checkout */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
+                <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-xl p-2 text-center font-medium">
+                  Official Razorpay Gateway: Supports UPI, Google Pay, PhonePe, Paytm, Cards & Netbanking.
+                </p>
                 <button
                   type="button"
                   id="btn-completed-payment-mobile"
@@ -544,11 +547,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   {processing ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      <span>Confirming Booking...</span>
+                      <span>Opening Secure Checkout...</span>
                     </span>
                   ) : (
                     <>
-                      <span>I&apos;ve Completed the Payment</span>
+                      <span>Proceed to Pay with Razorpay</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -693,26 +696,31 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   </div>
                 </div>
 
-                {/* Primary Action Button: "I've Completed the Payment ->" */}
-                <button
-                  type="button"
-                  id="btn-completed-payment-desktop"
-                  onClick={handleConfirmPayment}
-                  disabled={processing}
-                  className="w-full h-12 sm:h-13 bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide rounded-full shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {processing ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      <span>Confirming Booking...</span>
-                    </span>
-                  ) : (
-                    <>
-                      <span>I&apos;ve Completed the Payment</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+                {/* Primary Action Button: "Proceed to Pay with Razorpay" */}
+                <div className="space-y-2">
+                  <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-xl p-2 text-center font-medium">
+                    Official Razorpay Gateway: Supports UPI, Google Pay, PhonePe, Paytm, Cards & Netbanking.
+                  </p>
+                  <button
+                    type="button"
+                    id="btn-completed-payment-desktop"
+                    onClick={handleConfirmPayment}
+                    disabled={processing}
+                    className="w-full h-12 sm:h-13 bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide rounded-full shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {processing ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        <span>Opening Secure Checkout...</span>
+                      </span>
+                    ) : (
+                      <>
+                        <span>Proceed to Pay with Razorpay</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
 
               </div>
 

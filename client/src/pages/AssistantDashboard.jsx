@@ -23,11 +23,26 @@ export default function AssistantDashboard() {
   const [station, setStation] = useState('KZJ');
   const [requests, setRequests] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
-  const [tab, setTab] = useState('live'); // 'live' | 'jobs' | 'history'
+  const [tab, setTab] = useState('live'); // 'live' | 'jobs' | 'history' | 'wallet'
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+
+  /* ── Wallet & Payouts State (Phase 3B) ─────────────────────── */
+  const [wallet, setWallet] = useState({
+    available_balance: 0,
+    pending_balance: 0,
+    held_balance: 0,
+    paid_out_total: 0,
+    total_earnings: 0,
+  });
+  const [payouts, setPayouts] = useState([]);
+  const [earningsHistory, setEarningsHistory] = useState([]);
+  const [payoutModalOpen, setPayoutModalOpen] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutMethod, setPayoutMethod] = useState('bank_transfer');
+  const [payoutLoading, setPayoutLoading] = useState(false);
 
   /* ── Load Profile ───────────────────────────────────────── */
   const loadProfile = useCallback(async () => {
@@ -42,6 +57,22 @@ export default function AssistantDashboard() {
       } else {
         setError('Unable to retrieve assistant profile.');
       }
+    }
+  }, []);
+
+  /* ── Load Wallet & Payouts (Phase 3B) ─────────────────────── */
+  const loadWallet = useCallback(async () => {
+    try {
+      const [wRes, pRes, eRes] = await Promise.all([
+        axios.get('/assistant-wallet').catch(() => ({ data: {} })),
+        axios.get('/assistant-payouts').catch(() => ({ data: { payouts: [] } })),
+        axios.get('/assistant-wallet/earnings').catch(() => ({ data: { earnings: [] } })),
+      ]);
+      if (wRes.data?.wallet) setWallet(wRes.data.wallet);
+      if (pRes.data?.payouts) setPayouts(pRes.data.payouts);
+      if (eRes.data?.earnings) setEarningsHistory(eRes.data.earnings);
+    } catch (err) {
+      console.error('Unable to load wallet data:', err);
     }
   }, []);
 
@@ -72,12 +103,47 @@ export default function AssistantDashboard() {
   useEffect(() => {
     loadProfile();
     loadDashboard();
-  }, [loadProfile, loadDashboard]);
+    loadWallet();
+  }, [loadProfile, loadDashboard, loadWallet]);
 
   useEffect(() => {
-    const interval = setInterval(() => loadDashboard(), 8000);
+    const interval = setInterval(() => {
+      loadDashboard();
+      loadWallet();
+    }, 8000);
     return () => clearInterval(interval);
-  }, [loadDashboard]);
+  }, [loadDashboard, loadWallet]);
+
+  /* ── Real-Time Dispatch & Wallet Sync (Phase 7) ─────────── */
+  useEffect(() => {
+    if (!window.socket) return;
+
+    if (profile?.id) {
+      window.socket.emit('join_assistant', profile.id);
+    }
+
+    const handleNewBooking = () => {
+      loadDashboard();
+    };
+
+    const handleBookingCancelled = () => {
+      loadDashboard();
+    };
+
+    const handleWalletUpdated = () => {
+      loadWallet();
+    };
+
+    window.socket.on('new_booking', handleNewBooking);
+    window.socket.on('booking_cancelled', handleBookingCancelled);
+    window.socket.on('wallet_updated', handleWalletUpdated);
+
+    return () => {
+      window.socket.off('new_booking', handleNewBooking);
+      window.socket.off('booking_cancelled', handleBookingCancelled);
+      window.socket.off('wallet_updated', handleWalletUpdated);
+    };
+  }, [profile?.id, loadDashboard, loadWallet]);
 
   /* ── Online Status ──────────────────────────────────────── */
   const online = Boolean(profile?.is_online);
@@ -129,6 +195,61 @@ export default function AssistantDashboard() {
     }
   };
 
+  /* ── Payout Request Handler (Phase 3B) ──────────────────── */
+  const handleRequestPayout = async (e) => {
+    e?.preventDefault();
+    const amt = parseFloat(payoutAmount);
+    if (isNaN(amt) || amt <= 0) {
+      setError('Please enter a valid payout amount.');
+      return;
+    }
+    if (amt < 100) {
+      setError('Minimum withdrawal threshold is ₹100.');
+      return;
+    }
+    if (amt > (wallet.available_balance || 0)) {
+      setError(`Requested amount (₹${amt}) exceeds your available balance (₹${wallet.available_balance || 0}).`);
+      return;
+    }
+
+    setPayoutLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      await axios.post('/assistant-payouts/request', {
+        amount: amt,
+        payout_method: payoutMethod,
+      });
+      setMessage('Payout request submitted successfully. Awaiting administrative review.');
+      setPayoutModalOpen(false);
+      setPayoutAmount('');
+      await loadWallet();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to submit payout request.');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  /* ── Cancel Payout Handler (Phase 3B) ───────────────────── */
+  const handleCancelPayout = async (payoutId) => {
+    if (!window.confirm('Cancel this pending payout request and release earnings back to your available balance?')) {
+      return;
+    }
+    setActionLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      await axios.post(`/assistant-payouts/${payoutId}/cancel`);
+      setMessage('Payout request cancelled.');
+      await loadWallet();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to cancel payout request.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   /* ── Job Update Callback ────────────────────────────────── */
   const handleJobUpdate = useCallback(
     async (updatedJob) => {
@@ -153,8 +274,9 @@ export default function AssistantDashboard() {
       j.booking_status !== 'completed' && j.booking_status !== 'cancelled'
   );
   const completedJobs = myJobs.filter((j) => j.booking_status === 'completed');
+  // Phase 1: Assistant earns 80% net share of completed tariffs (20% platform commission)
   const totalEarnings = completedJobs.reduce(
-    (t, j) => t + Number(j.total_price || 0),
+    (t, j) => t + Math.round(Number(j.total_price || 0) * 0.8),
     0
   );
   const ratedJobs = completedJobs.filter((j) => j.rating);
@@ -238,9 +360,9 @@ export default function AssistantDashboard() {
               sub: 'In progress',
             },
             {
-              label: 'Total Earnings',
+              label: 'My Earnings (80%)',
               value: '₹' + totalEarnings,
-              sub: `${completedJobs.length} jobs completed`,
+              sub: `${completedJobs.length} completed (net of 20% platform fee)`,
             },
             {
               label: 'Service Rating',
@@ -283,6 +405,11 @@ export default function AssistantDashboard() {
                 id: 'history',
                 label: 'Trip History',
                 badge: completedJobs.length,
+              },
+              {
+                id: 'wallet',
+                label: 'Wallet & Payouts',
+                badge: payouts.filter((p) => p.status === 'requested').length,
               },
             ].map((t) => (
               <button
@@ -470,6 +597,339 @@ export default function AssistantDashboard() {
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {tab === 'wallet' && (
+          <div className="space-y-8 animate-fade-in">
+            {/* ── Wallet Overview Header ────────────────────────── */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+              <div>
+                <h3 className="text-lg font-bold text-black dark:text-white flex items-center gap-2">
+                  <span>Sahayak Operations Wallet</span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] font-mono font-bold">
+                    AUTHORITATIVE
+                  </span>
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Automated settlement ledger: 80% Sahayak earnings share after completed dispatches.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPayoutModalOpen(true)}
+                disabled={(wallet.available_balance || 0) < 100}
+                className="btn-primary py-2.5 px-5 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <span>Request Payout</span>
+                <span className="text-[10px] font-mono font-normal">
+                  (Min ₹100)
+                </span>
+              </button>
+            </div>
+
+            {/* ── 4 Wallet Stat Cards ──────────────────────────── */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-800/80 rounded-2xl p-5 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-mono block mb-1">
+                  Available to Withdraw
+                </span>
+                <p className="text-3xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                  ₹{wallet.available_balance || 0}
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Ready for immediate payout
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 font-mono block mb-1">
+                  Pending Settlement
+                </span>
+                <p className="text-3xl font-bold font-mono text-black dark:text-white">
+                  ₹{wallet.pending_balance || 0}
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Maturing after service hold
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 font-mono block mb-1">
+                  Held in Request
+                </span>
+                <p className="text-3xl font-bold font-mono text-black dark:text-white">
+                  ₹{wallet.held_balance || 0}
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  In review / processing
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 font-mono block mb-1">
+                  Total Paid Out
+                </span>
+                <p className="text-3xl font-bold font-mono text-black dark:text-white">
+                  ₹{wallet.paid_out_total || 0}
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Lifetime disbursed
+                </p>
+              </div>
+            </div>
+
+            {/* ── Payout Requests History ─────────────────────── */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider font-mono">
+                  Payout Withdrawal Requests
+                </h4>
+                <span className="text-xs font-mono text-zinc-400">
+                  {payouts.length} record{payouts.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {payouts.length === 0 ? (
+                <p className="text-xs text-zinc-400 py-6 text-center">
+                  No withdrawal requests submitted yet. When your available balance reaches ₹100, click "Request Payout".
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 font-mono">
+                        <th className="py-2.5 px-3">Request ID</th>
+                        <th className="py-2.5 px-3">Amount</th>
+                        <th className="py-2.5 px-3">Method</th>
+                        <th className="py-2.5 px-3">Status</th>
+                        <th className="py-2.5 px-3">Requested Date</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
+                      {payouts.map((p) => {
+                        const statusColors = {
+                          requested: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                          approved: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+                          processing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+                          paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                          rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+                          failed: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+                          cancelled: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
+                        };
+
+                        return (
+                          <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                            <td className="py-3 px-3 text-zinc-500 font-mono text-[11px]">
+                              {p.id.slice(0, 8)}...
+                            </td>
+                            <td className="py-3 px-3 font-bold text-black dark:text-white">
+                              ₹{p.amount}
+                            </td>
+                            <td className="py-3 px-3 capitalize text-zinc-400">
+                              {p.payout_method?.replace('_', ' ') || 'Bank Transfer'}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColors[p.status] || 'bg-zinc-100'}`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                              {new Date(p.requested_at || p.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              {p.status === 'requested' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelPayout(p.id)}
+                                  disabled={actionLoading}
+                                  className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline"
+                                >
+                                  Cancel Request
+                                </button>
+                              )}
+                              {p.status === 'paid' && (
+                                <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
+                                  <span className="font-bold">✓ Settled</span>
+                                  {p.payout_reference && (
+                                    <span className="block text-[10px] text-zinc-500 dark:text-zinc-400">
+                                      Ref: {p.payout_reference}
+                                    </span>
+                                  )}
+                                  {p.settlement_date && (
+                                    <span className="block text-[9px] text-zinc-400">
+                                      {new Date(p.settlement_date).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {p.status === 'failed' && (
+                                <span className="text-[10px] text-rose-500">
+                                  {p.failure_reason || 'Disbursement error'}
+                                </span>
+                              )}
+                              {p.status === 'rejected' && (
+                                <span className="text-[10px] text-zinc-400">
+                                  {p.failure_reason || 'Rejected by Admin'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* ── Recent Earnings Ledger ───────────────────────── */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider font-mono">
+                  Earnings Breakdown (80% Tariffs)
+                </h4>
+                <span className="text-xs font-mono text-zinc-400">
+                  {earningsHistory.length} trip{earningsHistory.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {earningsHistory.length === 0 ? (
+                <p className="text-xs text-zinc-400 py-6 text-center">
+                  No earnings recorded yet. Complete customer service requests to earn 80% net tariffs.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 font-mono">
+                        <th className="py-2.5 px-3">Trip ID</th>
+                        <th className="py-2.5 px-3">Gross Fare</th>
+                        <th className="py-2.5 px-3">Platform Fee (20%)</th>
+                        <th className="py-2.5 px-3">Sahayak Share (80%)</th>
+                        <th className="py-2.5 px-3">Settlement Status</th>
+                        <th className="py-2.5 px-3">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
+                      {earningsHistory.map((e) => {
+                        const statusBadge = {
+                          available: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                          pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                          held: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+                          paid_out: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
+                          reversed: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+                        };
+
+                        return (
+                          <tr key={e.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                            <td className="py-3 px-3 text-zinc-500 font-mono text-[11px]">
+                              {e.booking?.booking_id || e.booking_id?.slice(0, 8)}
+                            </td>
+                            <td className="py-3 px-3 text-zinc-400">
+                              ₹{e.gross_amount}
+                            </td>
+                            <td className="py-3 px-3 text-zinc-400">
+                              -₹{e.platform_commission_amount}
+                            </td>
+                            <td className="py-3 px-3 font-bold text-emerald-600 dark:text-emerald-400">
+                              +₹{e.assistant_amount}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[e.status] || 'bg-zinc-100'}`}>
+                                {e.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                              {new Date(e.created_at).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Request Payout Modal ────────────────────────────── */}
+        {payoutModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-scale-in">
+              <div>
+                <h3 className="text-base font-bold text-black dark:text-white">
+                  Request Payout Withdrawal
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Authoritative Available Balance: <strong className="font-mono text-emerald-600 dark:text-emerald-400">₹{wallet.available_balance || 0}</strong>
+                </p>
+              </div>
+
+              <form onSubmit={handleRequestPayout} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                    Withdrawal Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="100"
+                    max={wallet.available_balance || 0}
+                    step="1"
+                    required
+                    value={payoutAmount}
+                    onChange={(e) => setPayoutAmount(e.target.value)}
+                    placeholder="Enter amount (e.g. 500)"
+                    className="input-base text-sm font-mono w-full"
+                  />
+                  <p className="text-[11px] text-zinc-400 mt-1 font-mono">
+                    Minimum withdrawal threshold: ₹100
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                    Payout Method
+                  </label>
+                  <select
+                    value={payoutMethod}
+                    onChange={(e) => setPayoutMethod(e.target.value)}
+                    className="input-base text-xs font-mono w-full"
+                  >
+                    <option value="bank_transfer">Direct Bank Transfer (NEFT/IMPS)</option>
+                    <option value="upi">UPI Transfer</option>
+                  </select>
+                </div>
+
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Payouts are verified and disbursed by the ONECOOLIE administrative treasury team.
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPayoutModalOpen(false);
+                      setPayoutAmount('');
+                    }}
+                    disabled={payoutLoading}
+                    className="btn-secondary py-2 px-4 text-xs font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={payoutLoading || !payoutAmount || Number(payoutAmount) < 100}
+                    className="btn-primary py-2 px-5 text-xs font-bold disabled:opacity-50"
+                  >
+                    {payoutLoading ? 'Submitting...' : 'Submit Withdrawal →'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </main>

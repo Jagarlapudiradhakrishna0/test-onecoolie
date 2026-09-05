@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Brand from '../components/Brand';
+import LaunchCenter from '../components/LaunchCenter';
 import axios from '../api/axios';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -11,7 +12,8 @@ import {
   Shield, Train, User, Clock, AlertTriangle, CheckCircle, XCircle, Search, Filter,
   Download, RefreshCw, Eye, Phone, Mail, MapPin, CreditCard, ChevronRight, TrendingUp,
   Users, Check, X, ExternalLink, Printer, Key, Briefcase, Calendar, Info, Layers,
-  Compass, ArrowUpRight, CheckSquare, Power, ToggleLeft, ToggleRight
+  Compass, ArrowUpRight, CheckSquare, Power, ToggleLeft, ToggleRight,
+  ShieldCheck, FileText, Activity, DollarSign, ShieldAlert, AlertOctagon, RotateCcw
 } from 'lucide-react';
 
 /* ============================================================
@@ -650,13 +652,423 @@ function KycQueueCard({ applicant, onDecide, actionLoading }) {
 }
 
 // ----------------------------------------------------------------------
+// SUBCOMPONENT: SETTLEMENT CONFIRMATION MODAL (PHASE 4 MANUAL SETTLEMENT)
+// ----------------------------------------------------------------------
+function SettlementConfirmModal({ payout, onClose, onConfirm, actionLoading }) {
+  const [method, setMethod] = useState(payout?.payout_method || 'bank_transfer');
+  const [reference, setReference] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState('');
+
+  useEffect(() => {
+    if (payout) {
+      setMethod(payout.payout_method || 'bank_transfer');
+      setReference(`IMPS-${Date.now().toString().slice(-8)}`);
+      setDate(new Date().toISOString().slice(0, 10));
+      setNotes('');
+      setFormError('');
+    }
+  }, [payout]);
+
+  if (!payout) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!reference || reference.trim().length < 3) {
+      setFormError('Settlement reference must be at least 3 characters.');
+      return;
+    }
+    setFormError('');
+    onConfirm({
+      payout_reference: reference.trim(),
+      payout_method: method,
+      settlement_date: date,
+      settlement_notes: notes.trim() || undefined
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 my-auto cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs font-mono">
+              ₹
+            </span>
+            <div>
+              <h3 className="font-bold text-sm text-black dark:text-white font-mono">
+                Confirm Manual Payout Settlement
+              </h3>
+              <p className="text-[11px] text-zinc-400 font-mono">
+                Payout ID #{payout.id?.slice(0, 8)} · Sahayak: {payout.assistant?.name || 'Partner'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg text-zinc-400 hover:text-black dark:hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="bg-zinc-50 dark:bg-zinc-950 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 flex justify-between items-center font-mono">
+          <span className="text-xs text-zinc-500">Total Disbursement:</span>
+          <span className="text-lg font-bold text-emerald-600">₹{payout.amount}</span>
+        </div>
+
+        {formError && (
+          <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 border border-rose-200 text-xs font-mono">
+            {formError}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-3 text-xs font-mono">
+          <div>
+            <label className="block text-zinc-500 mb-1">Disbursement Channel / Method *</label>
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              className="w-full py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-black dark:text-white font-mono"
+            >
+              <option value="bank_transfer">Bank Transfer (NEFT/RTGS)</option>
+              <option value="imps">IMPS Instant Transfer</option>
+              <option value="upi">UPI Instant Payout</option>
+              <option value="neft">NEFT Standard Settlement</option>
+              <option value="cash">Direct Cash Disbursement</option>
+              <option value="other">Other Manual Settlement</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-zinc-500 mb-1">Bank / UTR / Reference Number *</label>
+            <input
+              type="text"
+              required
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="e.g. UTR4928172901 or UPI-129381"
+              className="w-full py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-black dark:text-white font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-zinc-500 mb-1">Settlement Date *</label>
+            <input
+              type="date"
+              required
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-black dark:text-white font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-zinc-500 mb-1">Audit / Settlement Notes (Optional)</label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional notes for internal ledger audit..."
+              className="w-full py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-black dark:text-white font-mono resize-none"
+            />
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={actionLoading}
+              className="btn-secondary py-2 px-4 text-xs font-mono"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={actionLoading}
+              className="btn-primary py-2 px-4 text-xs font-mono bg-emerald-600 hover:bg-emerald-700"
+            >
+              {actionLoading ? 'Recording Settlement...' : 'Confirm & Finalize Paid'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// SUBCOMPONENT: FINANCIAL INCIDENT DETAIL & RESOLUTION MODAL (PHASE 5)
+// ----------------------------------------------------------------------
+function IncidentDetailModal({ incident, onClose, onInvestigate, onResolve, onIgnore, actionLoading }) {
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [ignoreReason, setIgnoreReason] = useState('');
+  const [activeAction, setActiveAction] = useState('view'); // 'view' | 'resolve' | 'ignore'
+  const [errorMsg, setErrorMsg] = useState('');
+
+  if (!incident) return null;
+
+  const handleResolveSubmit = (e) => {
+    e.preventDefault();
+    if (!resolutionNotes || resolutionNotes.trim().length < 5) {
+      setErrorMsg('Resolution notes must be at least 5 characters long.');
+      return;
+    }
+    setErrorMsg('');
+    onResolve(incident.id, resolutionNotes.trim());
+  };
+
+  const handleIgnoreSubmit = (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    onIgnore(incident.id, ignoreReason.trim() || undefined);
+  };
+
+  const severityBadgeClass =
+    incident.severity === 'critical'
+      ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+      : incident.severity === 'warning'
+      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+      : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300 dark:border-blue-800';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 my-auto cursor-default font-mono"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center font-bold text-xs">
+              <ShieldAlert className="w-4 h-4" />
+            </span>
+            <div>
+              <h3 className="font-bold text-sm text-black dark:text-white">
+                Financial Incident #{incident.id?.slice(0, 8)}
+              </h3>
+              <p className="text-[11px] text-zinc-400">
+                Rule: {incident.incident_type}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg text-zinc-400 hover:text-black dark:hover:text-white cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Severity and Status Pills */}
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] ${severityBadgeClass}`}>
+              {incident.severity}
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              Status: {incident.status}
+            </span>
+          </div>
+          <span className="text-[11px] text-zinc-400">
+            Occurrences: <strong className="text-black dark:text-white">{incident.occurrence_count || 1}</strong>
+          </span>
+        </div>
+
+        {/* Details Card */}
+        <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-1.5 text-xs">
+          <div className="flex justify-between">
+            <span className="text-zinc-500">Entity:</span>
+            <span className="font-bold text-black dark:text-white">
+              {incident.entity_type} {incident.entity_id ? `(#${incident.entity_id.slice(0, 8)})` : ''}
+            </span>
+          </div>
+          {incident.user_id && (
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Target User:</span>
+              <span className="text-black dark:text-white">#{incident.user_id.slice(0, 8)}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-zinc-500">Detected At:</span>
+            <span className="text-zinc-400">{new Date(incident.detected_at).toLocaleString()}</span>
+          </div>
+          {incident.resolved_at && (
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Resolved At:</span>
+              <span className="text-emerald-600 font-bold">{new Date(incident.resolved_at).toLocaleString()}</span>
+            </div>
+          )}
+          {incident.resolution_notes && (
+            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+              <span className="text-zinc-500 block mb-0.5">Resolution Notes:</span>
+              <p className="text-zinc-700 dark:text-zinc-300 italic">{incident.resolution_notes}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Metadata JSON */}
+        {incident.metadata && Object.keys(incident.metadata).length > 0 && (
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase font-bold text-zinc-400">Forensic Metadata</span>
+            <pre className="p-2.5 bg-zinc-900 text-zinc-300 text-[11px] rounded-lg overflow-x-auto max-h-36">
+              {JSON.stringify(incident.metadata, null, 2)}
+            </pre>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 border border-rose-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        {/* Action Views */}
+        {activeAction === 'view' && (
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+            {incident.status === 'open' && (
+              <button
+                type="button"
+                onClick={() => onInvestigate(incident.id)}
+                disabled={actionLoading}
+                className="btn-secondary py-1.5 px-3 text-xs flex-1 cursor-pointer"
+              >
+                Mark Investigating
+              </button>
+            )}
+            {(incident.status === 'open' || incident.status === 'investigating') && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveAction('resolve')}
+                  disabled={actionLoading}
+                  className="btn-primary py-1.5 px-3 text-xs flex-1 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                >
+                  Resolve...
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAction('ignore')}
+                  disabled={actionLoading}
+                  className="btn-secondary py-1.5 px-3 text-xs text-zinc-400 hover:text-rose-500 cursor-pointer"
+                >
+                  Ignore...
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-secondary py-1.5 px-3 text-xs cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        )}
+
+        {activeAction === 'resolve' && (
+          <form onSubmit={handleResolveSubmit} className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs">
+            <div>
+              <label className="block text-zinc-500 mb-1">Resolution Audit Notes (Min 5 chars) *</label>
+              <textarea
+                required
+                rows={3}
+                value={resolutionNotes}
+                onChange={(e) => setResolutionNotes(e.target.value)}
+                placeholder="Explain the investigative findings and operational remediation taken..."
+                className="w-full py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-black dark:text-white resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveAction('view')}
+                disabled={actionLoading}
+                className="btn-secondary py-1.5 px-3 text-xs cursor-pointer"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="btn-primary py-1.5 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+              >
+                {actionLoading ? 'Saving...' : 'Confirm Resolution'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {activeAction === 'ignore' && (
+          <form onSubmit={handleIgnoreSubmit} className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs">
+            <div>
+              <label className="block text-zinc-500 mb-1">Reason for Ignoring (Optional)</label>
+              <input
+                type="text"
+                value={ignoreReason}
+                onChange={(e) => setIgnoreReason(e.target.value)}
+                placeholder="e.g. Expected test load or customer confirmed transaction..."
+                className="w-full py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-black dark:text-white"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveAction('view')}
+                disabled={actionLoading}
+                className="btn-secondary py-1.5 px-3 text-xs cursor-pointer"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="btn-secondary py-1.5 px-3 text-xs text-rose-600 border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+              >
+                {actionLoading ? 'Saving...' : 'Confirm Ignore'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
 // MAIN EXPORT: ADMIN DASHBOARD
 // ----------------------------------------------------------------------
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
 
-  // Navigation tabs: 'bookings' | 'overview' | 'assistants' | 'passengers' | 'sos'
+  // Navigation tabs: 'bookings' | 'overview' | 'finance' | 'payouts' | 'assistants' | 'passengers' | 'sos'
   const [activeTab, setActiveTab] = useState('bookings');
+
+  // Finance & Reconciliation States (Phase 4)
+  const [reconReport, setReconReport] = useState(null);
+  const [reconLoading, setReconLoading] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditFilter, setAuditFilter] = useState('ALL');
+  const [settlementModalPayout, setSettlementModalPayout] = useState(null);
+
+  // Financial Incidents & Production Hardening States (Phase 5)
+  const [incidentsList, setIncidentsList] = useState([]);
+  const [incidentStats, setIncidentStats] = useState({ total: 0, open: 0, investigating: 0, critical: 0, warning: 0 });
+  const [incidentsFilter, setIncidentsFilter] = useState('ALL');
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [financialHealth, setFinancialHealth] = useState(null);
+  const [paymentRecoveryList, setPaymentRecoveryList] = useState([]);
 
   // Core Data States
   const [stats, setStats] = useState({
@@ -678,6 +1090,8 @@ export default function AdminDashboard() {
   const [assistantsList, setAssistantsList] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [sosAlerts, setSosAlerts] = useState([]);
+  const [payoutsList, setPayoutsList] = useState([]);
+  const [payoutsFilter, setPayoutsFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [lastSynced, setLastSynced] = useState(new Date());
 
@@ -710,13 +1124,18 @@ export default function AdminDashboard() {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const [sRes, pRes, bRes, aRes, uRes, sosRes] = await Promise.all([
+      const [sRes, pRes, bRes, aRes, uRes, sosRes, payRes, incRes, incStatRes, healthRes, recovRes] = await Promise.all([
         axios.get('/admin/stats').catch(() => ({ data: {} })),
         axios.get('/admin/pending-assistants').catch(() => ({ data: [] })),
         axios.get('/admin/bookings').catch(() => ({ data: [] })),
         axios.get('/admin/assistants').catch(() => ({ data: [] })),
         axios.get('/admin/users').catch(() => ({ data: [] })),
         axios.get('/admin/sos-alerts').catch(() => ({ data: [] })),
+        axios.get('/admin/payouts').catch(() => ({ data: { payouts: [] } })),
+        axios.get('/admin/incidents').catch(() => ({ data: { incidents: [] } })),
+        axios.get('/admin/incidents/stats').catch(() => ({ data: {} })),
+        axios.get('/admin/finance/health').catch(() => ({ data: { health: null } })),
+        axios.get('/admin/finance/payment-recovery').catch(() => ({ data: { stuck_payments: [] } })),
       ]);
 
       setStats(sRes.data || {});
@@ -725,6 +1144,11 @@ export default function AdminDashboard() {
       setAssistantsList(aRes.data || []);
       setUsersList(uRes.data || []);
       setSosAlerts(sosRes.data || []);
+      setPayoutsList(payRes.data?.payouts || payRes.data || []);
+      setIncidentsList(incRes.data?.incidents || []);
+      setIncidentStats(incStatRes.data || { total: 0, open: 0, investigating: 0, critical: 0, warning: 0 });
+      setFinancialHealth(healthRes.data?.health || null);
+      setPaymentRecoveryList(recovRes.data?.stuck_payments || []);
       setLastSynced(new Date());
 
       // If inspecting a booking, sync it with newest data
@@ -747,16 +1171,21 @@ export default function AdminDashboard() {
     const interval = setInterval(fetchAll, 3000);
 
     if (window.socket) {
+      window.socket.emit('join_admin');
       const handleLiveEvent = () => fetchAll();
       window.socket.on('sos_alert', handleLiveEvent);
       window.socket.on('status_update', handleLiveEvent);
       window.socket.on('new_booking', handleLiveEvent);
+      window.socket.on('financial_incident_created', handleLiveEvent);
+      window.socket.on('financial_incident_updated', handleLiveEvent);
 
       return () => {
         clearInterval(interval);
         window.socket.off('sos_alert', handleLiveEvent);
         window.socket.off('status_update', handleLiveEvent);
         window.socket.off('new_booking', handleLiveEvent);
+        window.socket.off('financial_incident_created', handleLiveEvent);
+        window.socket.off('financial_incident_updated', handleLiveEvent);
       };
     }
 
@@ -806,6 +1235,156 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error('Toggle approval error:', err);
       toast.error('Failed to update assistant approval');
+    }
+  };
+
+  // ── Payout Management Handlers (Phase 3B) ────────
+  const handleApprovePayout = async (payoutId) => {
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/payouts/${payoutId}/approve`);
+      toast.success('Payout request approved.');
+      await fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to approve payout.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectPayout = async (payoutId) => {
+    const reason = window.prompt('Enter reason for rejecting this payout:', 'Insufficient account details or administrative review');
+    if (reason === null) return;
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/payouts/${payoutId}/reject`, { reason });
+      toast.success('Payout rejected. Earnings returned to available balance.');
+      await fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reject payout.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleProcessingPayout = async (payoutId) => {
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/payouts/${payoutId}/processing`);
+      toast.success('Payout moved to processing.');
+      await fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update payout.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const fetchReconciliation = useCallback(async () => {
+    try {
+      setReconLoading(true);
+      const [rRes, aRes] = await Promise.all([
+        axios.get('/admin/finance/reconciliation').catch(() => ({ data: { report: null } })),
+        axios.get('/admin/finance/audit-logs').catch(() => ({ data: { logs: [] } }))
+      ]);
+      if (rRes.data?.report) setReconReport(rRes.data.report);
+      if (aRes.data?.logs) setAuditLogs(aRes.data.logs);
+    } catch (err) {
+      console.error('FETCH RECON ERROR:', err);
+    } finally {
+      setReconLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'finance') {
+      fetchReconciliation();
+    }
+  }, [activeTab, fetchReconciliation]);
+
+  const handlePaidPayout = (payoutOrId) => {
+    const p = typeof payoutOrId === 'object' ? payoutOrId : payoutsList.find(item => item.id === payoutOrId);
+    if (p) {
+      setSettlementModalPayout(p);
+    }
+  };
+
+  const handleConfirmSettlement = async (settlementData) => {
+    if (!settlementModalPayout) return;
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/payouts/${settlementModalPayout.id}/paid`, settlementData);
+      toast.success('Payout marked as PAID. Earnings permanently finalized.');
+      setSettlementModalPayout(null);
+      await fetchAll();
+      if (activeTab === 'finance') {
+        await fetchReconciliation();
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to finalize payout settlement.';
+      toast.error(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleFailedPayout = async (payoutId) => {
+    const reason = window.prompt('Enter failure reason:', 'Bank network transaction timeout');
+    if (reason === null) return;
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/payouts/${payoutId}/failed`, { failure_reason: reason });
+      toast.success('Payout marked as failed. Unreversed earnings returned to available.');
+      await fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to mark payout failed.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleInvestigateIncident = async (incidentId) => {
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/incidents/${incidentId}/investigate`);
+      toast.success('Incident status updated to investigating.');
+      await fetchAll();
+      if (selectedIncident?.id === incidentId) {
+        setSelectedIncident((prev) => (prev ? { ...prev, status: 'investigating' } : null));
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update incident status.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResolveIncident = async (incidentId, notes) => {
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/incidents/${incidentId}/resolve`, { resolution_notes: notes });
+      toast.success('Incident resolved successfully.');
+      setSelectedIncident(null);
+      await fetchAll();
+      if (activeTab === 'finance') await fetchReconciliation();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to resolve incident.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleIgnoreIncident = async (incidentId, reason) => {
+    try {
+      setActionLoading(true);
+      await axios.post(`/admin/incidents/${incidentId}/ignore`, { reason });
+      toast.success('Incident status updated to ignored.');
+      setSelectedIncident(null);
+      await fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to ignore incident.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1108,6 +1687,10 @@ export default function AdminDashboard() {
           {[
             { id: 'bookings', label: 'Master Bookings Ledger', icon: Layers, count: bookings.length },
             { id: 'overview', label: 'Operations & Analytics', icon: TrendingUp },
+            { id: 'finance', label: 'Finance & Reconciliation', icon: ShieldCheck, alert: reconReport?.health?.critical_issues > 0 ? reconReport.health.critical_issues : undefined },
+            { id: 'incidents', label: 'Financial Incidents', icon: ShieldAlert, alert: incidentStats.critical > 0 ? incidentStats.critical : undefined, badge: incidentStats.open > 0 ? incidentStats.open : undefined },
+            { id: 'launch', label: 'Launch Center', icon: Activity },
+            { id: 'payouts', label: 'Sahayak Payouts', icon: CreditCard, badge: payoutsList.filter(p => p.status === 'requested').length },
             { id: 'assistants', label: 'Sahayak Force & KYC', icon: Briefcase, badge: kycQueue.length },
             { id: 'passengers', label: 'Passengers Directory', icon: Users, count: usersList.length },
             { id: 'sos', label: 'Emergency Incident SOS', icon: AlertTriangle, alert: sosAlerts.length },
@@ -1876,6 +2459,889 @@ export default function AdminDashboard() {
         )}
 
         {/* ========================================================
+            TAB: FINANCE & FINANCIAL RECONCILIATION (Phase 4)
+            ======================================================== */}
+        {activeTab === 'finance' && (
+          <div className="space-y-6 animate-fade-in font-mono">
+            {/* Header & Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                  Financial Reconciliation, Invariants & Audit Trail
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Mathematical validation of revenue splits (20/80), refund ceilings, wallet solvency, and tamper-evident audit logs.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={fetchReconciliation}
+                  disabled={reconLoading}
+                  className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${reconLoading ? 'animate-spin' : ''}`} />
+                  <span>Re-run Invariants Engine</span>
+                </button>
+              </div>
+            </div>
+
+            {/* System Health Banner */}
+            {reconReport?.health && (
+              <div
+                className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                  reconReport.health.status === 'healthy'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                    : reconReport.health.status === 'warning'
+                    ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+                    : 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`w-3 h-3 rounded-full ${
+                      reconReport.health.status === 'healthy'
+                        ? 'bg-emerald-500 animate-pulse'
+                        : reconReport.health.status === 'warning'
+                        ? 'bg-amber-500'
+                        : 'bg-rose-600 animate-ping'
+                    }`}
+                  />
+                  <div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider">
+                      System Status: {reconReport.health.status.toUpperCase()}
+                    </h4>
+                    <p className="text-xs opacity-90">
+                      {reconReport.health.status === 'healthy'
+                        ? 'All 11 core financial & operational invariants are 100% satisfied. No ledger anomalies detected.'
+                        : `${reconReport.health.critical_issues} critical issue(s) and ${reconReport.health.warnings} warning(s) detected across system ledgers.`}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[11px] opacity-75 font-mono">
+                  Reconciled at: {new Date(reconReport.reconciled_at).toLocaleTimeString()}
+                </div>
+              </div>
+            )}
+
+            {/* Financial Ledger Balance Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Gross Collections</span>
+                <p className="text-xl font-bold text-black dark:text-white">
+                  ₹{reconReport?.metrics?.gross_payments || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Paid payments</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Total Refunds</span>
+                <p className="text-xl font-bold text-rose-600">
+                  ₹{reconReport?.metrics?.total_refunded || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Completed returns</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Net Collected</span>
+                <p className="text-xl font-bold text-emerald-600">
+                  ₹{reconReport?.metrics?.net_collected || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Gross minus refunds</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-blue-500 block mb-1">Platform 20%</span>
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                  ₹{reconReport?.metrics?.platform_commission || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Completed bookings</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-purple-500 block mb-1">Sahayak Paid Out</span>
+                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                  ₹{reconReport?.metrics?.total_payouts_paid || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Finalized disbursements</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800/80 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-amber-600 block mb-1">Pending Liability</span>
+                <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+                  ₹{reconReport?.metrics?.pending_liability || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Pending + Avail + Held</span>
+              </div>
+            </div>
+
+            {/* Invariant Findings / Issues Section */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-500" />
+                  Invariant Discrepancies & Ledger Diagnostic Results ({reconReport?.issues?.length || 0})
+                </h4>
+              </div>
+
+              {(!reconReport?.issues || reconReport.issues.length === 0) ? (
+                <div className="p-8 text-center bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 space-y-1">
+                  <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
+                  <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
+                    All Financial Invariants Satisfied
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    No fare split mismatches, over-refunds, duplicate payout claims, or radar isolation breaches found.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
+                        <th className="py-2.5 px-3">Issue ID</th>
+                        <th className="py-2.5 px-3">Code</th>
+                        <th className="py-2.5 px-3">Severity</th>
+                        <th className="py-2.5 px-3">Entity</th>
+                        <th className="py-2.5 px-3">Description</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                      {reconReport.issues.map((iss) => (
+                        <tr key={iss.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                          <td className="py-2.5 px-3 font-bold text-zinc-500">{iss.id}</td>
+                          <td className="py-2.5 px-3 font-bold text-black dark:text-white">{iss.code}</td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                iss.severity === 'critical'
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                              }`}
+                            >
+                              {iss.severity}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-zinc-400">
+                            {iss.entity_type} #{iss.entity_id?.slice(0, 8)}
+                          </td>
+                          <td className="py-2.5 px-3 text-zinc-600 dark:text-zinc-300">{iss.message}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Tamper-Evident Financial Audit Trail */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-500" />
+                    Append-Only Financial Audit Trail
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Immutable event ledger tracking every state transition, disbursement, settlement, and earning finalization.
+                  </p>
+                </div>
+
+                {/* Audit Action Filters */}
+                <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                  {['ALL', 'payout_settlement_recorded', 'payout_paid', 'earning_paid_out', 'payout_requested', 'payout_approved', 'payout_rejected'].map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setAuditFilter(f)}
+                      className={`px-2 py-1 rounded-md transition-all ${
+                        auditFilter === f
+                          ? 'bg-black text-white dark:bg-white dark:text-black font-bold'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-black dark:hover:text-white'
+                      }`}
+                    >
+                      {f === 'ALL' ? 'All Events' : f.replace(/_/g, ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {auditLogs.length === 0 ? (
+                <p className="text-xs text-zinc-400 py-8 text-center">
+                  No financial audit events recorded yet. Payout settlements and state transitions will be permanently recorded here.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
+                        <th className="py-2.5 px-3">Timestamp</th>
+                        <th className="py-2.5 px-3">Action</th>
+                        <th className="py-2.5 px-3">Actor</th>
+                        <th className="py-2.5 px-3">Entity</th>
+                        <th className="py-2.5 px-3">Amount</th>
+                        <th className="py-2.5 px-3">State Transition</th>
+                        <th className="py-2.5 px-3">Details / Reference</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
+                      {auditLogs
+                        .filter((log) => auditFilter === 'ALL' || log.action === auditFilter)
+                        .slice(0, 50)
+                        .map((log) => (
+                          <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                            <td className="py-2.5 px-3 text-zinc-400 text-[11px] whitespace-nowrap">
+                              {new Date(log.created_at).toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-black dark:text-white">
+                              <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[10px]">
+                                {log.action}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-400 text-[11px]">
+                              {log.actor_role} ({log.actor_id ? log.actor_id.slice(0, 6) : 'system'})
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
+                              {log.entity_type} #{log.entity_id?.slice(0, 6)}
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-emerald-600">
+                              {log.amount ? `₹${log.amount}` : '—'}
+                            </td>
+                            <td className="py-2.5 px-3 text-[11px] text-zinc-400">
+                              {log.previous_state?.status || 'none'} ➔ <span className="font-bold text-black dark:text-white">{log.new_state?.status || 'N/A'}</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
+                              {log.new_state?.payout_reference ? `Ref: ${log.new_state.payout_reference}` : log.metadata?.reference ? `Ref: ${log.metadata.reference}` : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Financial Health Diagnostics Breakdown (Phase 5) */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-indigo-500" />
+                    Financial Health Diagnostics Breakdown
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Real-time operational readiness across database connection, gateway secrets isolation, and invariant status.
+                  </p>
+                </div>
+                {financialHealth && (
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
+                      financialHealth.status === 'HEALTHY'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        : financialHealth.status === 'WARNING'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                        : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                    }`}
+                  >
+                    System {financialHealth.status}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Database Ledger</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        financialHealth?.checks?.database?.status === 'UP' ? 'bg-emerald-500' : 'bg-rose-500'
+                      }`}
+                    />
+                    <strong className="text-black dark:text-white font-mono">
+                      {financialHealth?.checks?.database?.status || 'UNKNOWN'}
+                    </strong>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 mt-1 block">
+                    Latency: {financialHealth?.checks?.database?.latency_ms || 0}ms
+                  </span>
+                </div>
+
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Razorpay Gateway</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        financialHealth?.checks?.razorpay_gateway?.configured ? 'bg-emerald-500' : 'bg-amber-500'
+                      }`}
+                    />
+                    <strong className="text-black dark:text-white font-mono">
+                      {financialHealth?.checks?.razorpay_gateway?.configured ? 'CONFIGURED' : 'NOT SET'}
+                    </strong>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 mt-1 block">Zero secret leakage</span>
+                </div>
+
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Webhook Security</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        financialHealth?.checks?.razorpay_webhook?.configured ? 'bg-emerald-500' : 'bg-rose-500'
+                      }`}
+                    />
+                    <strong className="text-black dark:text-white font-mono">
+                      {financialHealth?.checks?.razorpay_webhook?.configured ? 'AUTHENTICATED' : 'MISSING'}
+                    </strong>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 mt-1 block">HMAC verified</span>
+                </div>
+
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Invariants Audit</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        financialHealth?.checks?.reconciliation?.status === 'PASS' ? 'bg-emerald-500' : 'bg-rose-500'
+                      }`}
+                    />
+                    <strong className="text-black dark:text-white font-mono">
+                      {financialHealth?.checks?.reconciliation?.status || 'PENDING'}
+                    </strong>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 mt-1 block">
+                    {financialHealth?.checks?.reconciliation?.critical_issues || 0} critical violations
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Recovery Center (Phase 5) */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-amber-500" />
+                    Payment Recovery Center ({paymentRecoveryList.length})
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Online payments pending &gt; 15 minutes requiring gateway telemetry sync.
+                  </p>
+                </div>
+                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300">
+                  <strong>Option C Enforced:</strong> Online payments cannot be manually marked paid by admins.
+                </div>
+              </div>
+
+              {paymentRecoveryList.length === 0 ? (
+                <div className="p-6 text-center bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 space-y-1">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 mx-auto mb-1" />
+                  <p className="font-bold text-black dark:text-white">Zero Stuck Online Payments</p>
+                  <p className="text-[11px] text-zinc-400">
+                    All online checkout transactions have cleanly finalized or settled.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
+                        <th className="py-2 px-3">Payment ID</th>
+                        <th className="py-2 px-3">Booking ID</th>
+                        <th className="py-2 px-3">Amount</th>
+                        <th className="py-2 px-3">Order ID</th>
+                        <th className="py-2 px-3">Age (Min)</th>
+                        <th className="py-2 px-3">Gateway Status</th>
+                        <th className="py-2 px-3">Recovery Policy</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
+                      {paymentRecoveryList.map((p) => (
+                        <tr key={p.payment_id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                          <td className="py-2 px-3 font-bold text-zinc-500">#{p.payment_id.slice(0, 8)}</td>
+                          <td className="py-2 px-3 text-black dark:text-white">#{p.booking_id.slice(0, 8)}</td>
+                          <td className="py-2 px-3 font-bold text-emerald-600">₹{p.amount}</td>
+                          <td className="py-2 px-3 text-zinc-400 text-[11px]">{p.razorpay_order_id || '—'}</td>
+                          <td className="py-2 px-3 text-amber-600 font-bold">{p.age_minutes}m</td>
+                          <td className="py-2 px-3">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                              {p.payment_status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-[11px] text-zinc-400">
+                            {p.recovery_action}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            TAB: FINANCIAL INCIDENTS & FRAUD PROTECTION (Phase 5)
+            ======================================================== */}
+        {activeTab === 'incidents' && (
+          <div className="space-y-6 animate-fade-in font-mono">
+            {/* Header & Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-rose-500" />
+                  Financial Incidents, Fraud Detection & Operations
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Automated surveillance engine detecting rapid payment failures, refund spikes, payout anomalies, and ledger corruption.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={fetchAll}
+                  disabled={actionLoading}
+                  className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh Surveillance</span>
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Cards Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Total Incidents</span>
+                <p className="text-2xl font-bold text-black dark:text-white">
+                  {incidentStats.total || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Recorded events</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800/80 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-amber-600 block mb-1">Open Cases</span>
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                  {incidentStats.open || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Requires triage</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-blue-300 dark:border-blue-800/80 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-blue-500 block mb-1">Investigating</span>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {incidentStats.investigating || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Under admin review</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-rose-300 dark:border-rose-800/80 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-rose-600 block mb-1">Critical Priority</span>
+                <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                  {incidentStats.critical || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">High severity</span>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-amber-500 block mb-1">Warnings</span>
+                <p className="text-2xl font-bold text-amber-500">
+                  {incidentStats.warning || 0}
+                </p>
+                <span className="text-[10px] text-zinc-500">Advisory alerts</span>
+              </div>
+            </div>
+
+            {/* Incidents Master Table */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <AlertOctagon className="w-4 h-4 text-rose-500" />
+                  Financial Incident Log ({incidentsList.length})
+                </h4>
+
+                {/* Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                  {['ALL', 'open', 'investigating', 'resolved', 'ignored', 'critical', 'warning'].map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setIncidentsFilter(f)}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                        incidentsFilter === f
+                          ? 'bg-black text-white dark:bg-white dark:text-black font-bold'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-black dark:hover:text-white'
+                      }`}
+                    >
+                      {f.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {incidentsList.length === 0 ? (
+                <div className="p-12 text-center bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 space-y-2">
+                  <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
+                  <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
+                    No Financial Incidents Detected
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    Automated surveillance engine is active. Zero anomalies or fraud triggers found across all railway nodes.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
+                        <th className="py-2.5 px-3">Severity</th>
+                        <th className="py-2.5 px-3">Incident Rule</th>
+                        <th className="py-2.5 px-3">Status</th>
+                        <th className="py-2.5 px-3">Entity</th>
+                        <th className="py-2.5 px-3">Hits</th>
+                        <th className="py-2.5 px-3">Detected</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
+                      {incidentsList
+                        .filter((inc) => {
+                          if (incidentsFilter === 'ALL') return true;
+                          if (incidentsFilter === 'critical' || incidentsFilter === 'warning') return inc.severity === incidentsFilter;
+                          return inc.status === incidentsFilter;
+                        })
+                        .map((inc) => (
+                          <tr key={inc.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                  inc.severity === 'critical'
+                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                                    : inc.severity === 'warning'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                }`}
+                              >
+                                {inc.severity}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-black dark:text-white">
+                              {inc.incident_type}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${
+                                  inc.status === 'open'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                                    : inc.status === 'investigating'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                    : inc.status === 'resolved'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                    : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                                }`}
+                              >
+                                {inc.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
+                              {inc.entity_type} #{inc.entity_id?.slice(0, 8)}
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-black dark:text-white">
+                              {inc.occurrence_count || 1}
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-400 text-[11px] whitespace-nowrap">
+                              {new Date(inc.detected_at).toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedIncident(inc)}
+                                className="btn-secondary py-1 px-2.5 text-[11px] cursor-pointer"
+                              >
+                                Inspect &amp; Action
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            TAB: SAHAYAK PAYOUTS & SETTLEMENT TREASURY (Phase 3B)
+            ======================================================== */}
+        {activeTab === 'payouts' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2 font-mono">
+                  <CreditCard className="w-5 h-5 text-blue-500" />
+                  Sahayak Payout Requests & Settlement Treasury
+                </h3>
+                <p className="text-xs text-zinc-500 font-mono">
+                  Authoritative review, verification, and disbursement of 80% assistant commission shares.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchAll}
+                disabled={actionLoading}
+                className="btn-secondary py-1.5 px-3 text-xs font-mono flex items-center gap-1 self-start sm:self-auto"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
+                <span>Refresh Ledger</span>
+              </button>
+            </div>
+
+            {/* Treasury KPI Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800/80 rounded-2xl p-4 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 font-mono block mb-1">
+                  Pending Review
+                </span>
+                <p className="text-2xl font-bold font-mono text-amber-700 dark:text-amber-400">
+                  {payoutsList.filter((p) => p.status === 'requested').length}
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                  Awaiting administrative sign-off
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-blue-500 font-mono block mb-1">
+                  In Processing
+                </span>
+                <p className="text-2xl font-bold font-mono text-black dark:text-white">
+                  {payoutsList.filter((p) => ['approved', 'processing'].includes(p.status)).length}
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                  Treasury transfer underway
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-800/80 rounded-2xl p-4 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-mono block mb-1">
+                  Total Disbursed
+                </span>
+                <p className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                  ₹{stats.totalPayoutsPaid || 0}
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                  Cumulative paid out to sahayaks
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 font-mono block mb-1">
+                  Pending Fleet Settlements
+                </span>
+                <p className="text-2xl font-bold font-mono text-black dark:text-white">
+                  ₹{stats.assistantEarningsPending || 0}
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                  Maturing earnings across all stations
+                </p>
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs font-mono">
+              {['ALL', 'requested', 'approved', 'processing', 'paid', 'failed', 'rejected'].map((f) => {
+                const count = f === 'ALL' ? payoutsList.length : payoutsList.filter((p) => p.status === f).length;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setPayoutsFilter(f)}
+                    className={`px-3 py-1.5 rounded-lg font-bold capitalize transition-all ${
+                      payoutsFilter === f
+                        ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
+                        : 'text-zinc-500 hover:text-black dark:hover:text-white'
+                    }`}
+                  >
+                    <span>{f}</span>
+                    <span className="ml-1 text-[10px] opacity-75">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Master Payouts Table */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+              {payoutsList.length === 0 ? (
+                <div className="p-12 text-center text-xs text-zinc-400 font-mono">
+                  No payout withdrawal requests found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 font-mono bg-zinc-50 dark:bg-zinc-900/50">
+                        <th className="py-3 px-4">Request ID</th>
+                        <th className="py-3 px-4">Sahayak</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Method</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Requested At</th>
+                        <th className="py-3 px-4 text-right">Treasury Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
+                      {payoutsList
+                        .filter((p) => payoutsFilter === 'ALL' || p.status === payoutsFilter)
+                        .map((p) => {
+                          const statusColors = {
+                            requested: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                            approved: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+                            processing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+                            paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                            rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+                            failed: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+                            cancelled: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
+                          };
+
+                          return (
+                            <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                              <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
+                                {p.id.slice(0, 8)}...
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="font-bold text-black dark:text-white">
+                                  {p.assistant?.name || 'Sahayak'}
+                                </div>
+                                <div className="text-[11px] text-zinc-400 font-normal">
+                                  {p.assistant?.phone || p.assistant_id?.slice(0, 8)} · {p.assistant?.station_code || 'SCR'}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 font-bold text-sm text-black dark:text-white">
+                                ₹{p.amount}
+                              </td>
+                              <td className="py-3 px-4 capitalize text-zinc-400">
+                                {p.payout_method?.replace('_', ' ') || 'Bank Transfer'}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColors[p.status] || 'bg-zinc-100'}`}>
+                                  {p.status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-zinc-400 text-[11px]">
+                                {new Date(p.requested_at || p.created_at).toLocaleString()}
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {p.status === 'requested' && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApprovePayout(p.id)}
+                                        disabled={actionLoading}
+                                        className="btn-primary py-1 px-2.5 text-[11px] font-bold bg-blue-600 hover:bg-blue-700"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRejectPayout(p.id)}
+                                        disabled={actionLoading}
+                                        className="btn-secondary py-1 px-2 text-[11px] text-rose-600 hover:text-rose-700 border-rose-300 dark:border-rose-800"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {p.status === 'approved' && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleProcessingPayout(p.id)}
+                                        disabled={actionLoading}
+                                        className="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-600 border-purple-300 dark:border-purple-800"
+                                      >
+                                        Start Processing
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handlePaidPayout(p.id)}
+                                        disabled={actionLoading}
+                                        className="btn-primary py-1 px-2.5 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700"
+                                      >
+                                        Mark Paid
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRejectPayout(p.id)}
+                                        disabled={actionLoading}
+                                        className="btn-secondary py-1 px-2 text-[11px] text-rose-600 hover:text-rose-700 border-rose-300 dark:border-rose-800"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {p.status === 'processing' && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handlePaidPayout(p.id)}
+                                        disabled={actionLoading}
+                                        className="btn-primary py-1 px-2.5 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700"
+                                      >
+                                        Mark Paid (Disbursed)
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleFailedPayout(p.id)}
+                                        disabled={actionLoading}
+                                        className="btn-secondary py-1 px-2 text-[11px] text-rose-600 hover:text-rose-700 border-rose-300 dark:border-rose-800"
+                                      >
+                                        Mark Failed
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {p.status === 'paid' && (
+                                    <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                                      ✓ Ref: {p.payout_reference || 'CONFIRMED'}
+                                    </span>
+                                  )}
+
+                                  {p.status === 'failed' && (
+                                    <span className="text-[11px] font-mono text-rose-500">
+                                      Failed ({p.failure_reason || 'Network error'})
+                                    </span>
+                                  )}
+
+                                  {p.status === 'rejected' && (
+                                    <span className="text-[11px] font-mono text-zinc-400">
+                                      Rejected ({p.failure_reason || 'Admin review'})
+                                    </span>
+                                  )}
+
+                                  {p.status === 'cancelled' && (
+                                    <span className="text-[11px] font-mono text-zinc-400">
+                                      Cancelled by Assistant
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
             TAB 5: EMERGENCY SOS CENTER
             ======================================================== */}
         {activeTab === 'sos' && (
@@ -1964,6 +3430,11 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* ── TAB: LAUNCH CENTER (PHASE 9) ────────────────────────── */}
+        {activeTab === 'launch' && (
+          <LaunchCenter />
+        )}
+
       </main>
 
       {/* ── DETAIL INSPECTOR MODAL ─────────────────────────────── */}
@@ -1973,6 +3444,28 @@ export default function AdminDashboard() {
           onClose={handleCloseInspector}
           onUpdate={handleUpdateBooking}
           assistants={assistantsList}
+        />
+      )}
+
+      {/* ── SETTLEMENT CONFIRMATION MODAL (PHASE 4) ──────────────── */}
+      {settlementModalPayout && (
+        <SettlementConfirmModal
+          payout={settlementModalPayout}
+          onClose={() => setSettlementModalPayout(null)}
+          onConfirm={handleConfirmSettlement}
+          actionLoading={actionLoading}
+        />
+      )}
+
+      {/* ── FINANCIAL INCIDENT DETAIL & RESOLUTION MODAL (PHASE 5) ── */}
+      {selectedIncident && (
+        <IncidentDetailModal
+          incident={selectedIncident}
+          onClose={() => setSelectedIncident(null)}
+          onInvestigate={handleInvestigateIncident}
+          onResolve={handleResolveIncident}
+          onIgnore={handleIgnoreIncident}
+          actionLoading={actionLoading}
         />
       )}
 

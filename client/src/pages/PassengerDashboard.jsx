@@ -59,6 +59,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import axios from '../api/axios';
 import { STATIONS } from '../utils/services';
+import { loadRazorpayScript } from '../utils/razorpay';
 import Brand from '../components/Brand';
 import Footer from '../components/Footer';
 import TrainLoader from '../components/TrainLoader';
@@ -655,8 +656,44 @@ export default function PassengerDashboard() {
     try {
       sessionStorage.removeItem('onecoolie_active_payment');
     } catch (e) { }
+
+    if (method === 'cash') {
+      try {
+        const { data } = await axios.post('/bookings', {
+          train_no: selectedTrain.train_no,
+          train_name: selectedTrain.train_name,
+          station_code: station,
+          journey_date: journeyDate,
+          journey_time: journeyTime,
+          services: {
+            ...services,
+            luggage: getLuggageTotalCount(),
+            luggageCounts,
+            luggage_details: getLuggageSummaryLabel(),
+          },
+          total_price: calculateTotal(),
+          payment_method: 'cash',
+          coach: coach.trim(),
+          seat_number: seatNumber.trim(),
+          berth_type: berthType,
+          action_type: actionType,
+          pnr: pnrInput.trim(),
+        });
+        setPayOpen(false);
+        playConfirmationSound();
+        setConfirmedBooking(data);
+        toast.success('Assistance booking confirmed! Pay cash to sahayak upon service completion.');
+        fetchBookings();
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Booking submission failed');
+      }
+      return;
+    }
+
+    // Online Payment Flow (Razorpay Gateway)
     try {
-      const { data } = await axios.post('/bookings', {
+      // 1. Create order on backend
+      const { data: orderRes } = await axios.post('/payments/create-order', {
         train_no: selectedTrain.train_no,
         train_name: selectedTrain.train_name,
         station_code: station,
@@ -668,20 +705,77 @@ export default function PassengerDashboard() {
           luggageCounts,
           luggage_details: getLuggageSummaryLabel(),
         },
-        total_price: calculateTotal(),
-        payment_method: method,
+        payment_method: 'upi',
         coach: coach.trim(),
         seat_number: seatNumber.trim(),
         berth_type: berthType,
         action_type: actionType,
         pnr: pnrInput.trim(),
       });
-      setPayOpen(false);
-      playConfirmationSound();
-      setConfirmedBooking(data);
-      toast.success('Assistance booking confirmed!');
+
+      if (!orderRes || !orderRes.razorpay) {
+        throw new Error('Failed to initialize payment order with server.');
+      }
+
+      // 2. Ensure Razorpay Checkout SDK is loaded
+      await loadRazorpayScript();
+      if (!window.Razorpay) {
+        throw new Error('Razorpay Checkout failed to load. Please check your internet connection.');
+      }
+
+      let storedUser = null;
+      try {
+        const raw = localStorage.getItem('userInfo');
+        if (raw) storedUser = JSON.parse(raw);
+      } catch (e) { }
+
+      // 3. Open Razorpay Standard Checkout
+      const options = {
+        key: orderRes.razorpay.key_id,
+        amount: orderRes.razorpay.amount,
+        currency: orderRes.razorpay.currency || 'INR',
+        name: 'OneCoolie',
+        description: `Station Assistance Booking #${orderRes.booking.booking_id}`,
+        order_id: orderRes.razorpay.order_id,
+        handler: async function (response) {
+          try {
+            // 4. Verify HMAC-SHA256 signature
+            const { data: verifyRes } = await axios.post('/payments/verify', {
+              booking_id: orderRes.booking.id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            setPayOpen(false);
+            playConfirmationSound();
+            setConfirmedBooking(verifyRes.booking || orderRes.booking);
+            toast.success('Payment verified! Sahayak search initiated.');
+            fetchBookings();
+          } catch (verifyErr) {
+            toast.error(verifyErr.response?.data?.message || 'Payment verification failed.');
+          }
+        },
+        prefill: {
+          name: storedUser?.name || '',
+          email: storedUser?.email || '',
+          contact: storedUser?.phone || '',
+        },
+        theme: {
+          color: '#1463FF',
+        },
+        modal: {
+          ondismiss: function () {
+            toast.info('Payment window closed. You can retry or choose Cash on Service.');
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Booking submission failed');
+      toast.error(err.response?.data?.message || err.message || 'Unable to launch online payment.');
     }
   };
 

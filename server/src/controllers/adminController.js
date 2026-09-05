@@ -1,6 +1,9 @@
 const supabase = require('../config/db');
 const { formatBooking } = require('../utils/bookingFormatter');
 const { broadcast } = require('./serviceController');
+const { resolveBooking } = require('../utils/bookingResolver');
+const { PLATFORM_COMMISSION_PERCENT } = require('../config/commission');
+const { recordAssistantEarningOnCompletion } = require('../utils/earningsService');
 
 // --------------------------------------------------
 // PLATFORM STATS & METRICS (GET /admin/stats)
@@ -30,17 +33,91 @@ exports.getStats = async (req, res) => {
     const onlineAssistants = allUsers.filter(u => u.role === 'assistant' && u.is_online).length;
     const totalPassengers = allUsers.filter(u => u.role === 'passenger').length;
 
-    // Revenue calculations
-    const revenue = allBookings
+    // Revenue calculations (Phase 1 Platform Commission & Sahayak Split)
+    const grossRevenue = allBookings
       .filter(b => b.payment_status === 'paid')
       .reduce((sum, b) => sum + (Number(b.total_price) || 0), 0);
+
+    // Phase 3A: Refund accounting
+    let totalRefunded = 0;
+    let pendingRefundsCount = 0;
+    let failedRefundsCount = 0;
+    try {
+      const { data: refundsData } = await supabase
+        .from('refunds')
+        .select('id, amount, status');
+      if (refundsData) {
+        totalRefunded = refundsData
+          .filter(r => r.status === 'processed')
+          .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        totalRefunded = Math.round(totalRefunded * 100) / 100;
+        pendingRefundsCount = refundsData.filter(r => ['pending', 'processing'].includes(r.status)).length;
+        failedRefundsCount = refundsData.filter(r => r.status === 'failed').length;
+      }
+    } catch (refErr) {
+      // Table may not exist yet in unmigrated environment
+    }
+
+    // Phase 3B: Assistant Earnings & Payouts breakdown
+    let assistantEarningsPending = 0;
+    let assistantEarningsAvailable = 0;
+    let assistantEarningsHeld = 0;
+    let assistantEarningsPaidOut = 0;
+    try {
+      const { data: earningsData } = await supabase
+        .from('assistant_earnings')
+        .select('id, assistant_amount, status');
+      if (earningsData) {
+        earningsData.forEach((e) => {
+          const amt = Number(e.assistant_amount) || 0;
+          if (e.status === 'pending') assistantEarningsPending += amt;
+          else if (e.status === 'available') assistantEarningsAvailable += amt;
+          else if (e.status === 'held') assistantEarningsHeld += amt;
+          else if (e.status === 'paid_out') assistantEarningsPaidOut += amt;
+        });
+        assistantEarningsPending = Math.round(assistantEarningsPending * 100) / 100;
+        assistantEarningsAvailable = Math.round(assistantEarningsAvailable * 100) / 100;
+        assistantEarningsHeld = Math.round(assistantEarningsHeld * 100) / 100;
+        assistantEarningsPaidOut = Math.round(assistantEarningsPaidOut * 100) / 100;
+      }
+    } catch (eErr) {}
+
+    let payoutsRequested = 0;
+    let payoutsProcessing = 0;
+    let payoutsFailed = 0;
+    let totalPayoutsPaid = 0;
+    try {
+      const { data: payoutsData } = await supabase
+        .from('assistant_payouts')
+        .select('id, amount, status');
+      if (payoutsData) {
+        payoutsRequested = payoutsData.filter(p => p.status === 'requested').length;
+        payoutsProcessing = payoutsData.filter(p => p.status === 'processing').length;
+        payoutsFailed = payoutsData.filter(p => p.status === 'failed').length;
+        totalPayoutsPaid = payoutsData
+          .filter(p => p.status === 'paid')
+          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        totalPayoutsPaid = Math.round(totalPayoutsPaid * 100) / 100;
+      }
+    } catch (pErr) {}
+
+    // Net Revenue = Gross Revenue - Total Refunded
+    const netRevenue = Math.max(0, Math.round((grossRevenue - totalRefunded) * 100) / 100);
+
+    const platformCommissionPercent = PLATFORM_COMMISSION_PERCENT; // 20%
+    const platformRevenue = Math.round((netRevenue * platformCommissionPercent) / 100 * 100) / 100;
+    const assistantEarningsOwed = Math.round((netRevenue - platformRevenue) * 100) / 100;
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const todayBookingsList = allBookings.filter(b => b.created_at && b.created_at.startsWith(todayStr));
     const todayBookings = todayBookingsList.length;
-    const todayRevenue = todayBookingsList
+    const todayGrossRevenue = todayBookingsList
       .filter(b => b.payment_status === 'paid')
       .reduce((sum, b) => sum + (Number(b.total_price) || 0), 0);
+    const todayPlatformRevenue = Math.round((todayGrossRevenue * platformCommissionPercent) / 100 * 100) / 100;
+
+    const pendingPaymentsCount = allBookings.filter(b => b.payment_status === 'pending').length;
+    const failedPaymentsCount = allBookings.filter(b => b.payment_status === 'failed').length;
 
     // Active SOS
     const activeSOS = allBookings.filter(b => b.sos_triggered).length;
@@ -88,10 +165,30 @@ exports.getStats = async (req, res) => {
       totalAssistants,
       onlineAssistants,
       totalPassengers,
-      revenue,
-      todayRevenue,
+      revenue: grossRevenue, // backward compatible
+      grossRevenue,
+      netRevenue,
+      totalRefunded,
+      pendingRefunds: pendingRefundsCount,
+      failedRefunds: failedRefundsCount,
+      platformRevenue,
+      assistantEarningsOwed,
+      assistantEarningsPending,
+      assistantEarningsAvailable,
+      assistantEarningsHeld,
+      assistantEarningsPaidOut,
+      payoutsRequested,
+      payoutsProcessing,
+      payoutsFailed,
+      totalPayoutsPaid,
+      todayRevenue: todayGrossRevenue, // backward compatible
+      todayGrossRevenue,
+      todayPlatformRevenue,
       todayBookings,
       activeSOS,
+      pendingPaymentsCount,
+      failedPaymentsCount,
+      commissionPercent: platformCommissionPercent,
       statusBreakdown,
       stationStats,
       paymentMap,
@@ -243,22 +340,15 @@ exports.getAllBookings = async (req, res) => {
 // --------------------------------------------------
 exports.getBookingById = async (req, res) => {
   try {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
-    let query = supabase
-      .from('bookings')
-      .select(`
+    const { booking: data, error } = await resolveBooking(
+      supabase,
+      req.params.id,
+      `
         *,
         passenger:passenger_id(id, name, email, phone),
         assistant:assistant_id(id, name, email, phone, station_code, is_online)
-      `);
-
-    if (isUUID) {
-      query = query.eq('id', req.params.id);
-    } else {
-      query = query.eq('booking_id', req.params.id);
-    }
-
-    const { data, error } = await query.maybeSingle();
+      `
+    );
 
     if (error || !data) {
       return res.status(404).json({ message: 'Booking not found.' });
@@ -311,10 +401,23 @@ exports.updateBooking = async (req, res) => {
       updates.sos_triggered = sos_triggered;
     }
 
-    const { data, error } = await supabase
+    const client = req.supabase || supabase;
+    const { booking: targetBooking, error: resolveErr } = await resolveBooking(client, req.params.id);
+    if (resolveErr || !targetBooking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    // Phase 6 Security Rule: Admins strictly prohibited from manually marking online payments as paid
+    if (payment_status === 'paid' && targetBooking.payment_method !== 'cash') {
+      return res.status(400).json({
+        message: 'Security Policy: Admins are strictly prohibited from manually marking online payments as paid. Online payments must be finalized by gateway webhooks or HMAC signature verification.'
+      });
+    }
+
+    const { data, error } = await client
       .from('bookings')
       .update(updates)
-      .eq('id', req.params.id)
+      .eq('id', targetBooking.id)
       .select(`
         *,
         passenger:passenger_id(id, name, email, phone),
@@ -324,6 +427,21 @@ exports.updateBooking = async (req, res) => {
 
     if (error || !data) {
       return res.status(400).json({ message: error?.message || 'Update failed.' });
+    }
+
+    // Sync payments table status if payment_status was updated
+    if (payment_status !== undefined) {
+      try {
+        await supabase
+          .from('payments')
+          .update({ status: payment_status, updated_at: new Date().toISOString() })
+          .eq('booking_id', targetBooking.id);
+      } catch (pErr) {}
+    }
+
+    // If completed and payment is paid, ensure assistant earnings are generated
+    if (data.booking_status === 'completed' && data.payment_status === 'paid' && data.assistant_id) {
+      await recordAssistantEarningOnCompletion(supabase, data);
     }
 
     const formatted = formatBooking(data, { includeOTP: true });
@@ -496,5 +614,123 @@ exports.resolveSOS = async (req, res) => {
   } catch (err) {
     console.error('ADMIN RESOLVE SOS ERROR:', err);
     res.status(500).json({ message: 'Failed to resolve emergency alert.' });
+  }
+};
+
+// --------------------------------------------------
+// CANCEL BOOKING BY ADMIN (POST /admin/bookings/:id/cancel)
+// --------------------------------------------------
+exports.cancelBookingByAdmin = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { reason = 'Cancelled by administrator' } = req.body || {};
+
+    const { booking, error: findError } = await resolveBooking(supabase, bookingId);
+    if (findError || !booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const { canAdminCancel, determineRefundEligibility } = require('../utils/cancellationRules');
+    const { processBookingRefund } = require('../utils/refundService');
+    const { reverseAssistantEarning } = require('../utils/earningsService');
+
+    const ruleCheck = canAdminCancel(booking);
+    if (!ruleCheck.allowed) {
+      if (ruleCheck.isAlreadyCancelled) {
+        return res.json({
+          success: true,
+          idempotent: true,
+          message: 'Booking is already cancelled.',
+          booking: formatBooking(booking, { includeOTP: false })
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: ruleCheck.reason || 'This booking cannot be cancelled.'
+      });
+    }
+
+    // Fetch authoritative payment ledger row
+    let paymentRecord = null;
+    try {
+      const { data: pData } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('booking_id', booking.id)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+      paymentRecord = pData;
+    } catch (pErr) {}
+
+    // Refund calculation & gateway dispatch
+    const refundEligibility = determineRefundEligibility(booking, paymentRecord, 'admin');
+    let refundResult = null;
+    if (refundEligibility.requiresRefund && paymentRecord) {
+      refundResult = await processBookingRefund(supabase, {
+        booking,
+        payment: paymentRecord,
+        refundAmount: refundEligibility.refundAmount,
+        reason,
+        actorRole: 'admin',
+        actorId: req.user?.id || 'admin'
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const newPaymentStatus = refundResult?.success
+      ? 'refunded'
+      : (booking.payment_method === 'cash' || paymentRecord?.status === 'pending')
+        ? 'cancelled'
+        : booking.payment_status;
+
+    const { data: updatedBooking, error: updateErr } = await supabase
+      .from('bookings')
+      .update({
+        booking_status: 'cancelled',
+        payment_status: newPaymentStatus,
+        updated_at: nowIso
+      })
+      .eq('id', booking.id)
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+      .single();
+
+    if (updateErr) {
+      return res.status(400).json({ message: updateErr.message });
+    }
+
+    if (paymentRecord?.id && paymentRecord.status === 'pending') {
+      try {
+        await supabase
+          .from('payments')
+          .update({ status: 'cancelled', updated_at: nowIso })
+          .eq('id', paymentRecord.id);
+      } catch (payCancelErr) {}
+    }
+
+    // Reverse any pending assistant earnings
+    await reverseAssistantEarning(supabase, booking.id, `Admin cancelled booking: ${reason}`);
+
+    const formatted = formatBooking(updatedBooking, { includeOTP: false });
+    broadcast(bookingId, formatted);
+
+    const { getIO } = require('./serviceController');
+    const io = getIO();
+    if (io) {
+      io.emit('booking_cancelled', formatted);
+      io.emit('status_update', formatted);
+    }
+
+    return res.json({
+      success: true,
+      message: refundResult?.success
+        ? `Booking cancelled by admin. Refund of ₹${refundEligibility.refundAmount} processed.`
+        : 'Booking cancelled by admin.',
+      booking: formatted,
+      refund: refundResult?.refund || null
+    });
+
+  } catch (err) {
+    console.error('ADMIN CANCEL BOOKING ERROR:', err);
+    return res.status(500).json({ message: 'Failed to cancel booking.' });
   }
 };

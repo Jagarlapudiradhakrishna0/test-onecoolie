@@ -230,10 +230,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
       const { data } = await axios.post(`/bookings/${booking.id}/cancel`);
       onUpdate(data.booking || data);
       setShowCancelModal(false);
-      toast.success('Booking cancelled successfully.');
+      toast.success(data.message || 'Booking cancelled successfully.');
     } catch (err) {
       console.error(err);
-      toast.error('Unable to cancel booking.');
+      toast.error(err.response?.data?.message || 'Unable to cancel booking.');
     }
   };
 
@@ -1127,14 +1127,28 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs font-medium text-zinc-500">Payment Status</span>
-              <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                {booking.payment_status?.toUpperCase() || 'PAID'}
+              <span className={`px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1.5 ${
+                booking.payment_status === 'refunded'
+                  ? 'bg-blue-100 text-blue-700'
+                  : booking.payment_status === 'cancelled'
+                    ? 'bg-zinc-100 text-zinc-600'
+                    : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  booking.payment_status === 'refunded'
+                    ? 'bg-blue-600'
+                    : booking.payment_status === 'cancelled'
+                      ? 'bg-zinc-500'
+                      : 'bg-emerald-600'
+                }`} />
+                {booking.payment_status === 'refunded'
+                  ? 'REFUND PROCESSED'
+                  : (booking.payment_status?.toUpperCase() || 'PAID')}
               </span>
             </div>
 
-            {/* Cancel Booking Action Button (Active State) */}
-            {!isCompleted && !isCancelled && (
+            {/* Cancel Booking Action Button (Active State before service starts) */}
+            {!isCompleted && !isCancelled && status !== 'in_service' && (
               <button
                 type="button"
                 onClick={() => setShowCancelModal(true)}

@@ -12,11 +12,13 @@ const {
     rateBooking
 } = require('../controllers/bookingController');
 
+const { bookingCancellationLimiter } = require('../middleware/financialRateLimiter');
+
 router.post('/', protect, createBooking);
 router.get('/my-bookings', protect, getMyBookings);
 router.get('/:id', protect, getBookingById);
 router.put('/:id', protect, updateBooking);
-router.post('/:id/cancel', protect, cancelBooking);
+router.post('/:id/cancel', bookingCancellationLimiter, protect, cancelBooking);
 
 // ONECOOLIE Backend Pipeline Routes
 router.put('/:id/assign', protect, assignAssistant);

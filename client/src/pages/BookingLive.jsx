@@ -38,6 +38,22 @@ export default function BookingLive() {
     try {
       const { data } = await axios.get(`/bookings/${id}`);
       setBooking(data);
+
+      // Phase 2C Payment Recovery: If online booking is pending, query authoritative gateway status
+      if (data && data.payment_status === 'pending' && data.payment_method !== 'cash') {
+        try {
+          const { data: statusRes } = await axios.get(`/payments/${id}/status`);
+          if (statusRes && statusRes.payment_status === 'paid') {
+            setBooking((prev) => ({
+              ...prev,
+              payment_status: 'paid'
+            }));
+            toast.success('Payment confirmed via secure gateway!');
+          }
+        } catch (statusErr) {
+          // Continue gracefully
+        }
+      }
     } catch (err) {
       console.error(err);
     }

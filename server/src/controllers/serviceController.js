@@ -1,5 +1,12 @@
 const supabase = require('../config/db');
 const { formatBooking } = require('../utils/bookingFormatter');
+const { resolveBooking } = require('../utils/bookingResolver');
+const { recordAssistantEarningOnCompletion } = require('../utils/earningsService');
+const {
+  isOnlinePayment,
+  isCashPayment,
+  normalizePaymentMethod
+} = require('../utils/paymentClassification');
 
 let io = null;
 
@@ -41,11 +48,11 @@ exports.broadcast = (bookingId, booking) => {
 // --------------------------------------------------
 
 async function fetchBookingForAssistant(bookingId, assistantId) {
-  const { data: booking, error } = await supabase
-    .from('bookings')
-    .select('*, passenger:passenger_id(id, name, email, phone)')
-    .eq('id', bookingId)
-    .single();
+  const { booking, error } = await resolveBooking(
+    supabase,
+    bookingId,
+    '*, passenger:passenger_id(id, name, email, phone)'
+  );
 
   if (error) {
     return { error: { status: 400, message: error.message } };
@@ -95,6 +102,12 @@ exports.updateStatus = async (req, res) => {
 
     // ── accepted → arriving ────────────────────────────────────────────────
     if (current === 'accepted' && status === 'arriving') {
+      if (isOnlinePayment(booking.payment_method) && booking.payment_status !== 'paid') {
+        return res.status(400).json({
+          message: 'Online payment must be completed and verified before arriving.'
+        });
+      }
+
       const { data, error } = await supabase
         .from('bookings')
         .update({
@@ -150,6 +163,9 @@ exports.updateStatus = async (req, res) => {
       if (!data) {
         return res.status(409).json({ message: 'Booking was already completed or changed.' });
       }
+
+      // Record assistant earning and platform commission upon completion
+      await recordAssistantEarningOnCompletion(supabase, data);
 
       const formatted = formatBooking(data);
       exports.broadcast(booking_id, formatted);
@@ -216,6 +232,13 @@ exports.confirmStartOTP = async (req, res) => {
 
     if (booking.assistant_id !== req.user.id) {
       return res.status(403).json({ message: 'You are not assigned to this job.' });
+    }
+
+    // Option C Gate: Unpaid online bookings cannot proceed to in_service
+    if (isOnlinePayment(booking.payment_method) && booking.payment_status !== 'paid') {
+      return res.status(400).json({
+        message: 'Online payment must be completed and verified before starting service.'
+      });
     }
 
     // ── Must be in 'arriving' state
@@ -303,16 +326,16 @@ exports.markPaid = async (req, res) => {
     const { booking_id } = req.params;
     const { method } = req.body;
 
-    // ── Validate method
+    // ── Validate method: On-spot collection by assistant is strictly cash
     if (!method) {
       return res.status(400).json({ message: 'Payment method is required.' });
     }
 
-    const normalizedMethod = String(method).toLowerCase().trim();
+    const normalizedMethod = normalizePaymentMethod(method);
 
-    if (!['cash', 'upi'].includes(normalizedMethod)) {
+    if (!isCashPayment(normalizedMethod)) {
       return res.status(400).json({
-        message: 'Invalid payment method. Allowed methods: cash, upi.'
+        message: 'Only cash payments can be collected by the assistant on spot.'
       });
     }
 
@@ -323,6 +346,13 @@ exports.markPaid = async (req, res) => {
 
     if (fetchError) {
       return res.status(fetchError.status).json({ message: fetchError.message });
+    }
+
+    // Must be a cash booking
+    if (!isCashPayment(booking.payment_method)) {
+      return res.status(400).json({
+        message: 'This booking was booked with online payment. Payment must be verified through the online gateway.'
+      });
     }
 
     // ── Must be in_service
@@ -339,18 +369,55 @@ exports.markPaid = async (req, res) => {
       });
     }
 
-    const paymentId = `TXN-${normalizedMethod.toUpperCase()}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    // Update or create dedicated payment ledger entry (Phase 1)
+    let paymentRecordId = booking.payment_id || null;
+    try {
+      const { data: existingPayment } = await supabase
+        .from('payments')
+        .select('id')
+        .eq('booking_id', booking.id)
+        .maybeSingle();
 
-    // ── Record payment atomically
+      if (existingPayment) {
+        paymentRecordId = existingPayment.id;
+        await supabase
+          .from('payments')
+          .update({
+            status: 'paid',
+            payment_method: normalizedMethod,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingPayment.id);
+      } else {
+        const { data: newPayment } = await supabase
+          .from('payments')
+          .insert([{
+            booking_id: booking.id,
+            passenger_id: booking.passenger_id,
+            amount: Number(booking.total_price) || 0,
+            currency: 'INR',
+            payment_method: normalizedMethod,
+            status: 'paid',
+            metadata: { note: 'Payment recorded by assistant during service' }
+          }])
+          .select('id')
+          .maybeSingle();
+        if (newPayment) paymentRecordId = newPayment.id;
+      }
+    } catch (payLedgerErr) {
+      console.warn('Payment update notice:', payLedgerErr.message);
+    }
+
+    // ── Record payment atomically on booking
     const { data, error } = await supabase
       .from('bookings')
       .update({
         payment_status: 'paid',
         payment_method: normalizedMethod,
-        payment_id: paymentId,
+        payment_id: paymentRecordId,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', booking_id)
+      .eq('id', booking.id)
       .eq('assistant_id', req.user.id)
       .eq('payment_status', 'pending')  // atomic guard against double-payment
       .select('*, passenger:passenger_id(id, name, email, phone)')

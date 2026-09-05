@@ -1,6 +1,12 @@
 const supabase = require('../config/db');
 const { broadcast } = require('./serviceController');
 const { formatBooking } = require('../utils/bookingFormatter');
+const { resolveBooking } = require('../utils/bookingResolver');
+const { recordAssistantEarningOnCompletion } = require('../utils/earningsService');
+const {
+  isBookingAvailableToAssistants,
+  isOnlinePayment
+} = require('../utils/paymentClassification');
 
 const FRESH_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
 
@@ -88,8 +94,13 @@ exports.getAvailableBookings = async (req, res) => {
       return res.status(400).json({ message: error.message });
     }
 
+    // Option C Enforcement:
+    // Cash bookings are available while pending.
+    // Online bookings are available ONLY if completed and verified (payment_status === 'paid').
+    const available = (data || []).filter((b) => isBookingAvailableToAssistants(b));
+
     // Never expose OTP in the available bookings list
-    const formatted = (data || []).map((b) =>
+    const formatted = available.map((b) =>
       formatBooking(b, { includeOTP: false })
     );
 
@@ -117,6 +128,18 @@ exports.acceptBooking = async (req, res) => {
 
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
+    const { booking: targetBooking, error: resolveErr } = await resolveBooking(supabase, booking_id);
+    if (resolveErr || !targetBooking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    // Option C Gate: Unpaid online bookings cannot be accepted by assistants
+    if (isOnlinePayment(targetBooking.payment_method) && targetBooking.payment_status !== 'paid') {
+      return res.status(400).json({
+        message: 'Online payment must be completed and verified before this booking can be accepted.'
+      });
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .update({
@@ -128,7 +151,7 @@ exports.acceptBooking = async (req, res) => {
         start_otp_expires_at: expiresAt,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', booking_id)
+      .eq('id', targetBooking.id)
       .eq('booking_status', 'pending')  // atomic guard: only accept pending jobs
       .select('*, passenger:passenger_id(id, name, email, phone)')
       .single();
@@ -206,11 +229,11 @@ exports.completeBooking = async (req, res) => {
   try {
     const { booking_id } = req.params;
 
-    const { data: booking, error: fetchError } = await supabase
-      .from('bookings')
-      .select('id, assistant_id, booking_status, payment_status')
-      .eq('id', booking_id)
-      .single();
+    const { booking, error: fetchError } = await resolveBooking(
+      supabase,
+      booking_id,
+      'id, assistant_id, booking_status, payment_status, total_price'
+    );
 
     if (fetchError || !booking) {
       return res.status(404).json({ message: 'Job not found.' });
@@ -246,7 +269,7 @@ exports.completeBooking = async (req, res) => {
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', booking_id)
+      .eq('id', booking.id)
       .eq('assistant_id', req.user.id)
       .eq('booking_status', 'in_service')  // atomic guard
       .select('*, passenger:passenger_id(id, name, email, phone)')
@@ -260,8 +283,11 @@ exports.completeBooking = async (req, res) => {
       return res.status(409).json({ message: 'Job was already completed (concurrent request).' });
     }
 
+    // Record assistant earning and platform commission split
+    await recordAssistantEarningOnCompletion(supabase, data);
+
     const formatted = formatBooking(data);
-    broadcast(booking_id, formatted);
+    broadcast(booking.id, formatted);
 
     res.json(formatted);
   } catch (err) {
@@ -279,27 +305,27 @@ exports.completeBooking = async (req, res) => {
 //   onUpdate(data?.booking || data) works in AssistantJobCard.
 // --------------------------------------------------
 
+const { canAssistantCancel } = require('../utils/cancellationRules');
+
 exports.cancelByAssistant = async (req, res) => {
   try {
     const { booking_id } = req.params;
 
-    const { data: booking, error: fetchError } = await supabase
-      .from('bookings')
-      .select('id, assistant_id, booking_status')
-      .eq('id', booking_id)
-      .single();
+    const { booking, error: fetchError } = await resolveBooking(
+      supabase,
+      booking_id,
+      'id, booking_id, assistant_id, booking_status, payment_method, payment_status, total_price, station_code'
+    );
 
     if (fetchError || !booking) {
       return res.status(404).json({ message: 'Job not found.' });
     }
 
-    if (booking.assistant_id !== req.user.id) {
-      return res.status(403).json({ message: 'You are not assigned to this job.' });
-    }
-
-    if (!['accepted', 'arriving'].includes(booking.booking_status)) {
+    // Centralized rule verification
+    const ruleCheck = canAssistantCancel(booking, req.user.id);
+    if (!ruleCheck.allowed) {
       return res.status(400).json({
-        message: 'Job cannot be cancelled at this stage. Service has already started.'
+        message: ruleCheck.reason || 'Job cannot be cancelled at this stage.'
       });
     }
 
@@ -315,7 +341,7 @@ exports.cancelByAssistant = async (req, res) => {
         start_otp_expires_at: null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', booking_id)
+      .eq('id', booking.id)
       .select('*, passenger:passenger_id(id, name, email, phone)')
       .single();
 
@@ -326,9 +352,21 @@ exports.cancelByAssistant = async (req, res) => {
     const formatted = formatBooking(data);
     broadcast(booking_id, formatted);
 
+    // If booking is available (Option C: paid online or cash), broadcast new_booking to fleet
+    try {
+      const io = getIO();
+      if (io && isBookingAvailableToAssistants(data)) {
+        io.emit('new_booking', formatBooking(data, { includeOTP: false }));
+      }
+    } catch (sErr) {}
+
     // AssistantJobCard does: onUpdate(data?.booking || data)
-    // We return { booking: formatted } so both patterns work.
-    res.json({ booking: formatted, ...formatted });
+    res.json({
+      success: true,
+      message: 'Job released back to station pool.',
+      booking: formatted,
+      ...formatted
+    });
 
   } catch (err) {
     console.error('ASSISTANT CANCEL ERROR:', err);

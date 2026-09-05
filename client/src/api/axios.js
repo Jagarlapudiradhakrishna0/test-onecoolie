@@ -1,7 +1,15 @@
 import axios from 'axios';
 
+// Centralized API Base URL resolution (Phase 7):
+// - If VITE_API_URL is explicitly set, use it across all environments.
+// - In development fallback: use '/api' to cleanly leverage Vite's reverse proxy to localhost:5000.
+// - In production fallback: use production cloud backend URL.
+const resolvedBaseUrl =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? '/api' : 'https://onecoolie.onrender.com/api');
+
 const instance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://onecoolie.onrender.com/api',
+  baseURL: resolvedBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },

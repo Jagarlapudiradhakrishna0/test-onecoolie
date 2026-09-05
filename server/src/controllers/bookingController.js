@@ -1,6 +1,19 @@
 const supabase = require('../config/db');
 const { formatBooking } = require('../utils/bookingFormatter');
 const { broadcast, getIO } = require('./serviceController');
+const { calculateBookingPrice } = require('../config/pricing');
+const { resolveBooking } = require('../utils/bookingResolver');
+const {
+  isValidPaymentMethod,
+  isCashPayment,
+  isOnlinePayment,
+  normalizePaymentMethod
+} = require('../utils/paymentClassification');
+const {
+  createBookingRecordInDB,
+  buildServiceData,
+  generateBookingId
+} = require('../utils/bookingCore');
 
 /*
 |--------------------------------------------------------------------------
@@ -8,101 +21,12 @@ const { broadcast, getIO } = require('./serviceController');
 |--------------------------------------------------------------------------
 */
 
-const VALID_PAYMENT_METHODS = [
-  'cash',
-  'online',
-  'upi',
-  'card',
-  'netbanking'
-];
-
 const ACTIVE_BOOKING_STATUSES = [
   'pending',
   'accepted',
   'arriving',
   'in_service'
 ];
-
-
-/*
-|--------------------------------------------------------------------------
-| HELPER - GENERATE BOOKING ID
-|--------------------------------------------------------------------------
-*/
-
-const generateBookingId = () => {
-  const timestamp = Date.now().toString(36).toUpperCase();
-
-  const random = Math.random()
-    .toString(36)
-    .substring(2, 7)
-    .toUpperCase();
-
-  return `RM-${timestamp}-${random}`;
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| HELPER - CONVERT SERVICES OBJECT
-|--------------------------------------------------------------------------
-|
-| Frontend sends:
-|
-| {
-|   luggage: 2,
-|   escort: true,
-|   language: false,
-|   wheelchair: false,
-|   snacks: true,
-|   transport: false
-| }
-|
-| Database stores:
-|
-| "Luggage Assistance (2 items), Seat Escorting, Snacks & Water"
-|
-|--------------------------------------------------------------------------
-*/
-
-const buildServiceData = (services) => {
-  const selectedServices = [];
-
-  if (
-    services &&
-    services.luggage &&
-    Number(services.luggage) > 0
-  ) {
-    const quantity = Number(services.luggage);
-
-    selectedServices.push(
-      `Luggage Assistance (${quantity} ${quantity === 1 ? 'item' : 'items'
-      })`
-    );
-  }
-
-  if (services && services.escort) {
-    selectedServices.push('Seat Escorting');
-  }
-
-  if (services && services.language) {
-    selectedServices.push('Language Help');
-  }
-
-  if (services && services.wheelchair) {
-    selectedServices.push('Wheelchair & Elderly');
-  }
-
-  if (services && services.snacks) {
-    selectedServices.push('Snacks & Water');
-  }
-
-  if (services && services.transport) {
-    selectedServices.push('Exit Transport Help');
-  }
-
-  return selectedServices;
-};
 
 
 /*
@@ -117,30 +41,6 @@ const buildServiceData = (services) => {
 
 exports.createBooking = async (req, res) => {
   try {
-    const {
-      train_no,
-      train_name,
-      station_code,
-      journey_date,
-      journey_time,
-      services,
-      total_price,
-      payment_method,
-      coach,
-      seat_number,
-      berth_type,
-      action_type,
-      pnr,
-      platform
-    } = req.body;
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDATION
-    |--------------------------------------------------------------------------
-    */
-
     if (!req.user || !req.user.id) {
       return res.status(401).json({
         message: 'Authentication required.'
@@ -159,284 +59,27 @@ exports.createBooking = async (req, res) => {
       });
     }
 
-    if (!train_no) {
-      return res.status(400).json({
-        message: 'Train number is required.'
-      });
-    }
+    const { booking, normalizedPaymentMethod } = await createBookingRecordInDB(
+      supabase,
+      req.user.id,
+      req.body
+    );
 
-    if (!train_name) {
-      return res.status(400).json({
-        message: 'Train name is required.'
-      });
-    }
+    const formatted = formatBooking(booking, { includeOTP: true });
 
-    if (!station_code) {
-      return res.status(400).json({
-        message: 'Station is required.'
-      });
-    }
-
-    if (!journey_date) {
-      return res.status(400).json({
-        message: 'Journey date is required.'
-      });
-    }
-
-    if (!services) {
-      return res.status(400).json({
-        message: 'Service is required.'
-      });
-    }
-
-    if (
-      total_price === undefined ||
-      total_price === null ||
-      Number(total_price) <= 0
-    ) {
-      return res.status(400).json({
-        message: 'Valid total price is required.'
-      });
-    }
-
-    if (!payment_method) {
-      return res.status(400).json({
-        message: 'Payment method is required.'
-      });
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDATE PAYMENT METHOD
-    |--------------------------------------------------------------------------
-    */
-
-    const normalizedPaymentMethod =
-      String(payment_method).toLowerCase();
-
-    if (
-      !VALID_PAYMENT_METHODS.includes(
-        normalizedPaymentMethod
-      )
-    ) {
-      return res.status(400).json({
-        message: `Invalid payment method. Allowed methods: ${VALID_PAYMENT_METHODS.join(
-          ', '
-        )}.`
-      });
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BUILD SERVICE
-    |--------------------------------------------------------------------------
-    */
-
-    const selectedServices =
-      buildServiceData(services);
-
-    if (selectedServices.length === 0) {
-      return res.status(400).json({
-        message: 'Please select at least one service.'
-      });
-    }
-
-    const service =
-      selectedServices.join(', ');
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | SERVICE DESCRIPTION
-    |--------------------------------------------------------------------------
-    */
-
-    let serviceDescription =
-      `Requested services: ${service}`;
-
-    if (coach || seat_number) {
-      serviceDescription += ` | Coach: ${coach || 'TBD'}, Seat: ${seat_number || 'TBD'}`;
-      if (berth_type) serviceDescription += ` (${berth_type})`;
-    }
-    if (action_type === 'collect_from_seat') {
-      serviceDescription += ` | Mission: De-boarding (Collect from Seat)`;
-    } else {
-      serviceDescription += ` | Mission: Boarding (Load into Seat/Berth)`;
-    }
-
-    if (journey_time) {
-      serviceDescription +=
-        ` | Journey time: ${journey_time}`;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | PAYMENT STATUS
-    |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    |
-    | Your database allows only:
-    |
-    | pending
-    | paid
-    | failed
-    | refunded
-    |
-    |--------------------------------------------------------------------------
-    */
-
-    let paymentStatus = 'pending';
-
-    if (
-      normalizedPaymentMethod === 'cash'
-    ) {
-      paymentStatus = 'pending';
-    } else {
-      /*
-      |--------------------------------------------------------------------------
-      | Current system treats online payment as paid
-      |--------------------------------------------------------------------------
-      |
-      | Later, when a real payment gateway is connected,
-      | this should only become "paid" after payment verification.
-      |
-      |--------------------------------------------------------------------------
-      */
-
-      paymentStatus = 'paid';
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | GENERATE BOOKING ID
-    |--------------------------------------------------------------------------
-    */
-
-    const bookingId =
-      generateBookingId();
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | INSERT BOOKING
-    |--------------------------------------------------------------------------
-    */
-
-    const bookingData = {
-      booking_id: bookingId,
-
-      passenger_id: req.user.id,
-
-      assistant_id: null,
-
-      train_number: String(train_no),
-
-      train_name: train_name,
-
-      journey_date: journey_date,
-
-      journey_time: journey_time || null,
-
-      /*
-      |--------------------------------------------------------------------------
-      | Station where assistance is requested
-      |--------------------------------------------------------------------------
-      */
-
-      station_code: station_code,
-
-      /*
-      |--------------------------------------------------------------------------
-      | Your current bookings table has source/destination.
-      |
-      | The current PassengerDashboard only gives us station_code,
-      | so temporarily store station_code in source.
-      |
-      | Do NOT rely on destination for the assistance station.
-      |--------------------------------------------------------------------------
-      */
-
-      source: station_code,
-
-      destination: station_code,
-
-      service: service,
-
-      services: {
-        ...(typeof services === 'object' ? services : {}),
-        coach: coach || services?.coach || null,
-        seat_number: seat_number || services?.seat_number || null,
-        berth_type: berth_type || services?.berth_type || null,
-        action_type: action_type || services?.action_type || 'load_to_seat',
-        pnr: pnr || services?.pnr || null,
-        platform: platform || services?.platform || null
-      },
-
-      service_description: serviceDescription,
-
-      total_price: Number(total_price),
-
-      payment_method:
-        normalizedPaymentMethod,
-
-      payment_status: paymentStatus,
-
-      payment_id:
-        normalizedPaymentMethod === 'cash'
-          ? `PENDING-CASH-${Date.now().toString(36).toUpperCase()}`
-          : `TXN-${normalizedPaymentMethod.toUpperCase()}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-
-      booking_status: 'pending'
-    };
-
-
-    const {
-      data,
-      error
-    } = await supabase
-      .from('bookings')
-      .insert([bookingData])
-      .select('*, passenger:passenger_id(id, name, email, phone)')
-      .single();
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | DATABASE ERROR
-    |--------------------------------------------------------------------------
-    */
-
-    if (error) {
-      console.error(
-        'CREATE BOOKING DATABASE ERROR:',
-        error
-      );
-
-      return res.status(400).json({
-        message: error.message
-      });
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | SUCCESS — return formatted booking with OTP for passenger & notify admin
-    |--------------------------------------------------------------------------
-    */
-
-    const formatted = formatBooking(data, { includeOTP: true });
-
-    // Realtime notification to all connected admins & assistants
+    // Realtime notification based on Option C rules:
+    // Cash: immediately broadcast new_booking to fleet and status_update
+    // Online: DO NOT broadcast new_booking until payment is completed and verified in Phase 2
     try {
       const io = getIO();
       if (io) {
-        io.emit('new_booking', formatted);
-        io.emit('status_update', formatted);
+        if (isCashPayment(normalizedPaymentMethod)) {
+          io.emit('new_booking', formatted);
+          io.emit('status_update', formatted);
+        } else {
+          // Unpaid online booking: only notify passenger's private room
+          io.to(`booking_${booking.id}`).emit('status_update', formatted);
+        }
       }
     } catch (e) {
       console.warn('Socket broadcast warning:', e.message);
@@ -445,11 +88,10 @@ exports.createBooking = async (req, res) => {
     return res.status(201).json(formatted);
 
   } catch (error) {
-    console.error(
-      'CREATE BOOKING SERVER ERROR:',
-      error
-    );
-
+    if (error.status && error.message) {
+      return res.status(error.status).json({ message: error.message });
+    }
+    console.error('CREATE BOOKING SERVER ERROR:', error);
     return res.status(500).json({
       message: 'Server error while creating booking.'
     });
@@ -557,39 +199,19 @@ exports.getBookingById = async (req, res) => {
     }
 
 
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
-    let query = supabase
-      .from('bookings')
-      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)');
-
-    if (isUUID) {
-      query = query.eq('id', req.params.id);
-    } else {
-      query = query.eq('booking_id', req.params.id);
-    }
-
-    const {
-      data: booking,
-      error
-    } = await query.maybeSingle();
-
+    const { booking, error } = await resolveBooking(
+      supabase,
+      req.params.id,
+      '*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)'
+    );
 
     if (error) {
-      console.error(
-        'GET BOOKING ERROR:',
-        error
-      );
-
-      return res.status(400).json({
-        message: error.message
-      });
+      console.error('GET BOOKING ERROR:', error);
+      return res.status(400).json({ message: error.message });
     }
 
-
     if (!booking) {
-      return res.status(404).json({
-        message: 'Booking not found.'
-      });
+      return res.status(404).json({ message: 'Booking not found.' });
     }
 
 
@@ -667,7 +289,7 @@ exports.getBookingById = async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| CANCEL BOOKING BY PASSENGER
+| CANCEL BOOKING BY PASSENGER (Phase 3A Rules & Refund Engine)
 |--------------------------------------------------------------------------
 |
 | POST /api/bookings/:id/cancel
@@ -675,138 +297,158 @@ exports.getBookingById = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
+const { canPassengerCancel, determineRefundEligibility } = require('../utils/cancellationRules');
+const { processBookingRefund } = require('../utils/refundService');
+const { reverseAssistantEarning } = require('../utils/earningsService');
+
 exports.cancelBooking = async (req, res) => {
   try {
-
     if (!req.user || !req.user.id) {
       return res.status(401).json({
         message: 'Authentication required.'
       });
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Find booking
-    |--------------------------------------------------------------------------
-    */
-
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
-    let findQuery = supabase.from('bookings').select('*');
-    if (isUUID) {
-      findQuery = findQuery.eq('id', req.params.id);
-    } else {
-      findQuery = findQuery.eq('booking_id', req.params.id);
-    }
-
-    const {
-      data: booking,
-      error: findError
-    } = await findQuery.maybeSingle();
-
+    // 1. Resolve booking
+    const { booking, error: findError } = await resolveBooking(supabase, req.params.id);
 
     if (findError) {
-      console.error(
-        'CANCEL BOOKING FIND ERROR:',
-        findError
-      );
-
-      return res.status(400).json({
-        message: findError.message
-      });
+      return res.status(400).json({ message: findError.message });
     }
-
 
     if (!booking) {
-      return res.status(404).json({
-        message: 'Booking not found.'
-      });
+      return res.status(404).json({ message: 'Booking not found.' });
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Make sure passenger owns booking
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      booking.passenger_id !==
-      req.user.id
-    ) {
+    // 2. Ownership verification
+    if (booking.passenger_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         message: 'You are not authorized to cancel this booking.'
       });
     }
 
+    // 3. Fetch authoritative payment ledger row
+    let paymentRecord = null;
+    try {
+      const { data: pData } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('booking_id', booking.id)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+      paymentRecord = pData;
+    } catch (pErr) {}
 
-    /*
-    |--------------------------------------------------------------------------
-    | Check booking status
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      !ACTIVE_BOOKING_STATUSES.includes(
-        booking.booking_status
-      )
-    ) {
+    // 4. Centralized Rule Check
+    const ruleCheck = canPassengerCancel(booking, paymentRecord);
+    if (!ruleCheck.allowed) {
+      if (ruleCheck.isAlreadyCancelled) {
+        // Idempotent acknowledgement
+        const formatted = formatBooking(booking, { includeOTP: false });
+        return res.json({
+          success: true,
+          idempotent: true,
+          message: 'Booking is already cancelled.',
+          booking: formatted,
+          ...formatted
+        });
+      }
       return res.status(400).json({
-        message: 'This booking cannot be cancelled.'
+        success: false,
+        message: ruleCheck.reason || 'This booking cannot be cancelled.'
       });
     }
 
+    // 5. Determine & Execute Refund (if eligible online payment)
+    const refundEligibility = determineRefundEligibility(booking, paymentRecord, 'passenger');
+    let refundResult = null;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Cancel
-    |--------------------------------------------------------------------------
-    */
+    if (refundEligibility.requiresRefund && paymentRecord) {
+      refundResult = await processBookingRefund(supabase, {
+        booking,
+        payment: paymentRecord,
+        refundAmount: refundEligibility.refundAmount,
+        reason: req.body?.reason || 'Cancelled by passenger',
+        actorRole: 'passenger',
+        actorId: req.user.id
+      });
+    }
 
-    const {
-      data,
-      error
-    } = await supabase
+    // 6. Update booking status
+    const nowIso = new Date().toISOString();
+    const newPaymentStatus = refundResult?.success
+      ? 'refunded'
+      : (isCashPayment(booking.payment_method) || paymentRecord?.status === 'pending')
+        ? 'cancelled'
+        : booking.payment_status;
+
+    const { data: updatedBooking, error: updateError } = await supabase
       .from('bookings')
       .update({
         booking_status: 'cancelled',
-        updated_at: new Date().toISOString(),
+        payment_status: newPaymentStatus,
+        updated_at: nowIso
       })
-      .eq(
-        'id',
-        req.params.id
-      )
+      .eq('id', booking.id)
       .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 
-
-    if (error) {
-      console.error(
-        'CANCEL BOOKING UPDATE ERROR:',
-        error
-      );
-
-      return res.status(400).json({
-        message: error.message
-      });
+    if (updateError) {
+      console.error('CANCEL BOOKING UPDATE ERROR:', updateError);
+      return res.status(400).json({ message: updateError.message });
     }
 
-    // Notify the assistant (if one was assigned) via socket
-    const formatted = formatBooking(data, { includeOTP: true });
-    broadcast(req.params.id, formatted);
+    // 7. Update pending payment ledger to cancelled if not charged
+    if (paymentRecord?.id && paymentRecord.status === 'pending') {
+      try {
+        await supabase
+          .from('payments')
+          .update({
+            status: 'cancelled',
+            updated_at: nowIso
+          })
+          .eq('id', paymentRecord.id);
+      } catch (payCancelErr) {}
+    }
+
+    // 8. Reverse any pending assistant earnings
+    await reverseAssistantEarning(supabase, booking.id, 'Passenger cancelled booking');
+
+    // 9. Realtime Socket.IO Broadcast
+    const formatted = formatBooking(updatedBooking, { includeOTP: false });
+    try {
+      const io = getIO();
+      if (io) {
+        // Notify passenger room
+        io.to(`booking_${booking.id}`).emit('booking_cancelled', formatted);
+        io.to(`booking_${booking.id}`).emit('status_update', formatted);
+
+        // Notify assigned assistant directly if assigned
+        if (booking.assistant_id) {
+          io.to(`user_${booking.assistant_id}`).emit('booking_cancelled', formatted);
+        }
+
+        // Fleet radar cleanup: remove from all assistant screens
+        io.emit('booking_cancelled', formatted);
+        io.emit('status_update', formatted);
+      }
+    } catch (socketErr) {
+      console.warn('Socket broadcast warning:', socketErr.message);
+    }
 
     return res.json({
-      message: 'Booking cancelled successfully.',
+      success: true,
+      idempotent: false,
+      message: refundResult?.success
+        ? `Booking cancelled successfully. Refund of ₹${refundEligibility.refundAmount} has been processed.`
+        : 'Booking cancelled successfully.',
       booking: formatted,
-      ...formatted,
+      refund: refundResult?.refund || null,
+      ...formatted
     });
 
   } catch (error) {
-    console.error(
-      'CANCEL BOOKING SERVER ERROR:',
-      error
-    );
-
+    console.error('CANCEL BOOKING SERVER ERROR:', error);
     return res.status(500).json({
       message: 'Unable to cancel booking.'
     });
@@ -867,32 +509,14 @@ exports.rateBooking = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    const {
-      data: booking,
-      error: findError
-    } = await supabase
-      .from('bookings')
-      .select(
-        'id, passenger_id, booking_status'
-      )
-      .eq(
-        'id',
-        req.params.id
-      )
-      .maybeSingle();
-
+    const { booking, error: findError } = await resolveBooking(supabase, req.params.id, 'id, passenger_id, booking_status');
 
     if (findError) {
-      return res.status(400).json({
-        message: findError.message
-      });
+      return res.status(400).json({ message: findError.message });
     }
 
-
     if (!booking) {
-      return res.status(404).json({
-        message: 'Booking not found.'
-      });
+      return res.status(404).json({ message: 'Booking not found.' });
     }
 
 
@@ -1058,12 +682,26 @@ exports.assignAssistant = async (req, res) => {
 
 exports.processPayment = async (req, res) => {
   try {
-    return res.status(501).json({
-      message: 'Payment endpoint is not implemented yet.'
+    const { booking, error } = await resolveBooking(supabase, req.params.id);
+    if (error || !booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const { data: payment } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('booking_id', booking.id)
+      .maybeSingle();
+
+    return res.json({
+      message: 'Payment details retrieved. Phase 1 online payments remain in pending gateway verification.',
+      booking_id: booking.id,
+      payment_status: booking.payment_status,
+      payment: payment || null
     });
   } catch (error) {
     return res.status(500).json({
-      message: 'Unable to process payment.'
+      message: 'Unable to retrieve payment information.'
     });
   }
 };
@@ -1074,14 +712,7 @@ exports.updateBooking = async (req, res) => {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
-    let findQuery = supabase.from('bookings').select('*');
-    if (isUUID) {
-      findQuery = findQuery.eq('id', req.params.id);
-    } else {
-      findQuery = findQuery.eq('booking_id', req.params.id);
-    }
-    const { data: booking, error: findError } = await findQuery.maybeSingle();
+    const { booking, error: findError } = await resolveBooking(supabase, req.params.id);
 
     if (findError || !booking) {
       return res.status(404).json({ message: 'Booking not found.' });

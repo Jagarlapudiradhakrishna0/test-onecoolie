@@ -6,20 +6,21 @@ import {
   useLocation
 } from 'react-router-dom';
 
-import { useContext } from 'react';
+import { useContext, lazy, Suspense } from 'react';
 
 import { AuthContext } from './context/AuthContext';
 
-import AuthPage from './pages/AuthPage';
-import AdminLogin from './pages/AdminLogin';
-import HomePage from './pages/HomePage';
-import PassengerDashboard from './pages/PassengerDashboard';
-import AssistantDashboard from './pages/AssistantDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import BookingLive from './pages/BookingLive';
-
 import OfflineBanner from './components/OfflineBanner';
 import TrainLoader from './components/TrainLoader';
+
+// Lazy-loaded routes for code-splitting & optimal bundle performance (Phase 7)
+const HomePage = lazy(() => import('./pages/HomePage'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const AdminLogin = lazy(() => import('./pages/AdminLogin'));
+const PassengerDashboard = lazy(() => import('./pages/PassengerDashboard'));
+const AssistantDashboard = lazy(() => import('./pages/AssistantDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const BookingLive = lazy(() => import('./pages/BookingLive'));
 
 function ProtectedRoute({
   children,
@@ -118,104 +119,113 @@ export default function App() {
       <OfflineBanner />
 
       <BrowserRouter>
-        <Routes>
+        <Suspense
+          fallback={
+            <TrainLoader
+              text="Loading OneCoolie..."
+              subtext="Connecting to station dispatch network..."
+            />
+          }
+        >
+          <Routes>
 
-          {/* Public Home */}
-          <Route
-            path="/"
-            element={<HomePage />}
-          />
+            {/* Public Home */}
+            <Route
+              path="/"
+              element={<HomePage />}
+            />
 
-          {/* Passenger Login */}
-          <Route
-            path="/auth"
-            element={
-              !user
-                ? <AuthPage role="passenger" />
-                : <SmartRedirect />
-            }
-          />
+            {/* Passenger Login */}
+            <Route
+              path="/auth"
+              element={
+                !user
+                  ? <AuthPage role="passenger" />
+                  : <SmartRedirect />
+              }
+            />
 
-          {/* Assistant Login */}
-          <Route
-            path="/assistant-auth"
-            element={
-              !user
-                ? <AuthPage role="assistant" />
-                : <SmartRedirect />
-            }
-          />
+            {/* Assistant Login */}
+            <Route
+              path="/assistant-auth"
+              element={
+                !user
+                  ? <AuthPage role="assistant" />
+                  : <SmartRedirect />
+              }
+            />
 
-          {/* Admin Login */}
-          <Route
-            path="/admin-auth"
-            element={
-              !user
-                ? <AdminLogin />
-                : <SmartRedirect />
-            }
-          />
+            {/* Admin Login */}
+            <Route
+              path="/admin-auth"
+              element={
+                !user
+                  ? <AdminLogin />
+                  : <SmartRedirect />
+              }
+            />
 
-          {/* Passenger Dashboard */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute
-                allowedRoles={['passenger']}
-              >
-                <PassengerDashboard />
-              </ProtectedRoute>
-            }
-          />
+            {/* Passenger Dashboard */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['passenger']}
+                >
+                  <PassengerDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Passenger Booking */}
-          <Route
-            path="/booking/:id"
-            element={
-              <ProtectedRoute
-                allowedRoles={['passenger']}
-              >
-                <BookingLive />
-              </ProtectedRoute>
-            }
-          />
+            {/* Passenger Booking */}
+            <Route
+              path="/booking/:id"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['passenger']}
+                >
+                  <BookingLive />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Assistant */}
-          <Route
-            path="/assistant"
-            element={
-              <ProtectedRoute
-                allowedRoles={['assistant']}
-              >
-                <AssistantDashboard />
-              </ProtectedRoute>
-            }
-          />
+            {/* Assistant */}
+            <Route
+              path="/assistant"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['assistant']}
+                >
+                  <AssistantDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Admin */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute
-                allowedRoles={['admin']}
-              >
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
+            {/* Admin */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['admin']}
+                >
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Unknown URL */}
-          <Route
-            path="*"
-            element={
-              <Navigate
-                to="/"
-                replace
-              />
-            }
-          />
+            {/* Unknown URL */}
+            <Route
+              path="*"
+              element={
+                <Navigate
+                  to="/"
+                  replace
+                />
+              }
+            />
 
-        </Routes>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </>
   );
