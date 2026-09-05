@@ -383,3 +383,94 @@ h1, h2, h3, h4, h5, h6 {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* ============================================================
+   TRAIN & LOADER ANIMATIONS
+   ============================================================ */
+@keyframes trainGlidePremium {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes trainGlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(180%);
+  }
+}
+
+@keyframes trainFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.8px);
+  }
+}
+
+@keyframes headlightSoft {
+  0%, 100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes wheelSpinCalm {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes progressFlow {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.animate-train-glide-premium {
+  animation: trainGlidePremium 3.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-train-glide {
+  animation: trainGlide 2.2s linear infinite;
+}
+
+.animate-train-float {
+  animation: trainFloat 0.8s ease-in-out infinite;
+}
+
+.animate-headlight-soft {
+  animation: headlightSoft 1.5s ease-in-out infinite;
+}
+
+.animate-wheel-spin-calm {
+  animation: wheelSpinCalm 0.6s linear infinite;
+}
+
+.animate-progress-flow {
+  animation: progressFlow 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}

@@ -1,23 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import oneCoolieLogo from '../assets/onecoolie-logo.png';
+import heroSlide1 from '../assets/images/hero-slide-1.jpg';
+import heroSlide2 from '../assets/images/hero-slide-2.jpg';
+import heroSlide3 from '../assets/images/hero-slide-3.jpg';
 
 /* ─── 1. Brand Logo & Identity ─── */
-function HomeBrand({ withTagline = false }) {
+function HomeBrand({ className = '', imgClassName = '' }) {
   return (
-    <Link to="/" className="inline-flex flex-col group select-none">
-      <div className="flex items-center gap-1.5">
-        <div className="w-7 h-7 rounded-lg bg-black flex items-center justify-center text-white text-xs font-black tracking-tighter shadow-xs group-hover:scale-105 transition-transform duration-200 shrink-0">
-          <span className="text-blue-500 font-extrabold mr-px">1</span>C
-        </div>
-        <span className="text-lg font-black tracking-tight text-zinc-950 font-sans flex items-center">
-          One<span className="text-blue-600">Coolie</span>
-        </span>
-      </div>
-      {withTagline && (
-        <span className="text-[10px] font-medium text-zinc-400 tracking-wide mt-0.5 font-sans hidden min-[380px]:block">
-          Making every journey easier
-        </span>
-      )}
+    <Link to="/" className={`inline-flex items-center group select-none ${className}`}>
+      <img
+        src={oneCoolieLogo}
+        alt="OneCoolie — Making Every Journey Easier"
+        className={`h-9 sm:h-11 md:h-13 lg:h-14 max-h-[60px] w-auto object-contain transition-transform duration-200 group-hover:scale-102 shrink-0 ${imgClassName}`}
+      />
     </Link>
   );
 }
@@ -59,7 +55,7 @@ function HomeNavbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2">
-          <HomeBrand withTagline={true} />
+          <HomeBrand />
         </div>
 
         {/* Center Desktop Navigation Links */}
@@ -159,17 +155,17 @@ function HomeNavbar() {
 const HERO_SLIDES = [
   {
     id: 1,
-    src: '/images/hero-slide-1.jpg',
+    src: heroSlide1,
     alt: 'Launching at key railway stations - Secunderabad, Warangal, Kazipet, Vijayawada',
   },
   {
     id: 2,
-    src: '/images/hero-slide-2.jpg',
+    src: heroSlide2,
     alt: 'Your assistance. One simple booking - From booking to boarding',
   },
   {
     id: 3,
-    src: '/images/hero-slide-3.jpg',
+    src: heroSlide3,
     alt: 'Starting with four. Building for India - Across all major stations',
   },
 ];
@@ -835,13 +831,18 @@ function HomeCTA() {
   return (
     <section className="py-10 sm:py-20 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="relative rounded-2xl sm:rounded-[36px] overflow-hidden bg-gradient-to-r from-blue-100/80 via-sky-50 to-blue-100/60 border border-blue-200/80 shadow-md p-5 sm:p-10 lg:p-12 min-h-[280px] flex flex-col justify-between group">
-          <img
-            src="/images/banner-bharat-moves.jpg"
-            alt="Bharat Moves Together with OneCoolie"
-            className="absolute inset-0 w-full h-full object-cover object-right opacity-80 group-hover:scale-102 transition-transform duration-700 pointer-events-none"
-            loading="lazy"
-          />
+        <div className="relative rounded-2xl sm:rounded-[36px] overflow-hidden bg-gradient-to-r from-blue-100/80 via-sky-50 to-blue-100/60 border border-blue-200/80 shadow-md p-5 sm:p-10 lg:p-12 min-h-[280px] flex flex-col justify-between">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            poster="/images/banner-bharat-moves.jpg"
+            className="absolute inset-0 w-full h-full object-cover object-right opacity-80 pointer-events-none"
+          >
+            <source src="/images/video_train.MP4" type="video/mp4" />
+            <source src="/images/video_train.mp4" type="video/mp4" />
+          </video>
 
           {/* Solid mobile gradient overlay for maximum text contrast on narrow phone screens */}
           <div className="absolute inset-0 bg-gradient-to-b from-sky-50/95 via-sky-50/90 to-sky-100/90 sm:bg-gradient-to-r sm:from-sky-50 sm:via-sky-50/90 sm:to-transparent pointer-events-none" />
@@ -933,7 +934,7 @@ function HomeFooter() {
     <footer className="bg-white border-t border-zinc-200/80 py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-8">
         <div className="flex items-center gap-2">
-          <HomeBrand withTagline={true} />
+          <HomeBrand />
         </div>
 
         <nav className="flex flex-wrap items-center justify-center gap-4 sm:gap-7 text-xs sm:text-sm font-medium text-zinc-600">

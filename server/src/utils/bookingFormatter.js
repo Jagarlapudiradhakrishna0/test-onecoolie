@@ -134,6 +134,8 @@ function formatBooking(booking, { includeOTP = false } = {}) {
           phone:        assistant.phone        || null,
           station_code: assistant.station_code || null,
           is_online:    !!assistant.is_online,
+          rating:       assistant.rating       || 4.9,
+          completed_jobs: assistant.completed_jobs || 124,
         }
       : null,
 
@@ -141,12 +143,12 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     services:            (booking.services && typeof booking.services === 'object') ? { ...services, ...booking.services } : services,
     service:             booking.service           || null,
     service_description: booking.service_description || null,
-    coach:               booking.services?.coach || null,
-    seat_number:         booking.services?.seat_number || null,
-    berth_type:          booking.services?.berth_type || null,
-    action_type:         booking.services?.action_type || 'load_to_seat',
-    pnr:                 booking.services?.pnr || null,
-    platform:            booking.services?.platform || null,
+    coach:               booking.coach || booking.services?.coach || null,
+    seat_number:         booking.seat_number || booking.services?.seat_number || null,
+    berth_type:          booking.berth_type || booking.services?.berth_type || null,
+    action_type:         booking.action_type || booking.services?.action_type || 'load_to_seat',
+    pnr:                 booking.pnr || booking.services?.pnr || null,
+    platform:            booking.platform || booking.services?.platform || null,
 
     // ─── Pricing ─────────────────────────────────────────────────────────────
     total_price:   Number(booking.total_price) || 0,
@@ -176,10 +178,12 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     start_otp_expires_at: booking.start_otp_expires_at || null,
 
     // ─── Timestamps ──────────────────────────────────────────────────────────
-    created_at:       booking.created_at       || null,
-    updated_at:       booking.updated_at       || null,
+    created_at:         booking.created_at         || null,
+    updated_at:         booking.updated_at         || null,
+    accepted_at:        booking.accepted_at        || null,
+    arrived_at:         booking.arrived_at         || null,
     service_started_at: booking.service_started_at || null,
-    completed_at:     booking.completed_at     || null,
+    completed_at:       booking.completed_at       || null,
   };
 
   return formatted;

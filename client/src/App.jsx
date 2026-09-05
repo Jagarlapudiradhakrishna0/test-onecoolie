@@ -172,9 +172,19 @@ export default function App() {
             }
           />
 
-          {/* Passenger Booking */}
+          {/* Passenger Booking & Live Tracking */}
           <Route
             path="/booking/:id"
+            element={
+              <ProtectedRoute
+                allowedRoles={['passenger']}
+              >
+                <BookingLive />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/live/:id"
             element={
               <ProtectedRoute
                 allowedRoles={['passenger']}

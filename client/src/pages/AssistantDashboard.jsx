@@ -4,6 +4,7 @@ import ProfileMenu from '../context/ProfileMenu';
 import { activeServices } from '../utils/services';
 import AssistantJobCard from '../components/AssistantJobCard';
 import Brand from '../components/Brand';
+import TrainLoader from '../components/TrainLoader';
 
 /* ============================================================
    ASSISTANT DASHBOARD — Swiss Operations Dispatch
@@ -167,8 +168,11 @@ export default function AssistantDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-xs font-mono text-zinc-400">
-        LOADING DISPATCH BOARD...
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black p-6">
+        <TrainLoader
+          label="Loading Dispatch Board..."
+          sub="Synchronizing assistant orders and live telemetry"
+        />
       </div>
     );
   }
