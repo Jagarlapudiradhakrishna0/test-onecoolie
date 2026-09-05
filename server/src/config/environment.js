@@ -56,17 +56,15 @@ const getAllowedOrigins = () => {
       if (!origins.includes(o)) origins.push(o);
     });
 
-  // Default development origins if none specified or in non-production
-  if (!isProduction()) {
-    const devDefaults = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:3000'
-    ];
-    for (const d of devDefaults) {
-      if (!origins.includes(d)) origins.push(d);
-    }
+  // Include local development origins for developer and operator testing
+  const devDefaults = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000'
+  ];
+  for (const d of devDefaults) {
+    if (!origins.includes(d)) origins.push(d);
   }
 
   return origins;

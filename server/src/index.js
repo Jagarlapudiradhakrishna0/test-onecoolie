@@ -84,8 +84,8 @@ const corsOriginHandler = (origin, callback) => {
   if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
     return callback(null, true);
   }
-  // Allow localhost during development / staging
-  if (!isProduction()) {
+  // Allow localhost during development / staging or local operator testing
+  if (!isProduction() || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
     return callback(null, true);
   }
   return callback(new Error(`Origin ${origin} not allowed by CORS policy`));
