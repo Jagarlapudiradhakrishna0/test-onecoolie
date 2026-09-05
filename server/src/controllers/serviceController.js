@@ -416,7 +416,7 @@ exports.rateBooking = async (req, res) => {
         updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
-      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+      .select('*, passenger:passenger_id(id, name, email, phone)')
       .single();
 
     if (error) {

@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
 import axios from '../api/axios';
 import ActiveBooking from '../components/ActiveBooking';
 import Brand from '../components/Brand';
-import TrainLoader from '../components/TrainLoader';
 
 /* ============================================================
    BOOKING LIVE — Real-Time Tracking & Ledger Page
@@ -24,7 +22,6 @@ export default function BookingLive() {
   const { id } = useParams();
   const [booking, setBooking] = useState(null);
   const [distance, setDistance] = useState(500);
-  const [copied, setCopied] = useState(false);
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -50,21 +47,15 @@ export default function BookingLive() {
     }
   }, [booking?.booking_status]);
 
-  const copyBookingId = () => {
-    if (!booking?.id) return;
-    navigator.clipboard?.writeText(booking.id);
-    setCopied(true);
-    toast.success('Booking ID copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   if (!booking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black p-6">
-        <TrainLoader
-          label="Connecting Live Telemetry..."
-          sub="Synchronizing platform dispatch status"
-        />
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-black dark:text-white">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-zinc-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
+          <p className="font-mono text-xs text-zinc-400">
+            CONNECTING TELEMETRY...
+          </p>
+        </div>
       </div>
     );
   }
@@ -88,15 +79,9 @@ export default function BookingLive() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={copyBookingId}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-mono font-semibold text-zinc-600 dark:text-zinc-300 hover:border-blue-500 hover:text-blue-600 transition-all shadow-xs"
-              title="Click to copy ID"
-            >
-              <span>#{booking.id?.slice(-8).toUpperCase()}</span>
-              <span className="text-[10px] text-zinc-400">{copied ? '✓ Copied' : '📋'}</span>
-            </button>
+            <span className="text-xs font-mono text-zinc-400 hidden sm:inline-block">
+              ID: #{booking.id?.slice(-8).toUpperCase()}
+            </span>
           </div>
         </div>
       </header>
@@ -162,33 +147,6 @@ export default function BookingLive() {
                       {booking.journey_date}
                     </span>
                   </div>
-
-                  {(booking.coach || booking.seat_number) && (
-                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Coach &amp; Berth</span>
-                        <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                          {booking.coach ? `Coach ${booking.coach}` : ''} {booking.seat_number ? `· Seat ${booking.seat_number}` : ''}
-                        </span>
-                      </div>
-                      {booking.berth_type && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Berth Position</span>
-                          <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                            {booking.berth_type}
-                          </span>
-                        </div>
-                      )}
-                      {booking.action_type && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Mission</span>
-                          <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                            {booking.action_type === 'collect_from_seat' ? '🚪 De-boarding Unload' : '🚶 Boarding Load'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
