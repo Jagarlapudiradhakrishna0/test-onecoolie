@@ -61,7 +61,11 @@ exports.createOrder = async (req, res) => {
   try {
     // 1. Authenticate passenger
     if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: 'Authentication required.' });
+      return res.status(401).json({
+        success: false,
+        stage: 'AUTHENTICATION_FAILURE',
+        message: 'Authentication required.'
+      });
     }
 
     const { data: userExists } = await supabase
@@ -72,6 +76,8 @@ exports.createOrder = async (req, res) => {
 
     if (!userExists) {
       return res.status(401).json({
+        success: false,
+        stage: 'AUTHENTICATION_FAILURE',
         message: 'Your session has expired. Please log out and log in again to sync your account.'
       });
     }
@@ -81,6 +87,8 @@ exports.createOrder = async (req, res) => {
     // 2. Reject cash bookings from Razorpay order creation
     if (isCashPayment(normalizedMethod)) {
       return res.status(400).json({
+        success: false,
+        stage: 'PAYMENT_METHOD_REJECTED',
         message: 'Cash bookings do not require a Razorpay order. Use POST /api/bookings.'
       });
     }
@@ -88,6 +96,8 @@ exports.createOrder = async (req, res) => {
     // 3. Ensure payment method is online
     if (!isOnlinePayment(normalizedMethod)) {
       return res.status(400).json({
+        success: false,
+        stage: 'PAYMENT_METHOD_REJECTED',
         message: 'Invalid payment method for online payment order. Allowed methods: upi, online, card, netbanking.'
       });
     }
@@ -95,6 +105,8 @@ exports.createOrder = async (req, res) => {
     // 4. Check Razorpay Gateway configuration
     if (!isRazorpayConfigured()) {
       return res.status(503).json({
+        success: false,
+        stage: 'RAZORPAY_CONFIGURATION_FAILURE',
         message: 'Razorpay payment gateway is not configured on this server. Please contact support or select Cash on Service.'
       });
     }
@@ -158,14 +170,35 @@ exports.createOrder = async (req, res) => {
     }
 
     // 6. Create ONECOOLIE booking and initial payment ledger record
-    const {
-      booking,
-      paymentRecord,
-      pricingResult
-    } = await createBookingRecordInDB(supabase, req.user.id, req.body);
+    let bookingRecordResult;
+    try {
+      bookingRecordResult = await createBookingRecordInDB(supabase, req.user.id, req.body);
+    } catch (dbErr) {
+      console.error('DATABASE_FAILURE_CREATE_BOOKING:', dbErr.message || dbErr);
+      return res.status(dbErr.status || 500).json({
+        success: false,
+        stage: 'DATABASE_FAILURE',
+        message: dbErr.message || 'Database failure initializing booking record.'
+      });
+    }
+
+    const { booking, paymentRecord, pricingResult } = bookingRecordResult;
 
     // 7. Calculate Razorpay amount in integer paise
-    const amountInPaise = formatRazorpayAmount(pricingResult.total);
+    let amountInPaise;
+    try {
+      amountInPaise = formatRazorpayAmount(pricingResult.total);
+      if (!Number.isInteger(amountInPaise) || amountInPaise < 100) {
+        throw new Error(`Amount must be an integer of at least 100 paise. Calculated: ${amountInPaise}`);
+      }
+    } catch (pricingErr) {
+      console.error('PRICING_FAILURE:', pricingErr.message);
+      return res.status(400).json({
+        success: false,
+        stage: 'PRICING_FAILURE',
+        message: pricingErr.message || 'Invalid booking amount for online payment.'
+      });
+    }
 
     // 8. Create Razorpay order via official SDK
     const razorpay = getRazorpayClient();
@@ -175,15 +208,35 @@ exports.createOrder = async (req, res) => {
       razorpayOrder = await razorpay.orders.create({
         amount: amountInPaise,
         currency: 'INR',
-        receipt: booking.booking_id,
+        receipt: String(booking.booking_id || '').slice(0, 40),
         notes: {
-          booking_id: booking.id,
-          passenger_id: req.user.id,
-          payment_id: paymentRecord?.id || ''
+          booking_id: String(booking.id || ''),
+          passenger_id: String(req.user.id || ''),
+          payment_id: String(paymentRecord?.id || '')
         }
       });
     } catch (razorpayErr) {
-      console.error('RAZORPAY ORDER CREATION ERROR:', razorpayErr.message || razorpayErr);
+      const rzpStatus = razorpayErr?.statusCode || razorpayErr?.status || 502;
+      const rzpDesc =
+        razorpayErr?.error?.description ||
+        razorpayErr?.description ||
+        razorpayErr?.error?.message ||
+        razorpayErr?.message ||
+        'Gateway order initialization failed';
+      const rzpCode = razorpayErr?.error?.code || 'RAZORPAY_GATEWAY_ERROR';
+
+      // Safe structured server log without credentials
+      console.error('RAZORPAY_ORDER_CREATION_FAILURE DETAILS:', {
+        stage: 'RAZORPAY_ORDER_CREATION_FAILURE',
+        statusCode: rzpStatus,
+        code: rzpCode,
+        description: rzpDesc,
+        booking_id: booking?.id,
+        amount_paise: amountInPaise,
+        hasKeyId: Boolean(process.env.RAZORPAY_KEY_ID),
+        keyPrefix: process.env.RAZORPAY_KEY_ID ? `${process.env.RAZORPAY_KEY_ID.substring(0, 8)}...` : 'NONE',
+        hasSecret: Boolean(process.env.RAZORPAY_KEY_SECRET)
+      });
 
       // Safe rollback on failure: mark payment as failed and booking as cancelled
       if (paymentRecord?.id) {
@@ -191,7 +244,7 @@ exports.createOrder = async (req, res) => {
           .from('payments')
           .update({
             status: 'failed',
-            failure_reason: 'Gateway order initialization failed'
+            failure_reason: `Gateway error: ${rzpDesc}`
           })
           .eq('id', paymentRecord.id);
       }
@@ -204,6 +257,10 @@ exports.createOrder = async (req, res) => {
         .eq('id', booking.id);
 
       return res.status(502).json({
+        success: false,
+        stage: 'RAZORPAY_ORDER_CREATION_FAILURE',
+        code: rzpCode,
+        gateway_reason: rzpDesc,
         message: 'Unable to initialize online payment order with gateway. Please try again or select Cash on Service.'
       });
     }

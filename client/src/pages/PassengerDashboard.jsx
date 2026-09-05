@@ -800,7 +800,9 @@ export default function PassengerDashboard() {
       rzp.open();
 
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Unable to launch online payment.');
+      const reason = err.response?.data?.gateway_reason;
+      const msg = err.response?.data?.message || err.message || 'Unable to launch online payment.';
+      toast.error(reason ? `${msg} (${reason})` : msg);
     }
   };
 

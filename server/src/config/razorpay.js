@@ -13,20 +13,28 @@
 const Razorpay = require('razorpay');
 
 let razorpayInstance = null;
+let cachedKeyId = null;
+let cachedKeySecret = null;
+
+function getCleanKey(val) {
+  if (!val || typeof val !== 'string') return '';
+  return val.trim().replace(/^["']|["']$/g, '').trim();
+}
 
 /**
  * Checks if Razorpay credentials are fully configured in the environment.
  * @returns {boolean}
  */
 function isRazorpayConfigured() {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const keyId = getCleanKey(process.env.RAZORPAY_KEY_ID);
+  const keySecret = getCleanKey(process.env.RAZORPAY_KEY_SECRET);
   return Boolean(
     keyId &&
     keySecret &&
-    String(keyId).trim() !== '' &&
-    String(keySecret).trim() !== '' &&
-    !String(keyId).includes('your-razorpay')
+    keyId.length >= 8 &&
+    keySecret.length >= 8 &&
+    !keyId.includes('your-razorpay') &&
+    !keyId.includes('xxxx')
   );
 }
 
@@ -36,23 +44,26 @@ function isRazorpayConfigured() {
  * @returns {Razorpay}
  */
 function getRazorpayClient() {
-  if (razorpayInstance) {
-    return razorpayInstance;
-  }
-
-  const key_id = process.env.RAZORPAY_KEY_ID;
-  const key_secret = process.env.RAZORPAY_KEY_SECRET;
+  const cleanKeyId = getCleanKey(process.env.RAZORPAY_KEY_ID);
+  const cleanKeySecret = getCleanKey(process.env.RAZORPAY_KEY_SECRET);
 
   if (!isRazorpayConfigured()) {
     throw new Error(
-      'Razorpay credentials are not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in server/.env.'
+      'Razorpay credentials are not configured or invalid. Please check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.'
     );
   }
 
+  if (razorpayInstance && cachedKeyId === cleanKeyId && cachedKeySecret === cleanKeySecret) {
+    return razorpayInstance;
+  }
+
   razorpayInstance = new Razorpay({
-    key_id: String(key_id).trim(),
-    key_secret: String(key_secret).trim(),
+    key_id: cleanKeyId,
+    key_secret: cleanKeySecret,
   });
+
+  cachedKeyId = cleanKeyId;
+  cachedKeySecret = cleanKeySecret;
 
   return razorpayInstance;
 }
