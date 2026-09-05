@@ -88,6 +88,10 @@ const corsOriginHandler = (origin, callback) => {
   if (!isProduction() || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
     return callback(null, true);
   }
+  // Allow Vercel production and preview deployment origins
+  if (/^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin)) {
+    return callback(null, true);
+  }
   return callback(new Error(`Origin ${origin} not allowed by CORS policy`));
 };
 
