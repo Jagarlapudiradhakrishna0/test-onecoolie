@@ -683,7 +683,7 @@ exports.cancelBookingByAdmin = async (req, res) => {
         ? 'cancelled'
         : booking.payment_status;
 
-    const { data: updatedBooking, error: updateErr } = await supabase
+    let { data: updatedBooking, error: updateErr } = await supabase
       .from('bookings')
       .update({
         booking_status: 'cancelled',
@@ -693,6 +693,24 @@ exports.cancelBookingByAdmin = async (req, res) => {
       .eq('id', booking.id)
       .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
+
+    if (updateErr && updateErr.message?.includes('bookings_payment_status_check')) {
+      console.warn('bookings_payment_status_check constraint rejected cancelled status; falling back gracefully.');
+      const fallbackStatus = refundResult?.success ? 'refunded' : (booking.payment_status === 'paid' ? 'refunded' : 'failed');
+      const retryResult = await supabase
+        .from('bookings')
+        .update({
+          booking_status: 'cancelled',
+          payment_status: fallbackStatus,
+          updated_at: nowIso
+        })
+        .eq('id', booking.id)
+        .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+        .single();
+
+      updatedBooking = retryResult.data;
+      updateErr = retryResult.error;
+    }
 
     if (updateErr) {
       return res.status(400).json({ message: updateErr.message });

@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
     services JSONB DEFAULT '{}'::jsonb,
     service_description TEXT,
     total_price NUMERIC(10, 2) NOT NULL DEFAULT 0.00 CHECK (total_price >= 0),
-    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded')) DEFAULT 'pending',
+    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded', 'cancelled')) DEFAULT 'pending',
     payment_method TEXT CHECK (payment_method IN ('cash', 'online', 'upi', 'card', 'netbanking')),
     payment_id TEXT,
     booking_status TEXT NOT NULL CHECK (booking_status IN ('pending', 'accepted', 'arriving', 'in_service', 'completed', 'cancelled')) DEFAULT 'pending',
