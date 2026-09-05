@@ -56,8 +56,7 @@ import ProfileMenu from '../context/ProfileMenu';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { BookingSkeleton } from '../components/Skeleton';
 import { useTheme } from '../context/ThemeContext';
-import { useLanguage } from '../context/LanguageContext';
-import axios from '../api/axios';
+import axios, { getStoredToken } from '../api/axios';
 import { STATIONS } from '../utils/services';
 import { loadRazorpayScript } from '../utils/razorpay';
 import Brand from '../components/Brand';
@@ -532,6 +531,11 @@ export default function PassengerDashboard() {
   };
 
   const fetchBookings = useCallback(async () => {
+    const token = getStoredToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     try {
       const { data } = await axios.get('/bookings/my-bookings');
       setBookings(data);
@@ -640,6 +644,12 @@ export default function PassengerDashboard() {
   };
 
   const handleConfirm = () => {
+    const token = getStoredToken();
+    if (!token) {
+      toast.error('Please sign in to confirm your station assistance booking.');
+      navigate('/auth?redirect=/dashboard');
+      return;
+    }
     if (!selectedTrain || !journeyDate) {
       return toast.error('Please select your train and journey date.');
     }
@@ -656,6 +666,16 @@ export default function PassengerDashboard() {
     try {
       sessionStorage.removeItem('onecoolie_active_payment');
     } catch (e) { }
+
+    const token = getStoredToken();
+    if (!token) {
+      toast.error('Session expired or not logged in. Please sign in to proceed.');
+      setPayOpen(false);
+      navigate('/auth?redirect=/dashboard');
+      return;
+    }
+
+    const authHeaders = { Authorization: `Bearer ${token}` };
 
     if (method === 'cash') {
       try {
@@ -678,7 +698,7 @@ export default function PassengerDashboard() {
           berth_type: berthType,
           action_type: actionType,
           pnr: pnrInput.trim(),
-        });
+        }, { headers: authHeaders });
         setPayOpen(false);
         playConfirmationSound();
         setConfirmedBooking(data);
@@ -692,7 +712,7 @@ export default function PassengerDashboard() {
 
     // Online Payment Flow (Razorpay Gateway)
     try {
-      // 1. Create order on backend
+      // 1. Create order on backend with authenticated token
       const { data: orderRes } = await axios.post('/payments/create-order', {
         train_no: selectedTrain.train_no,
         train_name: selectedTrain.train_name,
@@ -711,7 +731,7 @@ export default function PassengerDashboard() {
         berth_type: berthType,
         action_type: actionType,
         pnr: pnrInput.trim(),
-      });
+      }, { headers: authHeaders });
 
       if (!orderRes || !orderRes.razorpay) {
         throw new Error('Failed to initialize payment order with server.');
@@ -739,13 +759,13 @@ export default function PassengerDashboard() {
         order_id: orderRes.razorpay.order_id,
         handler: async function (response) {
           try {
-            // 4. Verify HMAC-SHA256 signature
+            // 4. Verify HMAC-SHA256 signature with authenticated token
             const { data: verifyRes } = await axios.post('/payments/verify', {
               booking_id: orderRes.booking.id,
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
-            });
+            }, { headers: authHeaders });
 
             setPayOpen(false);
             playConfirmationSound();
