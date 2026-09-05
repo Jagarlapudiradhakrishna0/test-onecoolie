@@ -696,19 +696,52 @@ exports.login = async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const searchEmail = (role === 'admin' && (normalizedEmail === 'admin@onecoolie.in' || normalizedEmail === 'admin@onecoolie.com'))
-      ? 'admin@railmitra.com'
-      : normalizedEmail;
 
     // Find user
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', searchEmail)
-      .maybeSingle();
+    let user = null;
+    let queryError = null;
 
-    if (error) {
-      console.error('LOGIN DATABASE ERROR:', error);
+    if (role === 'admin') {
+      // Check exact email first
+      const { data: exactAdmin, error: exactErr } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+
+      if (exactErr) {
+        queryError = exactErr;
+      } else if (exactAdmin) {
+        user = exactAdmin;
+      } else {
+        // Fallback for recognized admin aliases if configured under alternate domain
+        const aliases = ['admin@onecoolie.com', 'admin@onecoolie.in', 'admin@railmitra.com']
+          .filter(e => e !== normalizedEmail);
+        const { data: aliasAdmins, error: aliasErr } = await supabase
+          .from('users')
+          .select('*')
+          .in('email', aliases)
+          .eq('role', 'admin');
+
+        if (aliasErr) {
+          queryError = aliasErr;
+        } else if (aliasAdmins && aliasAdmins.length > 0) {
+          user = aliasAdmins[0];
+        }
+      }
+    } else {
+      const { data: standardUser, error: stdErr } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+
+      queryError = stdErr;
+      user = standardUser;
+    }
+
+    if (queryError) {
+      console.error('LOGIN DATABASE ERROR:', queryError);
 
       return res.status(500).json({
         message: 'Database error while logging in.'
