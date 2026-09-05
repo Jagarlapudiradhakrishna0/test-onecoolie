@@ -631,6 +631,26 @@ exports.getBookingById = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+    if (booking.assistant && booking.assistant_id) {
+      try {
+        const { data: stats } = await supabase
+          .from('bookings')
+          .select('rating')
+          .eq('assistant_id', booking.assistant_id)
+          .eq('booking_status', 'completed');
+
+        if (stats && stats.length > 0) {
+          booking.assistant.completed_jobs = stats.length;
+          const rated = stats.filter((s) => s.rating);
+          if (rated.length > 0) {
+            booking.assistant.rating = Number((rated.reduce((sum, r) => sum + Number(r.rating), 0) / rated.length).toFixed(1));
+          }
+        }
+      } catch (err) {
+        // Fallback gracefully
+      }
+    }
+
     const includeOTP = isPassenger || isAdmin;
 
     return res.json(formatBooking(booking, { includeOTP }));
@@ -643,6 +663,94 @@ exports.getBookingById = async (req, res) => {
 
     return res.status(500).json({
       message: 'Unable to load booking.'
+    });
+  }
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE BOOKING (Coach, Seat, Berth, Action Type)
+|--------------------------------------------------------------------------
+| PUT /api/bookings/:id
+|--------------------------------------------------------------------------
+*/
+
+exports.updateBooking = async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        message: 'Authentication required.'
+      });
+    }
+
+    const { id } = req.params;
+    const { coach, seat_number, berth_type, action_type, platform } = req.body;
+
+    const { data: booking, error: findError } = await supabase
+      .from('bookings')
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (findError || !booking) {
+      return res.status(404).json({
+        message: 'Booking not found.'
+      });
+    }
+
+    if (booking.passenger_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        message: 'You are not authorized to update this booking.'
+      });
+    }
+
+    if (['completed', 'cancelled'].includes(booking.booking_status)) {
+      return res.status(400).json({
+        message: 'Cannot modify a completed or cancelled booking.'
+      });
+    }
+
+    const currentServices = (booking.services && typeof booking.services === 'object')
+      ? { ...booking.services }
+      : {};
+
+    if (coach !== undefined) currentServices.coach = coach;
+    if (seat_number !== undefined) currentServices.seat_number = seat_number;
+    if (berth_type !== undefined) currentServices.berth_type = berth_type;
+    if (action_type !== undefined) currentServices.action_type = action_type;
+    if (platform !== undefined) currentServices.platform = platform;
+
+    const updatePayload = {
+      services: currentServices,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data: updated, error: updateError } = await supabase
+      .from('bookings')
+      .update(updatePayload)
+      .eq('id', id)
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+      .single();
+
+    if (updateError) {
+      return res.status(400).json({
+        message: updateError.message
+      });
+    }
+
+    const formatted = formatBooking(updated, { includeOTP: true });
+    broadcast(id, formatted);
+
+    return res.json({
+      message: 'Booking details updated successfully.',
+      booking: formatted
+    });
+
+  } catch (error) {
+    console.error('UPDATE BOOKING SERVER ERROR:', error);
+    return res.status(500).json({
+      message: 'Unable to update booking details.'
     });
   }
 };

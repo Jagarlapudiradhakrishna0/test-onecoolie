@@ -381,7 +381,7 @@ exports.markPaid = async (req, res) => {
 
 exports.rateBooking = async (req, res) => {
   try {
-    const { booking_id } = req.params;
+    const booking_id = req.params.booking_id || req.params.id;
     const { rating, review } = req.body;
 
     const numericRating = Number(rating);
@@ -392,7 +392,7 @@ exports.rateBooking = async (req, res) => {
 
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('id, passenger_id, booking_status')
+      .select('id, passenger_id, assistant_id, booking_status')
       .eq('id', booking_id)
       .single();
 
@@ -416,7 +416,7 @@ exports.rateBooking = async (req, res) => {
         updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
-      .select('*, passenger:passenger_id(id, name, email, phone)')
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 
     if (error) {
