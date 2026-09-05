@@ -98,9 +98,9 @@ exports.updateStatus = async (req, res) => {
       const { data, error } = await supabase
         .from('bookings')
         .update({
-          booking_status:   'arriving',
+          booking_status: 'arriving',
           assistant_status: 'arriving',
-          updated_at:       new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', booking_id)
         .eq('assistant_id', req.user.id)
@@ -132,10 +132,10 @@ exports.updateStatus = async (req, res) => {
       const { data, error } = await supabase
         .from('bookings')
         .update({
-          booking_status:   'completed',
+          booking_status: 'completed',
           assistant_status: 'completed',
-          completed_at:     new Date().toISOString(),
-          updated_at:       new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', booking_id)
         .eq('assistant_id', req.user.id)
@@ -253,13 +253,13 @@ exports.confirmStartOTP = async (req, res) => {
     const { data, error } = await supabase
       .from('bookings')
       .update({
-        booking_status:        'in_service',
-        assistant_status:      'in_service',
-        start_otp_verified:    true,
-        start_otp:             null,        // clear OTP after use
-        start_otp_expires_at:  null,
-        service_started_at:    new Date().toISOString(),
-        updated_at:            new Date().toISOString(),
+        booking_status: 'in_service',
+        assistant_status: 'in_service',
+        start_otp_verified: true,
+        start_otp: null,        // clear OTP after use
+        start_otp_expires_at: null,
+        service_started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
       .eq('assistant_id', req.user.id)
@@ -347,8 +347,8 @@ exports.markPaid = async (req, res) => {
       .update({
         payment_status: 'paid',
         payment_method: normalizedMethod,
-        payment_id:     paymentId,
-        updated_at:     new Date().toISOString(),
+        payment_id: paymentId,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
       .eq('assistant_id', req.user.id)
@@ -381,7 +381,7 @@ exports.markPaid = async (req, res) => {
 
 exports.rateBooking = async (req, res) => {
   try {
-    const booking_id = req.params.booking_id || req.params.id;
+    const { booking_id } = req.params;
     const { rating, review } = req.body;
 
     const numericRating = Number(rating);
@@ -392,7 +392,7 @@ exports.rateBooking = async (req, res) => {
 
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('id, passenger_id, assistant_id, booking_status')
+      .select('id, passenger_id, booking_status')
       .eq('id', booking_id)
       .single();
 
@@ -411,8 +411,8 @@ exports.rateBooking = async (req, res) => {
     const { data, error } = await supabase
       .from('bookings')
       .update({
-        rating:     numericRating,
-        review:     review ? String(review).slice(0, 1000) : null,
+        rating: numericRating,
+        review: review ? String(review).slice(0, 1000) : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
@@ -421,6 +421,27 @@ exports.rateBooking = async (req, res) => {
 
     if (error) {
       return res.status(400).json({ message: error.message });
+    }
+
+    if (data?.assistant && data.assistant_id) {
+      try {
+        const { data: assistantJobs } = await supabase
+          .from('bookings')
+          .select('rating, booking_status')
+          .eq('assistant_id', data.assistant_id);
+
+        if (assistantJobs) {
+          const completed = assistantJobs.filter((j) => j.booking_status === 'completed');
+          const rated = completed.filter((j) => j.rating);
+          const avg = rated.length
+            ? (rated.reduce((s, j) => s + Number(j.rating), 0) / rated.length).toFixed(1)
+            : null;
+          data.assistant.completed_jobs = completed.length;
+          data.assistant.rating = avg;
+        }
+      } catch (err) {
+        // Non-blocking assistant stats
+      }
     }
 
     const formatted = formatBooking(data, { includeOTP: true });
@@ -487,7 +508,7 @@ exports.triggerSOS = async (req, res) => {
           status: 'active',
         },
       ])
-      .catch(() => {});
+      .catch(() => { });
 
     // Emit SOS alert via socket
     if (io) {

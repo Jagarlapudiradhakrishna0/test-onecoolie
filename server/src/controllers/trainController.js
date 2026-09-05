@@ -34,7 +34,7 @@ exports.searchTrains = async (req, res) => {
   let liveTrains = [];
   try {
     if (station && SUPPORTED_STATIONS[station.toUpperCase()]) {
-      const board = await fetchLiveStationBoard(station.toUpperCase(), 6);
+      const board = await fetchLiveStationBoard(station.toUpperCase(), 4);
       if (board?.allTrains) {
         liveTrains = board.allTrains.map((t) => ({
           train_no: t.trainNumber,
@@ -50,7 +50,8 @@ exports.searchTrains = async (req, res) => {
           platform: t.platform,
           delay_minutes: t.delayMinutes,
           status: t.status,
-          is_live: true
+          is_live: true,
+          is_advance_schedule: false
         }));
       }
     }
@@ -65,33 +66,70 @@ exports.searchTrains = async (req, res) => {
     ? allCatalog.filter((t) => t.stops?.some((s) => s.code.toUpperCase() === station.toUpperCase()))
     : allCatalog;
 
-  // If no query string, return live running trains first, followed by station pre-booking catalogue!
+  const formatAdvanceCatalogTrain = (ct) => ({
+    ...ct,
+    expected_arrival: ct.scheduled_arrival || ct.expected_arrival || null,
+    expected_departure: ct.scheduled_departure || ct.expected_departure || null,
+    platform: ct.platform || '1',
+    delay_minutes: 0,
+    status: 'Advance Schedule',
+    is_live: false,
+    is_advance_schedule: true
+  });
+
+  // If no query string, return live running trains first, followed by advance schedule catalogue!
   if (!q) {
     const combined = [
       ...liveTrains,
-      ...stationCatalog.filter((ct) => !liveTrains.some((lt) => lt.train_no === ct.train_no))
+      ...stationCatalog
+        .filter((ct) => !liveTrains.some((lt) => lt.train_no === ct.train_no))
+        .map(formatAdvanceCatalogTrain)
     ].slice(0, 35);
     return res.json(combined);
   }
 
-  // Filter live trains matching query
-  const liveMatches = liveTrains.filter((t) =>
-    t.train_no.toLowerCase().includes(q) ||
-    t.train_name.toLowerCase().includes(q) ||
-    t.from?.name?.toLowerCase().includes(q) ||
-    t.to?.name?.toLowerCase().includes(q)
-  );
+  // Parse train number (e.g. 5 digits like 17012) or keywords
+  const numberMatch = q.match(/\b\d{4,5}\b/);
+  const searchNumber = numberMatch ? numberMatch[0] : null;
+  const tokens = q.split(/[\s·•\-_–—]+/).filter((t) => t.length > 2);
 
-  // Combine with catalog for advance pre-booking
+  const isMatch = (t) => {
+    const no = (t.train_no || '').toLowerCase();
+    const name = (t.train_name || '').toLowerCase();
+    const fromName = (t.from?.name || '').toLowerCase();
+    const toName = (t.to?.name || '').toLowerCase();
+
+    // Direct train number match
+    if (searchNumber && no === searchNumber) return true;
+    if (no.includes(q) || (no.length >= 4 && q.includes(no))) return true;
+
+    // Direct string match
+    if (name.includes(q) || q.includes(name) || fromName.includes(q) || toName.includes(q)) {
+      return true;
+    }
+
+    // Token match
+    if (tokens.length > 0) {
+      const fullText = `${no} ${name} ${fromName} ${toName}`;
+      if (tokens.some((tok) => fullText.includes(tok))) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Filter live trains matching query
+  const liveMatches = liveTrains.filter(isMatch);
+
+  // Combine with catalog for advance schedule pre-booking
   const catalogMatches = allCatalog
     .filter((t) =>
-      t.train_no.toLowerCase().includes(q) ||
-      t.train_name.toLowerCase().includes(q) ||
-      t.from?.name?.toLowerCase().includes(q) ||
-      t.to?.name?.toLowerCase().includes(q) ||
+      isMatch(t) ||
       t.stops?.some((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
     )
-    .filter((ct) => !liveMatches.some((lt) => lt.train_no === ct.train_no));
+    .filter((ct) => !liveMatches.some((lt) => lt.train_no === ct.train_no))
+    .map(formatAdvanceCatalogTrain);
 
   const combined = [...liveMatches, ...catalogMatches].slice(0, 35);
 

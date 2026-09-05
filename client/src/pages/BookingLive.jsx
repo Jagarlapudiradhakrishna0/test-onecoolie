@@ -1,27 +1,38 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import oneCoolieLogo from '../assets/onecoolie-logo.png';
+import {
+  Train,
+  Luggage,
+  Bell,
+  ArrowLeft,
+  Copy,
+  Check,
+  FileText,
+  Headphones,
+  ArrowRight,
+  ShieldCheck,
+  MapPin,
+  Calendar,
+  CreditCard
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 import axios from '../api/axios';
 import ActiveBooking from '../components/ActiveBooking';
-import Brand from '../components/Brand';
+import ProfileMenu from '../context/ProfileMenu';
+import { STATIONS } from '../utils/services';
+import TrainLoader from '../components/TrainLoader';
 
 /* ============================================================
-   BOOKING LIVE — Real-Time Tracking & Ledger Page
-   Strictly Black (#000000), White (#FFFFFF), and Blue (#2563EB)
+   BOOKING LIVE / TRIP DETAILS PAGE (PIXEL PERFECT MATCH TO MOCKUP)
    ============================================================ */
-
-const SERVICE_LABELS = {
-  luggage: 'Luggage Assistance',
-  escort: 'Seat & Coach Escorting',
-  language: 'Multilingual Guide',
-  wheelchair: 'Wheelchair & Priority',
-  snacks: 'Berth Refreshments',
-  transport: 'Exit Gate Transfer',
-};
 
 export default function BookingLive() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
   const [distance, setDistance] = useState(500);
+  const [copiedId, setCopiedId] = useState(false);
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -47,155 +58,165 @@ export default function BookingLive() {
     }
   }, [booking?.booking_status]);
 
+  const getDisplayId = (b) => {
+    if (!b) return 'A401F3D7';
+    const raw = b.id || b._id;
+    if (!raw) return 'A401F3D7';
+    const str = String(raw);
+    return str.length > 8 ? str.slice(-8).toUpperCase() : str.toUpperCase();
+  };
+
+  const handleCopyId = () => {
+    if (booking) {
+      const displayId = '#' + getDisplayId(booking);
+      navigator.clipboard.writeText(displayId);
+      setCopiedId(true);
+      toast.success(`Booking ID ${displayId} copied!`);
+      setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
+
   if (!booking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-black dark:text-white">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-zinc-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
-          <p className="font-mono text-xs text-zinc-400">
-            CONNECTING TELEMETRY...
-          </p>
-        </div>
-      </div>
+      <TrainLoader
+        text="Loading Trip Details..."
+        subtext="Fetching coach telemetry, assistant status & station track info..."
+      />
     );
   }
 
   const status = booking.booking_status || 'pending';
+  const isCompleted = status === 'completed';
+  const isCancelled = status === 'cancelled';
+
+  const formatDateString = (dateStr) => {
+    if (!dateStr) return '03 Sep 2026';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = d.toLocaleString('en-US', { month: 'short' });
+      const year = d.getFullYear();
+      return `${day} ${month} ${year}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const formattedBookedDate = booking.created_at
+    ? (() => {
+      try {
+        const d = new Date(booking.created_at);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = d.toLocaleString('en-US', { month: 'short' });
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        return `${day} ${month} ${year}, ${hours}:${mins}`;
+      } catch (e) {
+        return '03 Sep 2026, 19:15';
+      }
+    })()
+    : '03 Sep 2026, 19:15';
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-black dark:text-white">
-      {/* ── Top Header ────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-black dark:hover:text-white transition-colors"
-            >
-              &larr; Dashboard
-            </Link>
-            <span className="text-zinc-300 dark:text-zinc-700">|</span>
-            <Brand sub="Live Tracking" />
+    <div className="min-h-screen bg-[#f4f7fb] text-zinc-900 font-sans selection:bg-blue-600 selection:text-white">
+      {/* ── Sticky Floating Glass Capsule Top Navigation Bar ── */}
+      <header className="sticky top-3 z-40 px-3 sm:px-6">
+        <div className="max-w-6xl mx-auto bg-white/95 backdrop-blur-md rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-200/70 px-4 sm:px-6 py-2.5 flex items-center justify-between transition-all">
+          {/* Left Brand */}
+          <div className="flex items-center">
+            <button type="button" onClick={() => navigate('/')} className="flex items-center cursor-pointer group">
+              <img
+                src={oneCoolieLogo}
+                alt="OneCoolie"
+                className="h-10 sm:h-11 md:h-12 lg:h-13 max-h-[52px] w-auto object-contain transition-transform duration-200 group-hover:scale-102"
+              />
+            </button>
           </div>
 
+          {/* Center Navigation Pills */}
+          <div className="hidden sm:flex items-center p-1 bg-slate-100/70 rounded-full border border-slate-200/50 gap-1.5 shadow-inner">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard?tab=book')}
+              className="px-6 py-2.5 rounded-full text-xs font-semibold text-zinc-700 hover:text-black hover:bg-white/60 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Train className="w-4 h-4 text-zinc-600" />
+              <span>Book</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard?tab=trips')}
+              className="px-6 py-2.5 rounded-full text-xs font-bold bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)] transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Luggage className="w-4 h-4 text-white" />
+              <span>My Trips</span>
+            </button>
+          </div>
+
+          {/* Right Bell & Profile */}
           <div className="flex items-center gap-3">
-            <span className="text-xs font-mono text-zinc-400 hidden sm:inline-block">
-              ID: #{booking.id?.slice(-8).toUpperCase()}
-            </span>
+            <button
+              type="button"
+              className="w-10 h-10 rounded-full bg-slate-100/80 hover:bg-slate-200/80 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer border border-slate-200/50"
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4 text-zinc-700" />
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
+            </button>
+
+            <ProfileMenu role="passenger" onNavigate={(target) => navigate(`/dashboard${target === 'trips' ? '?tab=trips' : '?tab=book'}`)} />
           </div>
         </div>
       </header>
 
-      {/* ── Content Layout ────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-6 py-8 sm:py-10">
-        {status === 'cancelled' ? (
-          <div className="max-w-md mx-auto p-8 rounded-2xl text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl">
-            <h2 className="text-xl font-bold tracking-tight mb-2">
-              Assistance Cancelled
-            </h2>
-            <p className="text-xs text-zinc-500 mb-6">
-              This request was cancelled. You may schedule a new booking anytime.
-            </p>
-            <Link to="/dashboard" className="btn-primary py-2.5 px-6 text-xs">
-              &larr; Return to Dashboard
-            </Link>
+      {/* ── Main Content Container ── */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        {/* Sub-Header: Breadcrumb Back Link + Booking ID & Booked Date */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/60 pb-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard?tab=trips')}
+              className="hover:text-blue-600 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>My Trips</span>
+            </button>
+            <span className="text-zinc-300">/</span>
+            <span className="text-zinc-900 font-extrabold">Trip Details</span>
           </div>
-        ) : (
-          <div className="grid lg:grid-cols-12 gap-8 items-start">
-            {/* Main Column: Active Booking Component (8 cols) */}
-            <div className="lg:col-span-8">
-              <ActiveBooking
-                booking={booking}
-                distance={distance}
-                onUpdate={(b) => setBooking(b)}
-              />
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-slate-100/80 border border-slate-200/60 rounded-xl px-3 py-1 text-xs">
+              <span className="text-zinc-500 font-medium">Booking ID</span>
+              <span className="font-mono font-bold text-zinc-900">
+                #{getDisplayId(booking)}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyId}
+                className="text-zinc-400 hover:text-black p-0.5 cursor-pointer ml-1"
+                title="Copy ID"
+              >
+                {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
             </div>
 
-            {/* Sidebar: Details & Payment Ledger (4 cols) */}
-            <aside className="lg:col-span-4 space-y-6">
-              {/* Journey Details */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 font-mono block mb-2">
-                  Trip Credentials
-                </span>
-                <h3 className="text-lg font-bold tracking-tight mb-4">
-                  Train & Station Info
-                </h3>
-
-                <div className="space-y-3 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Train Number</span>
-                    <span className="font-mono font-bold text-black dark:text-white">
-                      {booking.train_no}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Train Name</span>
-                    <span className="font-bold text-black dark:text-white truncate max-w-[170px]">
-                      {booking.train_name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Station Hub</span>
-                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                      {booking.station_code}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Journey Date</span>
-                    <span className="font-mono text-black dark:text-white">
-                      {booking.journey_date}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Summary */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 font-mono block mb-2">
-                  Payment Ledger
-                </span>
-                <h3 className="text-lg font-bold tracking-tight mb-4">
-                  Settlement
-                </h3>
-
-                <div className="space-y-2.5 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-                  {Object.entries(booking.services || {})
-                    .filter(([, v]) => (typeof v === 'number' ? v > 0 : v))
-                    .map(([k, v]) => (
-                      <div
-                        key={k}
-                        className="flex justify-between items-center text-xs"
-                      >
-                        <span className="text-zinc-600 dark:text-zinc-400">
-                          {SERVICE_LABELS[k] || k}
-                        </span>
-                        <span className="font-mono font-semibold text-black dark:text-white">
-                          {typeof v === 'number' ? `${v} item(s)` : 'Yes'}
-                        </span>
-                      </div>
-                    ))}
-                </div>
-
-                <div className="pt-4 flex justify-between items-center">
-                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                    Total Amount
-                  </span>
-                  <span className="text-2xl font-bold font-mono text-black dark:text-white">
-                    ₹{booking.total_price}
-                  </span>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-center text-xs font-mono">
-                  <span className="text-zinc-400">Payment Status</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400 uppercase">
-                    {booking.payment_status || 'Pending'}
-                  </span>
-                </div>
-              </div>
-            </aside>
+            <div className="text-xs text-zinc-500 font-medium">
+              Booked on <span className="font-bold text-zinc-900">{formattedBookedDate}</span>
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Active Booking Component (Full-Width Top Banner & Stepper + Grid Below) */}
+        <ActiveBooking
+          booking={booking}
+          distance={distance}
+          onUpdate={(b) => setBooking(b)}
+        />
       </main>
     </div>
   );

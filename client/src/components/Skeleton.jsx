@@ -2,6 +2,8 @@
    SKELETON COMPONENT — Restrained Monochromatic Shimmer
    ============================================================ */
 
+import TrainLoader from './TrainLoader';
+
 export default function Skeleton({ className = '' }) {
   return (
     <div
@@ -22,13 +24,10 @@ export function CardSkeleton() {
 
 export function BookingSkeleton() {
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
-      <Skeleton className="w-1.5 h-12 rounded-full" />
-      <div className="flex-1 space-y-2">
-        <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-3 w-32" />
-      </div>
-      <Skeleton className="h-9 w-24 rounded-xl" />
+    <div className="bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-3xl p-6 shadow-2xs">
+      <TrainLoader fullScreen={false} size="sm" text="Loading Trip Records..." subtext="" />
     </div>
   );
 }
+
+export { TrainLoader };

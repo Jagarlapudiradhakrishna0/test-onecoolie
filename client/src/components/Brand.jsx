@@ -1,41 +1,33 @@
 import { Link } from 'react-router-dom';
+import oneCoolieLogo from '../assets/onecoolie-logo.png';
 
 /* ============================================================
-   BRAND COMPONENT — Swiss Minimal Identity (Black, White, Blue)
+   BRAND COMPONENT — Official OneCoolie Logo
+   Renders the authentic OneCoolie logo on both dark & light surfaces
    ============================================================ */
 
-export default function Brand({ sub, dark = false }) {
+export default function Brand({ sub, dark = false, className = '' }) {
+  const logoSrc = oneCoolieLogo;
+
   return (
-    <Link to="/" className="inline-flex items-center gap-3 group select-none">
-      {/* Geometric Swiss Monogram */}
-      <div
-        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-transform duration-200 group-hover:scale-105 ${
-          dark ? 'bg-white text-black' : 'bg-blue-600 text-white'
-        }`}
-      >
-        OC
-      </div>
+    <Link to="/" className={`inline-flex items-center gap-3 group select-none ${className}`}>
+      {/* Official OneCoolie Logo */}
+      <img
+        src={logoSrc}
+        alt="OneCoolie — Your Journey, Our Support"
+        className="h-8 sm:h-9 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+      />
 
-      {/* Typography Wordmark */}
-      <div className="flex items-center gap-2">
+      {sub && (
         <span
-          className={`text-lg font-bold tracking-tight ${dark ? 'text-white' : 'text-black'}`}
-        >
-          OneCoolie
-        </span>
-
-        {sub && (
-          <span
-            className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-              dark
-                ? 'bg-zinc-800 text-zinc-300 border border-zinc-700'
-                : 'bg-blue-50 text-blue-600 border border-blue-200'
+          className={`text-[10px] font-mono font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md ${dark
+            ? 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+            : 'bg-zinc-100 text-zinc-800 border border-zinc-200'
             }`}
-          >
-            {sub}
-          </span>
-        )}
-      </div>
+        >
+          {sub}
+        </span>
+      )}
     </Link>
   );
 }

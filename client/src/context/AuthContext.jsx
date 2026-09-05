@@ -43,16 +43,16 @@ export const AuthProvider = ({ children }) => {
     if (!token || !backendUser?.id) return null;
 
     const userData = {
-      id:           backendUser.id,
-      _id:          backendUser.id,
+      id: backendUser.id,
+      _id: backendUser.id,
       passenger_id: backendUser.passenger_id || null,
       assistant_id: backendUser.assistant_id || null,
-      name:         backendUser.name,
-      email:        backendUser.email,
-      role:         backendUser.role,
+      name: backendUser.name,
+      email: backendUser.email,
+      role: backendUser.role,
       station_code: backendUser.station_code || null,
-      is_approved:  backendUser.is_approved ?? false,
-      kyc_status:   backendUser.kyc_status || null,
+      is_approved: backendUser.is_approved ?? false,
+      kyc_status: backendUser.kyc_status || null,
       token
     };
 

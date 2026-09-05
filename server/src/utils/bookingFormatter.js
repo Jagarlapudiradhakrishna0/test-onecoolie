@@ -62,11 +62,11 @@ function parseServices(serviceField) {
     const luggageMatch = serviceField.match(/Luggage Assistance \((\d+) items?\)/i);
     if (luggageMatch) result.luggage = parseInt(luggageMatch[1], 10);
 
-    if (/Seat Escorting/i.test(serviceField))       result.escort     = true;
-    if (/Language Help/i.test(serviceField))         result.language   = true;
-    if (/Wheelchair/i.test(serviceField))            result.wheelchair = true;
-    if (/Snacks/i.test(serviceField))                result.snacks     = true;
-    if (/Exit Transport/i.test(serviceField))        result.transport  = true;
+    if (/Seat Escorting/i.test(serviceField)) result.escort = true;
+    if (/Language Help/i.test(serviceField)) result.language = true;
+    if (/Wheelchair/i.test(serviceField)) result.wheelchair = true;
+    if (/Snacks/i.test(serviceField)) result.snacks = true;
+    if (/Exit Transport/i.test(serviceField)) result.transport = true;
   }
 
   // If nothing matched but there was a string, treat as "general assistance"
@@ -101,69 +101,69 @@ function formatBooking(booking, { includeOTP = false } = {}) {
   // Build the output
   const formatted = {
     // ─── Identity ────────────────────────────────────────────────────────────
-    id:                      booking.id,
-    booking_id:              booking.booking_id || null,
+    id: booking.id,
+    booking_id: booking.booking_id || null,
 
     // ─── Train & Journey ─────────────────────────────────────────────────────
-    train_no:                trainNo,           // AssistantJobCard / PassengerDashboard
-    train_number:            trainNo,           // ActiveBooking / legacy
-    train_name:              booking.train_name || null,
-    station_code:            booking.station_code || booking.source || null,
-    source:                  booking.source || null,
-    destination:             booking.destination || null,
-    journey_date:            booking.journey_date || null,
-    journey_time:            booking.journey_time || null,
+    train_no: trainNo,           // AssistantJobCard / PassengerDashboard
+    train_number: trainNo,           // ActiveBooking / legacy
+    train_name: booking.train_name || null,
+    station_code: booking.station_code || booking.source || null,
+    source: booking.source || null,
+    destination: booking.destination || null,
+    journey_date: booking.journey_date || null,
+    journey_time: booking.journey_time || null,
 
     // ─── Participants ─────────────────────────────────────────────────────────
-    passenger_id:            booking.passenger_id,
-    passenger:               passenger
+    passenger_id: booking.passenger_id,
+    passenger: passenger
       ? {
-          id:    passenger.id    || booking.passenger_id,
-          name:  passenger.name  || null,
-          email: passenger.email || null,
-          phone: passenger.phone || null,
-        }
+        id: passenger.id || booking.passenger_id,
+        name: passenger.name || null,
+        email: passenger.email || null,
+        phone: passenger.phone || null,
+      }
       : null,
 
-    assistant_id:            booking.assistant_id || null,
-    assistant:               assistant
+    assistant_id: booking.assistant_id || null,
+    assistant: assistant
       ? {
-          id:           assistant.id           || booking.assistant_id,
-          name:         assistant.name         || null,
-          email:        assistant.email        || null,
-          phone:        assistant.phone        || null,
-          station_code: assistant.station_code || null,
-          is_online:    !!assistant.is_online,
-          rating:       assistant.rating       || 4.9,
-          completed_jobs: assistant.completed_jobs || 124,
-        }
+        id: assistant.id || booking.assistant_id,
+        name: assistant.name || null,
+        email: assistant.email || null,
+        phone: assistant.phone || null,
+        station_code: assistant.station_code || null,
+        is_online: !!assistant.is_online,
+        rating: assistant.rating || booking.assistant_rating || null,
+        completed_jobs: assistant.completed_jobs ?? assistant.total_completed ?? assistant.jobs ?? null,
+      }
       : null,
 
     // ─── Services & Coach Telemetry ──────────────────────────────────────────
-    services:            (booking.services && typeof booking.services === 'object') ? { ...services, ...booking.services } : services,
-    service:             booking.service           || null,
+    services: (booking.services && typeof booking.services === 'object') ? { ...services, ...booking.services } : services,
+    service: booking.service || null,
     service_description: booking.service_description || null,
-    coach:               booking.coach || booking.services?.coach || null,
-    seat_number:         booking.seat_number || booking.services?.seat_number || null,
-    berth_type:          booking.berth_type || booking.services?.berth_type || null,
-    action_type:         booking.action_type || booking.services?.action_type || 'load_to_seat',
-    pnr:                 booking.pnr || booking.services?.pnr || null,
-    platform:            booking.platform || booking.services?.platform || null,
+    coach: booking.services?.coach || null,
+    seat_number: booking.services?.seat_number || null,
+    berth_type: booking.services?.berth_type || null,
+    action_type: booking.services?.action_type || 'load_to_seat',
+    pnr: booking.services?.pnr || null,
+    platform: booking.services?.platform || null,
 
     // ─── Pricing ─────────────────────────────────────────────────────────────
-    total_price:   Number(booking.total_price) || 0,
+    total_price: Number(booking.total_price) || 0,
 
     // ─── Payment ─────────────────────────────────────────────────────────────
-    payment_status:  booking.payment_status  || 'pending',
-    payment_method:  booking.payment_method  || null,
-    payment_id:      booking.payment_id      || null,
+    payment_status: booking.payment_status || 'pending',
+    payment_method: booking.payment_method || null,
+    payment_id: booking.payment_id || null,
 
     // ─── Status ───────────────────────────────────────────────────────────────
-    booking_status:   booking.booking_status  || 'pending',
+    booking_status: booking.booking_status || 'pending',
     assistant_status: booking.assistant_status || 'pending',
 
     // ─── SOS Emergency ────────────────────────────────────────────────────────
-    sos_triggered:    !!booking.sos_triggered,
+    sos_triggered: !!booking.sos_triggered,
     sos_triggered_at: booking.sos_triggered_at || null,
 
     // ─── Rating & Review ──────────────────────────────────────────────────────
@@ -174,16 +174,16 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     //   start_otp is ONLY sent when the caller is the passenger or admin.
     //   AssistantJobCard does NOT need it – the assistant asks the passenger.
     ...(includeOTP ? { start_otp: booking.start_otp || null } : {}),
-    start_otp_verified:   !!booking.start_otp_verified,
+    start_otp_verified: !!booking.start_otp_verified,
     start_otp_expires_at: booking.start_otp_expires_at || null,
 
     // ─── Timestamps ──────────────────────────────────────────────────────────
-    created_at:         booking.created_at         || null,
-    updated_at:         booking.updated_at         || null,
-    accepted_at:        booking.accepted_at        || null,
-    arrived_at:         booking.arrived_at         || null,
-    service_started_at: booking.service_started_at || null,
-    completed_at:       booking.completed_at       || null,
+    created_at: booking.created_at || null,
+    updated_at: booking.updated_at || null,
+    accepted_at: booking.accepted_at || booking.services?.accepted_at || (['accepted', 'arriving', 'in_service', 'completed'].includes(booking.booking_status) ? (booking.services?.accepted_at || booking.updated_at || booking.created_at) : null),
+    arrived_at: booking.arrived_at || booking.services?.arrived_at || (['arriving', 'in_service', 'completed'].includes(booking.booking_status) ? (booking.services?.arrived_at || booking.updated_at) : null),
+    service_started_at: booking.service_started_at || booking.services?.in_service_at || booking.services?.service_started_at || null,
+    completed_at: booking.completed_at || booking.services?.completed_at || null,
   };
 
   return formatted;

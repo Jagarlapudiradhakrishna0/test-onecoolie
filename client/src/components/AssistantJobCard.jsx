@@ -79,7 +79,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
     } catch (error) {
       setOtpError(
         error.response?.data?.message ||
-          'Invalid OTP. Ask passenger to view the 6-digit code on their screen.'
+        'Invalid OTP. Ask passenger to view the 6-digit code on their screen.'
       );
     } finally {
       setLoading(false);
@@ -181,11 +181,10 @@ export default function AssistantJobCard({ job, onUpdate }) {
               ₹{job.total_price || 0}
             </p>
             <span
-              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block mt-1 font-mono ${
-                paid
+              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block mt-1 font-mono ${paid
                   ? 'bg-zinc-100 dark:bg-zinc-800 text-black dark:text-white'
                   : 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
-              }`}
+                }`}
             >
               {paid ? 'Paid · Succeeded' : 'Payment Pending'}
             </span>
@@ -415,16 +414,14 @@ export default function AssistantJobCard({ job, onUpdate }) {
               return (
                 <div
                   key={i}
-                  className={`flex flex-col ${
-                    isAssistant ? 'items-end' : 'items-start'
-                  }`}
+                  className={`flex flex-col ${isAssistant ? 'items-end' : 'items-start'
+                    }`}
                 >
                   <div
-                    className={`max-w-xs px-3.5 py-2 rounded-xl text-xs ${
-                      isAssistant
+                    className={`max-w-xs px-3.5 py-2 rounded-xl text-xs ${isAssistant
                         ? 'bg-black text-white dark:bg-white dark:text-black rounded-br-none font-medium'
                         : 'bg-white dark:bg-zinc-800 text-black dark:text-white border border-zinc-200 dark:border-zinc-700 rounded-bl-none font-medium'
-                    }`}
+                      }`}
                   >
                     {m.text}
                   </div>

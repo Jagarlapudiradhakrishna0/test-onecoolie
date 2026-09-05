@@ -157,7 +157,7 @@ function BookingDetailModal({ booking, onClose, onUpdate, assistants = [] }) {
         className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
-        
+
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/80 dark:bg-zinc-950/80">
           <div className="flex items-center gap-3">
@@ -212,10 +212,10 @@ function BookingDetailModal({ booking, onClose, onUpdate, assistants = [] }) {
 
         {/* Modal Body */}
         <div className="px-6 py-6 overflow-y-auto space-y-6 flex-1 text-xs">
-          
+
           {/* Grid of 3 Dossier Cards */}
           <div className="grid md:grid-cols-3 gap-4">
-            
+
             {/* 1. Passenger Dossier */}
             <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider font-mono text-[10px]">
@@ -558,11 +558,10 @@ function BookingDetailModal({ booking, onClose, onUpdate, assistants = [] }) {
                     type="button"
                     onClick={() => handleStatusChange(st)}
                     disabled={actionLoading || isCurrent}
-                    className={`text-[10px] font-bold uppercase font-mono px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                      isCurrent
+                    className={`text-[10px] font-bold uppercase font-mono px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${isCurrent
                         ? 'bg-blue-600 text-white border-blue-600 shadow-xs cursor-default'
                         : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 border-zinc-300 dark:border-zinc-700 hover:border-black dark:hover:border-white hover:bg-zinc-50'
-                    }`}
+                      }`}
                   >
                     {isCurrent ? `✓ ${st}` : st}
                   </button>
@@ -1120,11 +1119,10 @@ export default function AdminDashboard() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-3 px-4 border-b-2 font-semibold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-                  isActive
+                className={`py-3 px-4 border-b-2 font-semibold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${isActive
                     ? 'border-blue-500 text-white bg-zinc-900/50'
                     : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`}
+                  }`}
               >
                 <Icon className={`w-3.5 h-3.5 ${tab.alert ? 'text-red-500 animate-pulse' : ''}`} />
                 <span>{tab.label}</span>
@@ -1181,7 +1179,7 @@ export default function AdminDashboard() {
             ======================================================== */}
         {activeTab === 'bookings' && (
           <div className="space-y-4 animate-fade-in">
-            
+
             {/* Filter and Search Panel */}
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1222,7 +1220,7 @@ export default function AdminDashboard() {
 
               {/* Multi-Filter Controls */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 text-xs">
-                
+
                 {/* Station Filter */}
                 <div>
                   <label className="text-[10px] uppercase font-mono text-zinc-400 font-bold block mb-1">
@@ -1522,7 +1520,7 @@ export default function AdminDashboard() {
             ======================================================== */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
-            
+
             {/* 6 Top Metric Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
@@ -1553,7 +1551,7 @@ export default function AdminDashboard() {
 
             {/* Recharts Analytics Grid */}
             <div className="grid md:grid-cols-2 gap-6">
-              
+
               {/* Station Traffic & Revenue */}
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-3">
                 <h4 className="font-bold text-sm text-black dark:text-white font-mono flex items-center justify-between">
@@ -1642,7 +1640,7 @@ export default function AdminDashboard() {
             ======================================================== */}
         {activeTab === 'assistants' && (
           <div className="space-y-6 animate-fade-in">
-            
+
             {/* KYC Applications Queue */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -1744,11 +1742,10 @@ export default function AdminDashboard() {
                                 type="button"
                                 onClick={() => handleToggleAssistantOnline(ast)}
                                 title={ast.is_online ? 'Set Offline' : 'Set Online'}
-                                className={`p-1.5 rounded-md border text-[11px] font-bold cursor-pointer transition-colors ${
-                                  ast.is_online
+                                className={`p-1.5 rounded-md border text-[11px] font-bold cursor-pointer transition-colors ${ast.is_online
                                     ? 'bg-zinc-100 text-zinc-700 border-zinc-300 hover:bg-zinc-200'
                                     : 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                                }`}
+                                  }`}
                               >
                                 <Power className="w-3.5 h-3.5" />
                               </button>
@@ -1758,11 +1755,10 @@ export default function AdminDashboard() {
                                 type="button"
                                 onClick={() => handleToggleAssistantApproval(ast)}
                                 title={ast.is_approved ? 'Suspend Assistant' : 'Approve Assistant'}
-                                className={`p-1.5 rounded-md border text-[11px] font-bold cursor-pointer transition-colors ${
-                                  ast.is_approved
+                                className={`p-1.5 rounded-md border text-[11px] font-bold cursor-pointer transition-colors ${ast.is_approved
                                     ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
                                     : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
-                                }`}
+                                  }`}
                               >
                                 {ast.is_approved ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                               </button>

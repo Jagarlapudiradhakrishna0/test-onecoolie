@@ -18,6 +18,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import BookingLive from './pages/BookingLive';
 
 import OfflineBanner from './components/OfflineBanner';
+import TrainLoader from './components/TrainLoader';
 
 function ProtectedRoute({
   children,
@@ -31,15 +32,10 @@ function ProtectedRoute({
   // Wait until localStorage authentication is restored
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-zinc-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-
-          <p className="text-sm font-semibold text-zinc-500">
-            Loading...
-          </p>
-        </div>
-      </div>
+      <TrainLoader
+        text="Loading OneCoolie..."
+        subtext="Verifying security credentials & station telemetry..."
+      />
     );
   }
 
@@ -72,9 +68,10 @@ function SmartRedirect() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-4 border-zinc-200 border-t-blue-600 rounded-full animate-spin" />
-      </div>
+      <TrainLoader
+        text="Redirecting to Station Console..."
+        subtext="Connecting your dashboard..."
+      />
     );
   }
 
@@ -105,15 +102,10 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-zinc-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-
-          <p className="text-sm font-semibold text-zinc-500">
-            Loading OneCoolie...
-          </p>
-        </div>
-      </div>
+      <TrainLoader
+        text="Loading OneCoolie..."
+        subtext="Starting station assistance network..."
+      />
     );
   }
 

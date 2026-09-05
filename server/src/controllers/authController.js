@@ -112,8 +112,8 @@ exports.sendOtp = async (req, res) => {
       .eq('used', false);
 
     // Generate, hash, and store new OTP
-    const otp      = generateOtp();
-    const otpHash  = await hashOtp(otp);
+    const otp = generateOtp();
+    const otpHash = await hashOtp(otp);
     const expiresAt = getOtpExpiryDate();
     const expiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
 
@@ -124,12 +124,12 @@ exports.sendOtp = async (req, res) => {
     const { error: insertError } = await supabase
       .from('email_otps')
       .insert([{
-        email:      normalizedEmail,
-        otp_hash:   otpHash,
+        email: normalizedEmail,
+        otp_hash: otpHash,
         purpose,
         expires_at: expiresAt.toISOString(),
-        used:       false,
-        attempts:   0
+        used: false,
+        attempts: 0
       }]);
 
     if (insertError) {
@@ -146,7 +146,7 @@ exports.sendOtp = async (req, res) => {
 
     return res.status(200).json({
       message: 'OTP sent successfully. Check your inbox.',
-      email:   normalizedEmail,
+      email: normalizedEmail,
       // Tell the frontend whether this is a known account (for UI branching)
       accountExists: !!existingUser,
       expiresInMinutes: expiryMinutes
@@ -293,14 +293,14 @@ exports.verifyOtpAndLogin = async (req, res) => {
     console.log('OTP LOGIN SUCCESS:', { id: user.id, email: user.email, role: user.role });
 
     return res.status(200).json({
-      _id:          user.id,
-      id:           user.id,
-      name:         user.name,
-      email:        user.email,
-      role:         user.role,
+      _id: user.id,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
       station_code: user.station_code || null,
-      is_approved:  user.is_approved,
-      kyc_status:   user.kyc_status || null,
+      is_approved: user.is_approved,
+      kyc_status: user.kyc_status || null,
       token
     });
 
@@ -442,11 +442,11 @@ exports.verifyOtpAndRegister = async (req, res) => {
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert([{
-        name:         name.trim(),
-        email:        normalizedEmail,
-        password:     hashedPassword,
+        name: name.trim(),
+        email: normalizedEmail,
+        password: hashedPassword,
         role,
-        is_approved:  isApproved,
+        is_approved: isApproved,
         station_code: role === 'assistant' ? (station_code || null) : null
       }])
       .select()
@@ -470,13 +470,13 @@ exports.verifyOtpAndRegister = async (req, res) => {
     if (role === 'assistant') {
       return res.status(201).json({
         message: 'Registration successful! Your account is awaiting admin approval.',
-        _id:          newUser.id,
-        id:           newUser.id,
-        name:         newUser.name,
-        email:        newUser.email,
-        role:         newUser.role,
+        _id: newUser.id,
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
         station_code: newUser.station_code,
-        is_approved:  newUser.is_approved
+        is_approved: newUser.is_approved
       });
     }
 
@@ -486,14 +486,14 @@ exports.verifyOtpAndRegister = async (req, res) => {
     console.log('OTP REGISTER SUCCESS:', { id: newUser.id, email: newUser.email, role: newUser.role });
 
     return res.status(201).json({
-      _id:          newUser.id,
-      id:           newUser.id,
-      name:         newUser.name,
-      email:        newUser.email,
-      role:         newUser.role,
+      _id: newUser.id,
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
       station_code: newUser.station_code || null,
-      is_approved:  newUser.is_approved,
-      kyc_status:   newUser.kyc_status || null,
+      is_approved: newUser.is_approved,
+      kyc_status: newUser.kyc_status || null,
       token
     });
 
@@ -541,7 +541,7 @@ exports.checkEmail = async (req, res) => {
 
     return res.status(200).json({
       exists: !!user,
-      role:   user?.role || null
+      role: user?.role || null
     });
 
   } catch (err) {

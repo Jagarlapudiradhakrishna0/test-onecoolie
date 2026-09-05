@@ -4,6 +4,7 @@ import ProfileMenu from '../context/ProfileMenu';
 import { activeServices } from '../utils/services';
 import AssistantJobCard from '../components/AssistantJobCard';
 import Brand from '../components/Brand';
+import TrainLoader from '../components/TrainLoader';
 
 /* ============================================================
    ASSISTANT DASHBOARD — Swiss Operations Dispatch
@@ -160,16 +161,17 @@ export default function AssistantDashboard() {
   const averageRating =
     ratedJobs.length > 0
       ? (
-          ratedJobs.reduce((t, j) => t + Number(j.rating), 0) /
-          ratedJobs.length
-        ).toFixed(1)
+        ratedJobs.reduce((t, j) => t + Number(j.rating), 0) /
+        ratedJobs.length
+      ).toFixed(1)
       : '—';
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-xs font-mono text-zinc-400">
-        LOADING DISPATCH BOARD...
-      </div>
+      <TrainLoader
+        text="Loading Dispatch Board..."
+        subtext="Synchronizing live platform assignments & assistant fleet..."
+      />
     );
   }
 
@@ -186,16 +188,14 @@ export default function AssistantDashboard() {
               type="button"
               onClick={toggleDuty}
               disabled={actionLoading}
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all ${
-                online
-                  ? 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800 shadow-sm'
+              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all ${online
+                  ? 'bg-black text-white dark:bg-white dark:text-black border-transparent shadow-sm'
                   : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700'
-              }`}
+                }`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${
-                  online ? 'bg-blue-600 animate-pulse' : 'bg-zinc-400'
-                }`}
+                className={`w-2 h-2 rounded-full ${online ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400'
+                  }`}
               />
               <span>{online ? 'On Duty (Active)' : 'Off Duty'}</span>
             </button>
@@ -212,14 +212,14 @@ export default function AssistantDashboard() {
         {/* Alerts */}
         {error && (
           <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-medium text-black dark:text-white flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {message && (
-          <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs font-medium text-blue-700 dark:text-blue-300 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+          <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-black dark:text-white flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             <span>{message}</span>
           </div>
         )}
@@ -289,11 +289,10 @@ export default function AssistantDashboard() {
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                  tab === t.id
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${tab === t.id
                     ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm'
                     : 'text-zinc-500 hover:text-black dark:hover:text-white'
-                }`}
+                  }`}
               >
                 <span>{t.label}</span>
                 {t.badge > 0 && (

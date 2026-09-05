@@ -120,13 +120,13 @@ exports.acceptBooking = async (req, res) => {
     const { data, error } = await supabase
       .from('bookings')
       .update({
-        assistant_id:          req.user.id,
-        assistant_status:      'accepted',
-        booking_status:        'accepted',
-        start_otp:             otp,
-        start_otp_verified:    false,
-        start_otp_expires_at:  expiresAt,
-        updated_at:            new Date().toISOString(),
+        assistant_id: req.user.id,
+        assistant_status: 'accepted',
+        booking_status: 'accepted',
+        start_otp: otp,
+        start_otp_verified: false,
+        start_otp_expires_at: expiresAt,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
       .eq('booking_status', 'pending')  // atomic guard: only accept pending jobs
@@ -242,9 +242,9 @@ exports.completeBooking = async (req, res) => {
       .from('bookings')
       .update({
         assistant_status: 'completed',
-        booking_status:   'completed',
-        completed_at:     new Date().toISOString(),
-        updated_at:       new Date().toISOString(),
+        booking_status: 'completed',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
       .eq('assistant_id', req.user.id)
@@ -307,13 +307,13 @@ exports.cancelByAssistant = async (req, res) => {
     const { data, error } = await supabase
       .from('bookings')
       .update({
-        assistant_id:          null,
-        assistant_status:      'pending',
-        booking_status:        'pending',
-        start_otp:             null,
-        start_otp_verified:    false,
-        start_otp_expires_at:  null,
-        updated_at:            new Date().toISOString(),
+        assistant_id: null,
+        assistant_status: 'pending',
+        booking_status: 'pending',
+        start_otp: null,
+        start_otp_verified: false,
+        start_otp_expires_at: null,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', booking_id)
       .select('*, passenger:passenger_id(id, name, email, phone)')
@@ -369,16 +369,16 @@ exports.getOnlineAssistants = async (req, res) => {
         .eq('assistant_id', assistant.id);
 
       const completed = (jobs || []).filter((j) => j.booking_status === 'completed');
-      const rated     = completed.filter((j) => j.rating);
-      const avg       = rated.length
+      const rated = completed.filter((j) => j.rating);
+      const avg = rated.length
         ? (rated.reduce((s, j) => s + Number(j.rating), 0) / rated.length).toFixed(1)
         : null;
 
       results.push({
-        id:     assistant.id,
-        name:   assistant.name,
+        id: assistant.id,
+        name: assistant.name,
         rating: avg,
-        jobs:   completed.length,
+        jobs: completed.length,
       });
     }
 
