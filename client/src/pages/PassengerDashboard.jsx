@@ -196,15 +196,15 @@ export default function PassengerDashboard() {
   const [actionType, setActionType] = useState('load_to_seat'); // 'load_to_seat' | 'collect_from_seat'
 
   const [services, setServices] = useState({
-    luggage: 1,
-    escort: true,
+    luggage: 0,
+    escort: false,
     language: false,
     wheelchair: false,
     snacks: false,
     transport: false,
   });
   const [luggageCounts, setLuggageCounts] = useState({
-    small: 1,
+    small: 0,
     medium: 0,
     large: 0,
   });
@@ -554,7 +554,7 @@ export default function PassengerDashboard() {
     (b) => !ACTIVE_STATUSES.includes(b.booking_status)
   );
 
-  // Auto-fill from URL query params (e.g. from Live Station Board "Book Porter" button)
+  // Auto-fill from URL query params (e.g. from Live Station Board or Home service cards)
   useEffect(() => {
     const tNo = searchParams.get('trainNo');
     const tName = searchParams.get('trainName');
@@ -568,6 +568,24 @@ export default function PassengerDashboard() {
       if (stCode) setStation(stCode);
       setBookingMode('train');
       setTab('book');
+    }
+
+    const serviceParam = searchParams.get('service');
+    if (serviceParam) {
+      if (serviceParam === 'luggage' || serviceParam === 'luggage-porter') {
+        setServices((prev) => ({ ...prev, luggage: 1 }));
+        setLuggageCounts({ small: 1, medium: 0, large: 0 });
+      } else if (serviceParam === 'escort' || serviceParam === 'seat-escort') {
+        setServices((prev) => ({ ...prev, escort: true }));
+      } else if (serviceParam === 'wheelchair' || serviceParam === 'wheelchair-care') {
+        setServices((prev) => ({ ...prev, wheelchair: true }));
+      } else if (serviceParam === 'transport' || serviceParam === 'exit-transfer') {
+        setServices((prev) => ({ ...prev, transport: true }));
+      } else if (serviceParam === 'snacks') {
+        setServices((prev) => ({ ...prev, snacks: true }));
+      } else if (serviceParam === 'language') {
+        setServices((prev) => ({ ...prev, language: true }));
+      }
     }
   }, [searchParams]);
 
@@ -2209,9 +2227,24 @@ export default function PassengerDashboard() {
                             </div>
 
                             <div className="flex items-center gap-3 self-start sm:self-auto relative">
-                              <span className="font-mono text-xs text-zinc-400 font-medium">
-                                ID: #{b.id?.slice(-8).toUpperCase() || 'A401F3D7'}
-                              </span>
+                              <div className="flex items-center gap-1.5 bg-slate-100/70 border border-slate-200/60 rounded-lg px-2 py-0.5">
+                                <span className="font-mono text-xs text-zinc-700 font-bold select-all">
+                                  ID: {b.booking_id || b.id}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const copyVal = b.booking_id || b.id;
+                                    navigator.clipboard.writeText(copyVal);
+                                    toast.success(`Booking ID copied: ${copyVal}`);
+                                  }}
+                                  className="text-zinc-400 hover:text-blue-600 p-0.5 rounded transition-colors cursor-pointer"
+                                  title="Copy Booking ID"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </div>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -2629,15 +2662,15 @@ export default function PassengerDashboard() {
                   <span className="font-semibold text-zinc-600">Booking ID</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-zinc-900 font-mono text-xs">
-                    #{confirmedBooking.id?.slice(-8).toUpperCase()}
+                  <span className="font-extrabold text-zinc-900 font-mono text-xs select-all">
+                    {confirmedBooking.booking_id || confirmedBooking.id}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      const fullId = `#${confirmedBooking.id?.slice(-8).toUpperCase()}`;
-                      navigator.clipboard.writeText(fullId);
-                      toast.success('Booking ID copied!');
+                      const cleanId = confirmedBooking.booking_id || confirmedBooking.id;
+                      navigator.clipboard.writeText(cleanId);
+                      toast.success(`Booking ID copied: ${cleanId}`);
                     }}
                     className="text-blue-600 hover:text-blue-700 p-1 rounded-md hover:bg-blue-50 transition-colors cursor-pointer"
                     title="Copy Booking ID"
@@ -2646,6 +2679,31 @@ export default function PassengerDashboard() {
                   </button>
                 </div>
               </div>
+
+              {/* Row 1b: Database UUID for Supabase reference */}
+              {confirmedBooking.booking_id && confirmedBooking.id && (
+                <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
+                  <div className="flex items-center gap-1.5 text-zinc-400">
+                    <span>Database UUID</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[10px] text-zinc-600 select-all max-w-[190px] truncate" title={confirmedBooking.id}>
+                      {confirmedBooking.id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(confirmedBooking.id);
+                        toast.success('Database UUID copied!');
+                      }}
+                      className="text-zinc-500 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-colors cursor-pointer"
+                      title="Copy Supabase UUID"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Row 2: Status */}
               <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
@@ -2786,7 +2844,7 @@ export default function PassengerDashboard() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
                 <h3 className="font-bold text-lg text-zinc-900">Edit Journey Details</h3>
-                <p className="text-xs text-zinc-400 font-mono">Booking ID: #{editingBooking.id?.slice(-8).toUpperCase()}</p>
+                <p className="text-xs text-zinc-500 font-mono">Booking ID: {editingBooking.booking_id || editingBooking.id}</p>
               </div>
               <button
                 type="button"

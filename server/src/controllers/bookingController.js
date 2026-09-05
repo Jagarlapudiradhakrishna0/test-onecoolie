@@ -557,17 +557,21 @@ exports.getBookingById = async (req, res) => {
     }
 
 
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
+    let query = supabase
+      .from('bookings')
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)');
+
+    if (isUUID) {
+      query = query.eq('id', req.params.id);
+    } else {
+      query = query.eq('booking_id', req.params.id);
+    }
+
     const {
       data: booking,
       error
-    } = await supabase
-      .from('bookings')
-      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
-      .eq(
-        'id',
-        req.params.id
-      )
-      .maybeSingle();
+    } = await query.maybeSingle();
 
 
     if (error) {
@@ -687,17 +691,18 @@ exports.cancelBooking = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
+    let findQuery = supabase.from('bookings').select('*');
+    if (isUUID) {
+      findQuery = findQuery.eq('id', req.params.id);
+    } else {
+      findQuery = findQuery.eq('booking_id', req.params.id);
+    }
+
     const {
       data: booking,
       error: findError
-    } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq(
-        'id',
-        req.params.id
-      )
-      .maybeSingle();
+    } = await findQuery.maybeSingle();
 
 
     if (findError) {
@@ -1069,11 +1074,14 @@ exports.updateBooking = async (req, res) => {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const { data: booking, error: findError } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('id', req.params.id)
-      .maybeSingle();
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
+    let findQuery = supabase.from('bookings').select('*');
+    if (isUUID) {
+      findQuery = findQuery.eq('id', req.params.id);
+    } else {
+      findQuery = findQuery.eq('booking_id', req.params.id);
+    }
+    const { data: booking, error: findError } = await findQuery.maybeSingle();
 
     if (findError || !booking) {
       return res.status(404).json({ message: 'Booking not found.' });
@@ -1099,7 +1107,7 @@ exports.updateBooking = async (req, res) => {
     const { data: updated, error: updateError } = await supabase
       .from('bookings')
       .update(updateData)
-      .eq('id', req.params.id)
+      .eq('id', booking.id)
       .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 

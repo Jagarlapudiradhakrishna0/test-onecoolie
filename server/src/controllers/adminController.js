@@ -243,15 +243,22 @@ exports.getAllBookings = async (req, res) => {
 // --------------------------------------------------
 exports.getBookingById = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
+    let query = supabase
       .from('bookings')
       .select(`
         *,
         passenger:passenger_id(id, name, email, phone),
         assistant:assistant_id(id, name, email, phone, station_code, is_online)
-      `)
-      .eq('id', req.params.id)
-      .single();
+      `);
+
+    if (isUUID) {
+      query = query.eq('id', req.params.id);
+    } else {
+      query = query.eq('booking_id', req.params.id);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error || !data) {
       return res.status(404).json({ message: 'Booking not found.' });

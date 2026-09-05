@@ -228,10 +228,11 @@ export default function AuthPage({ role = 'passenger' }) {
       const userData = await login(email, loginPassword, role);
       setSignupStep('success');
       setTimeout(() => {
+        const search = location.search || '';
         if (userData.role === 'assistant') {
           navigate('/assistant', { replace: true });
         } else {
-          navigate('/dashboard', { replace: true });
+          navigate(`/dashboard${search}`, { replace: true });
         }
       }, 900);
     } catch (err) {
@@ -316,7 +317,8 @@ export default function AuthPage({ role = 'passenger' }) {
       if (res?.token || res?.user?.token) {
         setSignupStep('success');
         setTimeout(() => {
-          navigate(role === 'assistant' ? '/assistant' : '/dashboard', { replace: true });
+          const search = location.search || '';
+          navigate(role === 'assistant' ? '/assistant' : `/dashboard${search}`, { replace: true });
         }, 1100);
       } else {
         setActiveTab('login');

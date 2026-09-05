@@ -2,7 +2,8 @@ import {
   BrowserRouter,
   Routes,
   Route,
-  Navigate
+  Navigate,
+  useLocation
 } from 'react-router-dom';
 
 import { useContext } from 'react';
@@ -39,17 +40,19 @@ function ProtectedRoute({
     );
   }
 
+  const location = useLocation();
+
   // Not logged in
   if (!user) {
     if (allowedRoles.includes('admin')) {
-      return <Navigate to="/admin-auth" replace />;
+      return <Navigate to={`/admin-auth${location.search}`} replace />;
     }
 
     if (allowedRoles.includes('assistant')) {
-      return <Navigate to="/assistant-auth" replace />;
+      return <Navigate to={`/assistant-auth${location.search}`} replace />;
     }
 
-    return <Navigate to="/auth" replace />;
+    return <Navigate to={`/auth${location.search}`} replace />;
   }
 
   // Wrong role
@@ -65,6 +68,7 @@ function SmartRedirect() {
     user,
     authLoading
   } = useContext(AuthContext);
+  const location = useLocation();
 
   if (authLoading) {
     return (
@@ -76,7 +80,7 @@ function SmartRedirect() {
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to={`/auth${location.search}`} replace />;
   }
 
   if (user.role === 'admin') {
@@ -88,10 +92,10 @@ function SmartRedirect() {
   }
 
   if (user.role === 'passenger') {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={`/dashboard${location.search}`} replace />;
   }
 
-  return <Navigate to="/auth" replace />;
+  return <Navigate to={`/auth${location.search}`} replace />;
 }
 
 export default function App() {

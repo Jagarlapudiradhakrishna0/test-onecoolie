@@ -467,7 +467,7 @@ function HomeServices() {
           {services.map((s) => (
             <Link
               key={s.id}
-              to="/auth"
+              to={`/dashboard?service=${s.id}`}
               aria-label={`Book ${s.title}`}
               className="w-[82vw] max-w-[340px] sm:w-[320px] lg:w-full shrink-0 lg:shrink snap-center block group focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-600 rounded-[22px] sm:rounded-[26px] transition-all duration-300 hover:-translate-y-2 hover:shadow-xl"
             >

@@ -453,7 +453,7 @@ export default function AssistantDashboard() {
                       </span>
                     </div>
                     <p className="text-xs font-mono text-zinc-400">
-                      {job.journey_date} · Passenger: {job.passenger?.name} · ID: #{job.id?.slice(-8).toUpperCase()}
+                      {job.journey_date} · Passenger: {job.passenger?.name} · ID: {job.booking_id || job.id}
                     </p>
                   </div>
 

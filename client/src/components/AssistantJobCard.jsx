@@ -169,7 +169,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
             </h3>
 
             <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-1">
-              Date: {job.journey_date || '—'} {job.journey_time ? `at ${job.journey_time}` : ''} · ID: #{job.id?.slice(-8).toUpperCase()}
+              Date: {job.journey_date || '—'} {job.journey_time ? `at ${job.journey_time}` : ''} · ID: {job.booking_id || job.id}
             </p>
           </div>
 
