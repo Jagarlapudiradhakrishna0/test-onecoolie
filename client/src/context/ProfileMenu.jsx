@@ -11,7 +11,7 @@ import { useLanguage } from '../context/LanguageContext';
    Strictly Black, White, and OneCoolie Blue (#2563EB)
    ============================================================ */
 
-export default function ProfileMenu({ role, onNavigate }) {
+export default function ProfileMenu({ role, onNavigate, helpPath }) {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { lang, setLanguage, t } = useLanguage();
@@ -59,7 +59,7 @@ export default function ProfileMenu({ role, onNavigate }) {
           key: 'help',
           label: t('help') || 'Help & Support',
           sub: 'Get assistance anytime',
-          act: () => setModal('help'),
+          act: () => (helpPath ? navigate(helpPath) : setModal('help')),
           icon: HelpCircle,
         },
         {
@@ -90,7 +90,7 @@ export default function ProfileMenu({ role, onNavigate }) {
           key: 'help',
           label: t('help') || 'Help & Support',
           sub: 'Get assistance anytime',
-          act: () => setModal('help'),
+          act: () => (helpPath ? navigate(helpPath) : setModal('help')),
           icon: HelpCircle,
         },
         {
