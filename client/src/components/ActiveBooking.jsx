@@ -1091,14 +1091,6 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                   <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">Route</p>
                 </div>
               </div>
-
-              {/* Train Amenity Note */}
-              <div className="bg-[#F8FAFC] border border-slate-200/70 rounded-2xl p-3 flex items-start gap-2 text-xs text-zinc-600">
-                <Info className="w-4 h-4 text-[#1463FF] shrink-0 mt-0.5" />
-                <p className="text-[11px] sm:text-xs leading-relaxed text-zinc-600">
-                  Vande Bharat Express offers a faster, more comfortable and premium travel experience with world-class amenities.
-                </p>
-              </div>
             </div>
 
             {/* ── Assistant Profile & Messaging (Preserved when Assigned) ── */}
