@@ -233,6 +233,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/trains', trainRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/service', serviceRoutes);
+app.use('/api/services', serviceRoutes);
 app.use('/api/assistants', assistantRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);

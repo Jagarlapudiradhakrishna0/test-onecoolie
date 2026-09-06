@@ -201,6 +201,17 @@ export default function App() {
               }
             />
 
+            {/* Passenger Support redirect */}
+            <Route
+              path="/support"
+              element={
+                <Navigate
+                  to="/dashboard?tab=support"
+                  replace
+                />
+              }
+            />
+
             {/* Assistant */}
             <Route
               path="/assistant"

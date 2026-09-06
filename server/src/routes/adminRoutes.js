@@ -172,4 +172,9 @@ router.post('/finance/canary/percentage', canaryPercentageHandler);
 router.post('/finance/canary/public', canaryPublicHandler);
 router.get('/finance/canary/metrics', getCanaryMetricsHandler);
 
+// Station Desk & Operational Support Tickets
+const { getAllTickets, updateTicketStatus } = require('../controllers/supportController');
+router.get('/support-tickets', getAllTickets);
+router.patch('/support-tickets/:id', updateTicketStatus);
+
 module.exports = router;

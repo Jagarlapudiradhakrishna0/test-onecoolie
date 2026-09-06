@@ -133,6 +133,24 @@ exports.acceptBooking = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found.' });
     }
 
+    // Check if assistant already has an active job in progress
+    const { data: activeBookings, error: activeCheckErr } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('assistant_id', req.user.id)
+      .in('booking_status', ['accepted', 'arriving', 'in_service'])
+      .limit(1);
+
+    if (activeCheckErr) {
+      console.error('CHECK ACTIVE BOOKINGS ERROR ON ACCEPT:', activeCheckErr);
+    }
+
+    if (activeBookings && activeBookings.length > 0) {
+      return res.status(400).json({
+        message: 'You already have an active job in progress. Complete or cancel your current job before accepting another.'
+      });
+    }
+
     // Option C Gate: Unpaid online bookings cannot be accepted by assistants
     if (isOnlinePayment(targetBooking.payment_method) && targetBooking.payment_status !== 'paid') {
       return res.status(400).json({
@@ -153,7 +171,7 @@ exports.acceptBooking = async (req, res) => {
       })
       .eq('id', targetBooking.id)
       .eq('booking_status', 'pending')  // atomic guard: only accept pending jobs
-      .select('*, passenger:passenger_id(id, name, email, phone)')
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 
     if (error) {
@@ -165,6 +183,27 @@ exports.acceptBooking = async (req, res) => {
       return res.status(409).json({
         message: 'Booking already taken by another assistant or not found.'
       });
+    }
+
+    // Attach assistant completed jobs and feedback rating
+    if (data.assistant && data.assistant_id) {
+      try {
+        const { data: assistantJobs } = await supabase
+          .from('bookings')
+          .select('rating, booking_status')
+          .eq('assistant_id', data.assistant_id);
+
+        if (assistantJobs) {
+          const completed = assistantJobs.filter((j) => j.booking_status === 'completed');
+          const rated = completed.filter((j) => j.rating && Number(j.rating) > 0);
+          const avg = rated.length
+            ? (rated.reduce((s, j) => s + Number(j.rating), 0) / rated.length).toFixed(1)
+            : null;
+          data.assistant.completed_jobs = completed.length;
+          data.assistant.total_completed = completed.length;
+          data.assistant.rating = avg;
+        }
+      } catch (e) {}
     }
 
     // Notify passenger (broadcast INCLUDES OTP so passenger can see it)
@@ -203,10 +242,23 @@ exports.getMyJobs = async (req, res) => {
       return res.status(400).json({ message: error.message });
     }
 
-    // Never expose start_otp to the assistant
-    const formatted = (data || []).map((b) =>
-      formatBooking(b, { includeOTP: false })
-    );
+    // Format bookings for assistant:
+    // - Never expose start_otp to the assistant
+    // - For completed jobs, anonymize passenger identity so the assistant cannot see who gave the feedback
+    const formatted = (data || []).map((b) => {
+      const fb = formatBooking(b, { includeOTP: false });
+      if (fb.booking_status === 'completed') {
+        fb.passenger = {
+          name: 'Verified Passenger',
+          phone: null,
+          email: null,
+        };
+        fb.passenger_name = 'Verified Passenger';
+        fb.passenger_phone = null;
+        fb.passenger_email = null;
+      }
+      return fb;
+    });
 
     res.json(formatted);
   } catch (err) {

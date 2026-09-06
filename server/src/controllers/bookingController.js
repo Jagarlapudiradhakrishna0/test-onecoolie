@@ -572,23 +572,29 @@ exports.rateBooking = async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
-    | Save rating
+    | Save rating & review
     |--------------------------------------------------------------------------
     */
+
+    const updatePayload = {
+      rating,
+      updated_at: new Date().toISOString()
+    };
+    if (req.body.review !== undefined) {
+      updatePayload.review = req.body.review ? String(req.body.review).slice(0, 1000) : null;
+    }
 
     const {
       data,
       error
     } = await supabase
       .from('bookings')
-      .update({
-        rating
-      })
+      .update(updatePayload)
       .eq(
         'id',
-        req.params.id
+        booking.id
       )
-      .select()
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 
 
@@ -603,10 +609,15 @@ exports.rateBooking = async (req, res) => {
       });
     }
 
+    const formatted = formatBooking(data, { includeOTP: true });
+    broadcast(booking.id, formatted);
+    if (booking.booking_id && booking.booking_id !== booking.id) {
+      broadcast(booking.booking_id, formatted);
+    }
 
     return res.json({
       message: 'Rating submitted successfully.',
-      booking: data
+      booking: formatted
     });
 
   } catch (error) {

@@ -594,3 +594,99 @@ exports.triggerSOS = async (req, res) => {
     return res.status(500).json({ message: 'Unable to trigger SOS.' });
   }
 };
+
+// --------------------------------------------------
+// GET CHAT MESSAGES (GET /service/:booking_id/chat)
+// --------------------------------------------------
+exports.getChatMessages = async (req, res) => {
+  try {
+    const { booking_id } = req.params;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking_id);
+
+    let query = supabase.from('bookings').select('id, booking_id, services');
+    if (isUUID) {
+      query = query.eq('id', booking_id);
+    } else {
+      query = query.eq('booking_id', booking_id);
+    }
+
+    const { data: booking, error } = await query.maybeSingle();
+    if (error || !booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const messages = (booking.services && Array.isArray(booking.services.chat_messages))
+      ? booking.services.chat_messages
+      : [];
+
+    return res.json({ messages });
+  } catch (err) {
+    console.error('GET CHAT MESSAGES ERROR:', err);
+    return res.status(500).json({ message: 'Unable to load chat messages.' });
+  }
+};
+
+// --------------------------------------------------
+// SEND CHAT MESSAGE (POST /service/:booking_id/chat)
+// --------------------------------------------------
+exports.sendChatMessage = async (req, res) => {
+  try {
+    const { booking_id } = req.params;
+    const { text, from, timestamp } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Message text is required.' });
+    }
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking_id);
+
+    let query = supabase.from('bookings').select('id, booking_id, services');
+    if (isUUID) {
+      query = query.eq('id', booking_id);
+    } else {
+      query = query.eq('booking_id', booking_id);
+    }
+
+    const { data: booking, error } = await query.maybeSingle();
+    if (error || !booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const curServices = (booking.services && typeof booking.services === 'object') ? booking.services : {};
+    const oldMsgs = Array.isArray(curServices.chat_messages) ? curServices.chat_messages : [];
+
+    const newMessage = {
+      bookingId: booking.id,
+      bookingCode: booking.booking_id,
+      from: from || (req.user?.role === 'assistant' ? 'assistant' : 'passenger'),
+      text: String(text).trim().slice(0, 1000),
+      timestamp: timestamp || new Date().toISOString(),
+    };
+
+    const updatedMessages = [...oldMsgs, newMessage];
+
+    await supabase
+      .from('bookings')
+      .update({
+        services: {
+          ...curServices,
+          chat_messages: updatedMessages,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', booking.id);
+
+    // Broadcast via socket to both UUID and booking code rooms
+    if (io) {
+      io.to(`booking_${booking.id}`).emit('chat_message', newMessage);
+      if (booking.booking_id && booking.booking_id !== booking.id) {
+        io.to(`booking_${booking.booking_id}`).emit('chat_message', newMessage);
+      }
+    }
+
+    return res.json({ success: true, message: newMessage, messages: updatedMessages });
+  } catch (err) {
+    console.error('SEND CHAT MESSAGE ERROR:', err);
+    return res.status(500).json({ message: 'Unable to send message.' });
+  }
+};

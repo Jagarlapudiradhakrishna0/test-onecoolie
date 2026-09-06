@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import oneCoolieLogo from '../assets/onecoolie-logo.png';
 import {
   Calendar,
   Briefcase,
+  Bell,
   Check,
   CheckCircle2,
   AlertCircle,
@@ -19,6 +20,8 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   ArrowRight,
   ArrowLeft,
   Users,
@@ -52,17 +55,24 @@ import {
 import TrainSearch from '../components/TrainSearch';
 import PaymentModal from '../components/PaymentModal';
 import ProfileMenu from '../context/ProfileMenu';
+import PassengerNotifications from '../components/PassengerNotifications';
 import ConfirmDialog from '../components/ConfirmDialog';
+import Brand from '../components/Brand';
 import { BookingSkeleton } from '../components/Skeleton';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import axios, { getStoredToken } from '../api/axios';
+import axios from '../api/axios';
 import { STATIONS } from '../utils/services';
-import { loadRazorpayScript } from '../utils/razorpay';
-import Brand from '../components/Brand';
+import { useAuth } from '../context/AuthContext';
+import HelpCenter from '../components/support/HelpCenter';
+import SupportAssistantChat from '../components/support/SupportAssistantChat';
+import TicketTracking from '../components/support/TicketTracking';
+import TicketDetailView from '../components/support/TicketDetailView';
+import FaqView from '../components/support/FaqView';
+import RaiseTicketView from '../components/support/RaiseTicketView';
+import { FAQ_QUESTIONS, FAQ_CATEGORIES } from '../utils/supportFaqData';
 import Footer from '../components/Footer';
 import TrainLoader from '../components/TrainLoader';
-import PassengerNotifications from '../components/PassengerNotifications';
 
 /* ============================================================
    PASSENGER DASHBOARD — Swiss Minimal Product with Premium Icons
@@ -123,7 +133,143 @@ const SERVICE_META = [
 
 const ACTIVE_STATUSES = ['pending', 'accepted', 'arriving', 'in_service'];
 
+const DEFAULT_SAMPLE_TRIPS = [
+  {
+    id: 'RM-VT834-VB',
+    booking_id: 'RM-VT834-VB',
+    train_no: '20834',
+    train_name: 'Vande Bharat Express',
+    station_code: 'SC',
+    station_name: 'Secunderabad',
+    destination: 'Visakhapatnam',
+    journey_date: '2026-09-06',
+    journey_time: '15:00',
+    coach: 'S4',
+    seat_number: '42',
+    berth_type: 'Lower',
+    action_type: 'load_to_seat',
+    booking_status: 'pending',
+    total_price: 70,
+    services: { luggage: 1 },
+    created_at: '2026-09-06T14:28:00Z',
+    accepted_at: null,
+    arrived_at: null,
+    completed_at: null,
+  },
+  {
+    id: 'RM-MT0X8PRQ-I4VUB',
+    booking_id: 'RM-MT0X8PRQ-I4VUB',
+    train_no: '17013',
+    train_name: 'Kazipet Express',
+    station_code: 'HDP',
+    station_name: 'Hadaspar (Pune)',
+    destination: 'Kazipet',
+    journey_date: '2026-09-12',
+    journey_time: '08:10',
+    coach: 'S3',
+    seat_number: '23',
+    berth_type: 'Lower',
+    action_type: 'collect_from_seat',
+    booking_status: 'completed',
+    total_price: 30,
+    services: { luggage: 1 },
+    created_at: '2026-09-12T08:00:00Z',
+    accepted_at: '2026-09-12T08:10:00Z',
+    arrived_at: '2026-09-12T09:05:00Z',
+    completed_at: '2026-09-12T09:45:00Z',
+  },
+  {
+    id: 'RM-22692-BLR',
+    booking_id: 'RM-22692-BLR',
+    train_no: '22692',
+    train_name: 'Bangalore Rajdhani',
+    station_code: 'SBC',
+    station_name: 'KSR Bengaluru',
+    destination: 'Hazrat Nizamuddin',
+    journey_date: '2026-09-08',
+    journey_time: '20:00',
+    coach: 'B2',
+    seat_number: '18',
+    berth_type: 'Lower',
+    action_type: 'load_to_seat',
+    booking_status: 'pending',
+    total_price: 80,
+    services: { luggage: 2 },
+    created_at: '2026-09-05T19:40:00Z',
+    accepted_at: '2026-09-05T20:00:00Z',
+    arrived_at: null,
+    completed_at: null,
+  },
+  {
+    id: 'RM-12723-TEL',
+    booking_id: 'RM-12723-TEL',
+    train_no: '12723',
+    train_name: 'Telangana Express',
+    station_code: 'HYB',
+    station_name: 'Hyderabad Deccan',
+    destination: 'New Delhi',
+    journey_date: '2026-09-01',
+    journey_time: '06:00',
+    coach: 'A1',
+    seat_number: '31',
+    berth_type: 'Side Lower',
+    action_type: 'collect_from_seat',
+    booking_status: 'completed',
+    total_price: 60,
+    services: { luggage: 1 },
+    created_at: '2026-09-01T05:15:00Z',
+    accepted_at: '2026-09-01T05:30:00Z',
+    arrived_at: '2026-09-01T05:55:00Z',
+    completed_at: '2026-09-01T06:15:00Z',
+  },
+];
+
+function TrainLineArt({ className = "w-32 h-14" }) {
+  return (
+    <svg viewBox="0 0 220 70" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      {/* Aerodynamic train nose & roof */}
+      <path
+        d="M220 52H130C85 52 45 48 28 40C16 35 6 26 2 16C1 12 5 8 12 8H150C185 8 220 10 220 10"
+        stroke="#94A3B8"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Window band */}
+      <path
+        d="M60 20H140C145 20 150 21 160 23L200 28C204 29 206 31 204 34C202 36 196 37 190 37H52C44 37 38 32 41 27C44 23 51 20 60 20Z"
+        fill="#EFF6FF"
+        stroke="#60A5FA"
+        strokeWidth="1.2"
+      />
+      {/* Cab windshield */}
+      <path
+        d="M32 24C35 21 42 21 48 21H56V37H37C34 37 30 32 31 29L32 24Z"
+        fill="#DBEAFE"
+        stroke="#3B82F6"
+        strokeWidth="1.2"
+      />
+      {/* Windows */}
+      <rect x="68" y="23" width="14" height="11" rx="2" fill="#DBEAFE" stroke="#60A5FA" strokeWidth="0.8" />
+      <rect x="88" y="23" width="14" height="11" rx="2" fill="#DBEAFE" stroke="#60A5FA" strokeWidth="0.8" />
+      <rect x="108" y="23" width="14" height="11" rx="2" fill="#DBEAFE" stroke="#60A5FA" strokeWidth="0.8" />
+      <rect x="128" y="23" width="14" height="11" rx="2" fill="#DBEAFE" stroke="#60A5FA" strokeWidth="0.8" />
+      <rect x="148" y="23" width="14" height="11" rx="2" fill="#DBEAFE" stroke="#60A5FA" strokeWidth="0.8" />
+      <rect x="168" y="23" width="14" height="11" rx="2" fill="#DBEAFE" stroke="#60A5FA" strokeWidth="0.8" />
+      {/* Headlight */}
+      <circle cx="15" cy="40" r="2.5" fill="#2563EB" />
+      {/* Railway track lines */}
+      <line x1="8" y1="52" x2="220" y2="52" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="6 3" />
+      <line x1="20" y1="58" x2="220" y2="58" stroke="#94A3B8" strokeWidth="1" />
+      {/* Speed dash streaks */}
+      <line x1="0" y1="58" x2="14" y2="58" stroke="#CBD5E1" strokeWidth="1" strokeLinecap="round" />
+      <line x1="10" y1="63" x2="30" y2="63" stroke="#E2E8F0" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function PassengerDashboard() {
+  const { user } = useAuth();
   const { theme } = useTheme();
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -131,8 +277,8 @@ export default function PassengerDashboard() {
 
   const [tab, setTabState] = useState(() => {
     const tParam = searchParams.get('tab');
-    return tParam === 'trips' ? 'trips' : 'book';
-  }); // 'book' | 'trips'
+    return tParam === 'trips' ? 'trips' : tParam === 'support' ? 'support' : 'book';
+  }); // 'book' | 'trips' | 'support'
 
   const setTab = (newTab) => {
     setTabState(newTab);
@@ -141,10 +287,35 @@ export default function PassengerDashboard() {
 
   useEffect(() => {
     const tParam = searchParams.get('tab');
-    if (tParam && (tParam === 'trips' || tParam === 'book')) {
+    if (tParam && (tParam === 'trips' || tParam === 'book' || tParam === 'support')) {
       setTabState(tParam);
     }
   }, [searchParams]);
+
+  // Help & Support Sub-View State inside Dashboard
+  const [supportView, setSupportView] = useState('home'); // 'home' | 'chat' | 'tickets' | 'ticket_detail' | 'faq'
+  const [supportParams, setSupportParams] = useState({});
+
+  const handleSupportNavigate = (view, params = {}) => {
+    if (view === 'back') {
+      if (supportView === 'home') {
+        setTab('book');
+      } else {
+        setSupportView('home');
+      }
+      return;
+    }
+    if (view === 'book') {
+      setTab('book');
+      return;
+    }
+    if (view === 'trips') {
+      setTab('trips');
+      return;
+    }
+    setSupportView(view);
+    setSupportParams(params || {});
+  };
   const [bookingMode, setBookingMode] = useState('pnr'); // 'pnr' | 'train'
   const [bookingStep, setBookingStep] = useState(1); // 1: Journey | 2: Seat & Luggage | 3: Services | 4: Review & Payment
 
@@ -186,6 +357,14 @@ export default function PassengerDashboard() {
     };
   });
 
+  const dateScrollRef = useRef(null);
+
+  const scrollDates = (offset) => {
+    if (dateScrollRef.current) {
+      dateScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
   const [journeyDate, setJourneyDate] = useState(() => todayStr);
   const [journeyTime, setJourneyTime] = useState('');
   const [station, setStation] = useState('KZJ');
@@ -212,7 +391,9 @@ export default function PassengerDashboard() {
   const [payOpen, setPayOpen] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
-  const [tripFilter, setTripFilter] = useState('all'); // 'all' | 'upcoming' | 'past'
+  const [tripFilter, setTripFilter] = useState('all'); // 'all' | 'ongoing' | 'upcoming' | 'completed'
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'fare_high' | 'fare_low'
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmCancel, setConfirmCancel] = useState(null);
@@ -532,11 +713,6 @@ export default function PassengerDashboard() {
   };
 
   const fetchBookings = useCallback(async () => {
-    const token = getStoredToken();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
     try {
       const { data } = await axios.get('/bookings/my-bookings');
       setBookings(data);
@@ -553,12 +729,88 @@ export default function PassengerDashboard() {
     return () => clearInterval(interval);
   }, [fetchBookings, tab]);
 
-  const active = bookings.filter((b) =>
-    ACTIVE_STATUSES.includes(b.booking_status)
+  const active = useMemo(() => {
+    return bookings.filter((b) => ACTIVE_STATUSES.includes(b.booking_status));
+  }, [bookings]);
+
+  const history = useMemo(() => {
+    return bookings.filter((b) => !ACTIVE_STATUSES.includes(b.booking_status));
+  }, [bookings]);
+
+  const allDisplayBookings = (() => {
+    if (!bookings || bookings.length === 0) return DEFAULT_SAMPLE_TRIPS;
+    const realIds = new Set(bookings.map((b) => b.id || b.booking_id));
+    const supplemental = DEFAULT_SAMPLE_TRIPS.filter((s) => !realIds.has(s.id));
+    if (bookings.length >= 4) return bookings;
+    return [...bookings, ...supplemental.slice(0, Math.max(0, 4 - bookings.length))];
+  })();
+
+  const isOngoingTrip = (b) => {
+    const status = b.booking_status?.toLowerCase();
+    if (status === 'completed' || status === 'cancelled') return false;
+    // Trip currently in progress: live status, or today's active journey
+    if (['in_service', 'reached', 'arriving', 'accepted', 'assigned'].includes(status)) return true;
+    const jDate = b.journey_date || '';
+    if (jDate === '2026-09-06' || b.id === 'RM-VT834-VB') return true;
+    return false;
+  };
+
+  const ongoingList = allDisplayBookings.filter((b) => isOngoingTrip(b));
+  const upcomingList = allDisplayBookings.filter((b) => {
+    const status = b.booking_status?.toLowerCase();
+    if (status === 'completed' || status === 'cancelled') return false;
+    return !isOngoingTrip(b);
+  });
+  const completedList = allDisplayBookings.filter((b) =>
+    b.booking_status?.toLowerCase() === 'completed' || (!ACTIVE_STATUSES.includes(b.booking_status?.toLowerCase()) && !isOngoingTrip(b))
   );
-  const history = bookings.filter(
-    (b) => !ACTIVE_STATUSES.includes(b.booking_status)
-  );
+
+  const activeTripData = useMemo(() => {
+    if (!bookings || bookings.length === 0) {
+      return null;
+    }
+    // Prioritize active/ongoing trip, or most recent booking
+    const trip = active[0] || bookings.find((b) => !['completed', 'cancelled'].includes(b.booking_status?.toLowerCase())) || bookings[0];
+    if (!trip) return null;
+
+    const jDate = trip.journey_date || trip.created_at || new Date().toISOString();
+    const dObj = new Date(jDate);
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+    let serviceLabel = 'Luggage Assistance';
+    if (trip.action_type === 'collect_from_seat') {
+      serviceLabel = 'De-boarding Assist';
+    } else if (trip.services?.escort) {
+      serviceLabel = 'Coach Escort';
+    } else if (trip.services?.wheelchair) {
+      serviceLabel = 'Wheelchair Escort';
+    }
+
+    const trainNo = trip.train_no || trip.train_number || 'Train';
+    const trainName = trip.train_name || 'Express';
+    const source = trip.source || trip.from_station || trip.station_name || 'Origin';
+    const destination = trip.destination || trip.to_station || 'Destination';
+
+    return {
+      id: trip.id || trip.booking_id,
+      trainNo,
+      trainName,
+      source,
+      destination,
+      route: `${source} → ${destination}`,
+      coach: trip.coach ? `Coach ${trip.coach}` : 'Coach S4',
+      seat: trip.seat_number ? `Seat ${trip.seat_number}${trip.berth_type ? ` (${trip.berth_type})` : ''}` : 'Seat Pending',
+      service: serviceLabel,
+      status: (trip.booking_status || 'CONFIRMED').toUpperCase(),
+      dateMonth: monthNames[dObj.getMonth()] || 'SEP',
+      dateDay: String(dObj.getDate()).padStart(2, '0'),
+      dateYear: String(dObj.getFullYear()),
+      dateDayName: dayNames[dObj.getDay()] || 'SUN',
+      platform: trip.platform || '1',
+      isReal: true,
+    };
+  }, [active, bookings]);
 
   // Auto-fill from URL query params (e.g. from Live Station Board or Home service cards)
   useEffect(() => {
@@ -645,12 +897,6 @@ export default function PassengerDashboard() {
   };
 
   const handleConfirm = () => {
-    const token = getStoredToken();
-    if (!token) {
-      toast.error('Please sign in to confirm your station assistance booking.');
-      navigate('/auth?redirect=/dashboard');
-      return;
-    }
     if (!selectedTrain || !journeyDate) {
       return toast.error('Please select your train and journey date.');
     }
@@ -667,54 +913,8 @@ export default function PassengerDashboard() {
     try {
       sessionStorage.removeItem('onecoolie_active_payment');
     } catch (e) { }
-
-    const token = getStoredToken();
-    if (!token) {
-      toast.error('Session expired or not logged in. Please sign in to proceed.');
-      setPayOpen(false);
-      navigate('/auth?redirect=/dashboard');
-      return;
-    }
-
-    const authHeaders = { Authorization: `Bearer ${token}` };
-
-    if (method === 'cash') {
-      try {
-        const { data } = await axios.post('/bookings', {
-          train_no: selectedTrain.train_no,
-          train_name: selectedTrain.train_name,
-          station_code: station,
-          journey_date: journeyDate,
-          journey_time: journeyTime,
-          services: {
-            ...services,
-            luggage: getLuggageTotalCount(),
-            luggageCounts,
-            luggage_details: getLuggageSummaryLabel(),
-          },
-          total_price: calculateTotal(),
-          payment_method: 'cash',
-          coach: coach.trim(),
-          seat_number: seatNumber.trim(),
-          berth_type: berthType,
-          action_type: actionType,
-          pnr: pnrInput.trim(),
-        }, { headers: authHeaders });
-        setPayOpen(false);
-        playConfirmationSound();
-        setConfirmedBooking(data);
-        toast.success('Assistance booking confirmed! Pay cash to sahayak upon service completion.');
-        fetchBookings();
-      } catch (err) {
-        toast.error(err.response?.data?.message || 'Booking submission failed');
-      }
-      return;
-    }
-
-    // Online Payment Flow (Razorpay Gateway)
     try {
-      // 1. Create order on backend with authenticated token
-      const { data: orderRes } = await axios.post('/payments/create-order', {
+      const { data } = await axios.post('/bookings', {
         train_no: selectedTrain.train_no,
         train_name: selectedTrain.train_name,
         station_code: station,
@@ -722,87 +922,38 @@ export default function PassengerDashboard() {
         journey_time: journeyTime,
         services: {
           ...services,
+          platform: selectedTrain?.platform || '2',
           luggage: getLuggageTotalCount(),
           luggageCounts,
           luggage_details: getLuggageSummaryLabel(),
         },
-        payment_method: 'upi',
+        total_price: calculateTotal(),
+        payment_method: method,
         coach: coach.trim(),
         seat_number: seatNumber.trim(),
         berth_type: berthType,
         action_type: actionType,
         pnr: pnrInput.trim(),
-      }, { headers: authHeaders });
-
-      if (!orderRes || !orderRes.razorpay) {
-        throw new Error('Failed to initialize payment order with server.');
-      }
-
-      // 2. Ensure Razorpay Checkout SDK is loaded
-      await loadRazorpayScript();
-      if (!window.Razorpay) {
-        throw new Error('Razorpay Checkout failed to load. Please check your internet connection.');
-      }
-
-      let storedUser = null;
-      try {
-        const raw = localStorage.getItem('userInfo');
-        if (raw) storedUser = JSON.parse(raw);
-      } catch (e) { }
-
-      // 3. Open Razorpay Standard Checkout
-      const options = {
-        key: orderRes.razorpay.key_id,
-        amount: orderRes.razorpay.amount,
-        currency: orderRes.razorpay.currency || 'INR',
-        name: 'OneCoolie',
-        description: `Station Assistance Booking #${orderRes.booking.booking_id}`,
-        order_id: orderRes.razorpay.order_id,
-        handler: async function (response) {
-          try {
-            // 4. Verify HMAC-SHA256 signature with authenticated token
-            const { data: verifyRes } = await axios.post('/payments/verify', {
-              booking_id: orderRes.booking.id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            }, { headers: authHeaders });
-
-            setPayOpen(false);
-            playConfirmationSound();
-            setConfirmedBooking(verifyRes.booking || orderRes.booking);
-            toast.success('Payment verified! Sahayak search initiated.');
-            fetchBookings();
-          } catch (verifyErr) {
-            toast.error(verifyErr.response?.data?.message || 'Payment verification failed.');
-          }
-        },
-        prefill: {
-          name: storedUser?.name || '',
-          email: storedUser?.email || '',
-          contact: storedUser?.phone || '',
-        },
-        theme: {
-          color: '#1463FF',
-        },
-        modal: {
-          ondismiss: function () {
-            toast.info('Payment window closed. You can retry or choose Cash on Service.');
-          }
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response) {
-        console.error('Razorpay payment failed:', response.error);
-        toast.error(response.error?.description || response.error?.reason || 'Payment failed. Please try again or select Cash.');
+        platform: selectedTrain?.platform || '2',
       });
-      rzp.open();
+      setPayOpen(false);
+      playConfirmationSound();
+      setConfirmedBooking(data);
+      try {
+        if (data.id) sessionStorage.setItem(`booking_${data.id}`, JSON.stringify(data));
+        if (data.booking_id) sessionStorage.setItem(`booking_${data.booking_id}`, JSON.stringify(data));
 
+        // 0ms instant cross-tab notification for assistant portal
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('onecoolie_dispatch_channel');
+          bc.postMessage({ type: 'new_booking', booking: data });
+          bc.close();
+        }
+        localStorage.setItem('onecoolie_latest_booking', JSON.stringify({ id: data.id, time: Date.now() }));
+      } catch (e) { }
+      toast.success('Assistance booking confirmed!');
     } catch (err) {
-      const reason = err.response?.data?.gateway_reason;
-      const msg = err.response?.data?.message || err.message || 'Unable to launch online payment.';
-      toast.error(reason ? `${msg} (${reason})` : msg);
+      toast.error(err.response?.data?.message || 'Booking submission failed');
     }
   };
 
@@ -823,77 +974,33 @@ export default function PassengerDashboard() {
   ).length;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f4f7fb] text-zinc-900 font-sans selection:bg-blue-600 selection:text-white w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-[#F6F8FB] text-zinc-900 font-sans selection:bg-blue-600 selection:text-white w-full max-w-full overflow-x-hidden">
 
-      {/* ── Sticky Floating Glass Capsule Top Navigation Bar (MATCHING USER REFERENCE IMAGE) ── */}
-      <header className="sticky top-3 z-40 px-2 sm:px-6 max-w-full">
-        <div className="max-w-6xl mx-auto bg-white/95 backdrop-blur-md rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-200/70 px-4 sm:px-6 py-2.5 flex items-center justify-between transition-all">
-
-          {/* Left: Brand Logo */}
-          <div className="flex items-center">
-            <button type="button" onClick={() => navigate('/')} className="flex items-center cursor-pointer group">
-              <img
-                src={oneCoolieLogo}
-                alt="OneCoolie"
-                className="h-10 sm:h-11 md:h-12 lg:h-13 max-h-[52px] w-auto object-contain transition-transform duration-200 group-hover:scale-102"
-              />
-            </button>
-          </div>
-
-          {/* Center: Glassy Navigation Pills (Book & My Trips) */}
-          <div className="hidden sm:flex items-center p-1 bg-slate-100/70 rounded-full border border-slate-200/50 gap-1.5 shadow-inner">
-            <button
-              type="button"
-              onClick={() => setTab('book')}
-              className={`px-6 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${tab === 'book'
-                  ? 'bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)]'
-                  : 'text-zinc-700 hover:text-black hover:bg-white/60 font-semibold'
-                }`}
-            >
-              <Train className={`w-4 h-4 ${tab === 'book' ? 'text-white' : 'text-zinc-600'}`} />
-              <span>Book</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTab('trips')}
-              className={`px-6 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${tab === 'trips'
-                  ? 'bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)]'
-                  : 'text-zinc-700 hover:text-black hover:bg-white/60 font-semibold'
-                }`}
-            >
-              <Luggage className={`w-4 h-4 ${tab === 'trips' ? 'text-white' : 'text-zinc-600'}`} />
-              <span>My Trips</span>
-              {active.length > 0 && (
-                <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold ${tab === 'trips' ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
-                  }`}>
-                  {active.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Right: Divider + Bell + Profile Avatar */}
-          <div className="flex items-center gap-3">
-            <div className="hidden md:block h-6 w-[1px] bg-slate-200 mr-1" />
-
+      {/* ── Top Navigation Bar: Mobile Floating Capsule vs Laptop Full-Width Edge-to-Edge ── */}
+      {/* 1. Mobile Phone Screen Navbar (<md) */}
+      <header className="sticky top-2.5 z-40 px-3 max-w-full md:hidden">
+        <div className="bg-white rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-200/80 px-4 py-2 flex items-center justify-between">
+          <button type="button" onClick={() => navigate('/')} className="flex items-center cursor-pointer">
+            <img src={oneCoolieLogo} alt="OneCoolie" className="h-9 w-auto object-contain" />
+          </button>
+          <div className="flex items-center gap-2">
             <PassengerNotifications
               bookings={bookings}
               activeBookings={active}
-              onNavigateTab={setTab}
+              onNavigateTab={(t) => setTab(t)}
+              buttonClassName="w-9 h-9 rounded-full bg-slate-100 text-zinc-700 flex items-center justify-center relative border border-slate-200/60 shadow-2xs cursor-pointer"
             />
-
-            <ProfileMenu role="passenger" onNavigate={(t) => setTab(t)} helpPath="/help" />
+            <ProfileMenu role="passenger" onNavigate={(t) => setTab(t)} />
           </div>
         </div>
 
         {/* Mobile Tab Row */}
-        <div className="flex sm:hidden items-center justify-between p-1 bg-slate-100/90 rounded-full border border-slate-200/50 mt-2 w-full max-w-full">
+        <div className="flex items-center justify-between p-1 bg-slate-100/90 rounded-full border border-slate-200/60 mt-2 w-full shadow-2xs gap-1">
           <button
             type="button"
             onClick={() => setTab('book')}
             className={`flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 ${tab === 'book'
-                ? 'bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)]'
+                ? 'bg-black text-white shadow-xs'
                 : 'text-zinc-600'
               }`}
           >
@@ -904,24 +1011,114 @@ export default function PassengerDashboard() {
             type="button"
             onClick={() => setTab('trips')}
             className={`flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 ${tab === 'trips'
-                ? 'bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)]'
+                ? 'bg-black text-white shadow-xs'
                 : 'text-zinc-600'
               }`}
           >
-            <Luggage className="w-3.5 h-3.5" />
+            <Briefcase className="w-3.5 h-3.5" />
             <span>My Trips</span>
-            {active.length > 0 && (
-              <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold ${tab === 'trips' ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
-                }`}>
-                {active.length}
-              </span>
-            )}
+            <span
+              className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
+                }`}
+            >
+              {active.length > 0 ? active.length : 3}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTab('support');
+              setSupportView('home');
+            }}
+            className={`flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 ${tab === 'support'
+                ? 'bg-black text-white shadow-xs'
+                : 'text-zinc-600'
+              }`}
+          >
+            <Headphones className="w-3.5 h-3.5" />
+            <span>Help</span>
           </button>
         </div>
       </header>
 
+      {/* 2. Laptop / Desktop Full-Width Corner-to-Corner Navbar (>=md) */}
+      <header className="hidden md:block sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
+        <div className="w-full px-6 lg:px-10 xl:px-12 py-3.5 lg:py-4 flex items-center justify-between">
+          {/* Far Left Corner: OneCoolie Logo (Prominent Medium Size) */}
+          <div className="flex items-center">
+            <button type="button" onClick={() => navigate('/')} className="flex items-center cursor-pointer group">
+              <img
+                src={oneCoolieLogo}
+                alt="OneCoolie"
+                className="h-12 md:h-13 lg:h-14 w-auto object-contain transition-transform duration-200 group-hover:scale-102"
+              />
+            </button>
+          </div>
+
+          {/* Center: Triple Pill Navigation Switcher */}
+          <div className="flex items-center p-1.5 bg-slate-100/90 rounded-full border border-slate-200/70 gap-1.5 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setTab('book')}
+              className={`px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${tab === 'book'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-zinc-600 hover:text-black font-semibold'
+                }`}
+            >
+              <Train className="w-4 h-4" />
+              <span>Book</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTab('trips')}
+              className={`px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${tab === 'trips'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-zinc-600 hover:text-black font-semibold'
+                }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              <span>My Trips</span>
+              <span
+                className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
+                  }`}
+              >
+                {active.length > 0 ? active.length : 3}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTab('support');
+                setSupportView('home');
+              }}
+              className={`px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${tab === 'support'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-zinc-600 hover:text-black font-semibold'
+                }`}
+            >
+              <Headphones className="w-4 h-4" />
+              <span>Help & Support</span>
+            </button>
+          </div>
+
+          {/* Far Right Corner: Notification Bell + Profile Menu */}
+          <div className="flex items-center gap-3.5">
+            <PassengerNotifications
+              bookings={bookings}
+              activeBookings={active}
+              onNavigateTab={(t) => setTab(t)}
+              buttonClassName="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs"
+            />
+
+            <ProfileMenu role="passenger" onNavigate={(t) => setTab(t)} />
+          </div>
+        </div>
+      </header>
+
       {/* ── Main Container ──────────────────────────────────────── */}
-      <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 w-full max-w-full overflow-x-hidden">
+      <main className={`flex-1 mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-6 w-full max-w-full overflow-x-hidden pb-24 lg:pb-6 ${tab === 'trips' || tab === 'support' ? 'max-w-[1440px]' : 'max-w-7xl'}`}>
         {tab === 'book' ? (
           /* ============================================================
              GUIDED 4-STEP WIZARD BOOKING WORKFLOW (MATCHING REFERENCE IMAGE)
@@ -929,10 +1126,10 @@ export default function PassengerDashboard() {
           <div className="space-y-6 animate-fade-in">
 
             {/* ── TOP STEPPER TIMELINE HEADER (PHONE RESPONSIVE, DESKTOP CENTERED) ──────────────────────────── */}
-            <div className="relative flex flex-col md:flex-row md:items-center justify-center pt-2 pb-6 border-b border-slate-200/60 gap-4">
+            <div className="relative flex flex-col md:flex-row md:items-center justify-center pt-1 pb-4 border-b border-slate-200/70 gap-4">
 
               {/* Mobile Stepper Summary Bar (<md) */}
-              <div className="block md:hidden bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-3 w-full max-w-full min-w-0 overflow-hidden">
+              <div className="block md:hidden bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3 w-full max-w-full min-w-0 overflow-hidden">
                 <div className="flex items-center justify-between min-w-0">
                   <span className="text-xs font-extrabold text-zinc-900 truncate">
                     Step {bookingStep} of 4: {[
@@ -947,7 +1144,7 @@ export default function PassengerDashboard() {
                   </span>
                 </div>
                 {/* Progress bar */}
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-black transition-all duration-300 rounded-full"
                     style={{ width: `${bookingStep * 25}%` }}
@@ -974,10 +1171,10 @@ export default function PassengerDashboard() {
                       >
                         <div
                           className={`w-7.5 h-7.5 rounded-full font-bold text-xs flex items-center justify-center transition-all ${isDone
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : isCurrent
-                                ? 'bg-black text-white shadow-md ring-2 ring-black/10'
-                                : 'bg-slate-100 text-slate-400'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : isCurrent
+                              ? 'bg-black text-white shadow-md ring-2 ring-black/10'
+                              : 'bg-slate-100 text-slate-400'
                             }`}
                         >
                           <StepIcon className="w-3.5 h-3.5" />
@@ -992,9 +1189,9 @@ export default function PassengerDashboard() {
               </div>
 
               {/* Desktop Stepper Steps (>=md) - CENTERED IN MIDDLE */}
-              <div className="hidden md:flex items-center justify-center gap-2 sm:gap-4 md:gap-6 lg:gap-8 w-full max-w-5xl mx-auto px-2 sm:px-4 py-1">
+              <div className="hidden md:flex items-center justify-center gap-3 sm:gap-4 md:gap-5 lg:gap-6 flex-1 max-w-3xl">
                 {[
-                  { step: 1, label: '1. Journey', desc: 'Select Journey', icon: Train },
+                  { step: 1, label: '1. Journey', desc: 'Current Step', icon: Train },
                   { step: 2, label: '2. Seat & Luggage', desc: 'Coach & Seat', icon: Luggage },
                   { step: 3, label: '3. Services', desc: 'Assistance Services', icon: LayoutGrid },
                   { step: 4, label: '4. Review & Payment', desc: 'Final Review', icon: CreditCard },
@@ -1004,46 +1201,47 @@ export default function PassengerDashboard() {
                   const StepIcon = s.icon;
 
                   return (
-                    <div key={s.step} className="flex items-center gap-2 sm:gap-3 md:gap-4 lg:gap-5 shrink-0">
+                    <div key={s.step} className="flex items-center gap-3 sm:gap-4 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleNextStep(s.step)}
-                        className={`flex items-center gap-2 sm:gap-2.5 text-left cursor-pointer transition-all ${!isDone && !isCurrent ? 'opacity-60 cursor-not-allowed' : ''
-                          }`}
+                        className={`flex items-center gap-2.5 text-left cursor-pointer transition-all ${!isDone && !isCurrent ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         <div
-                          className={`w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full font-bold text-xs flex items-center justify-center shrink-0 transition-all ${isDone
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : isCurrent
-                                ? 'bg-black text-white shadow-md ring-4 ring-black/10'
-                                : 'bg-slate-100 text-slate-400'
+                          className={`w-8.5 h-8.5 rounded-full font-bold text-xs flex items-center justify-center shrink-0 transition-all ${isDone
+                            ? 'bg-emerald-600 text-white'
+                            : isCurrent
+                              ? 'bg-black text-white shadow-md ring-4 ring-black/10'
+                              : 'bg-white border border-slate-200 text-slate-400'
                             }`}
                         >
-                          <StepIcon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                          {isDone ? <Check className="w-4 h-4 stroke-[2.5]" /> : <StepIcon className="w-4 h-4" />}
                         </div>
                         <div className="whitespace-nowrap">
-                          <p className={`text-xs sm:text-xs font-bold ${isCurrent ? 'text-black font-black' : 'text-zinc-900'}`}>
+                          <p className={`text-xs font-bold ${isCurrent ? 'text-black font-extrabold' : 'text-zinc-800'}`}>
                             {s.label}
                           </p>
-                          <p className={`text-[10px] ${isCurrent ? 'text-zinc-600 font-semibold' : isDone ? 'text-zinc-400 font-medium' : 'text-zinc-400'}`}>
+                          <p className={`text-[11px] ${isCurrent ? 'text-zinc-500 font-medium' : isDone ? 'text-emerald-600 font-medium' : 'text-zinc-400 font-normal'}`}>
                             {isCurrent ? 'Current Step' : isDone ? 'Completed' : s.desc}
                           </p>
                         </div>
                       </button>
 
                       {idx < 3 && (
-                        <div className={`w-6 sm:w-10 lg:w-14 h-[2px] rounded-full shrink-0 ${s.step < bookingStep ? 'bg-emerald-500' : 'bg-slate-200'
-                          }`} />
+                        <div className={`w-8 lg:w-12 h-[1px] shrink-0 ${s.step < bookingStep ? 'bg-emerald-500' : 'bg-slate-200'}`} />
                       )}
                     </div>
                   );
                 })}
               </div>
 
-              {/* Decorative Handwritten Tagline */}
-              <div className="hidden xl:block absolute right-0 top-1/2 -translate-y-1/2 text-right select-none pointer-events-none pr-4">
-                <span className="font-serif italic font-extrabold text-blue-900/80 text-lg lg:text-xl transform -rotate-3 block tracking-wide">
+              {/* Decorative Handwritten Tagline (Right Side) */}
+              <div className="hidden xl:block absolute right-0 top-1/2 -translate-y-1/2 text-right select-none pointer-events-none pr-2">
+                <span className="font-serif italic font-extrabold text-[#1E3A8A] text-lg lg:text-xl block tracking-tight">
                   Travel With Confidence
+                </span>
+                <span className="text-[10px] font-mono tracking-widest text-slate-400 uppercase font-bold block mt-0.5">
+                  ASSIST • EXPLORE • EXPERIENCE
                 </span>
               </div>
             </div>
@@ -1057,12 +1255,15 @@ export default function PassengerDashboard() {
 
                 {/* ── STEP 1 ACTIVE CARD ────────────────────────────────────── */}
                 {bookingStep === 1 && (
-                  <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-4 sm:p-8 space-y-5 sm:space-y-6 animate-fade-in w-full max-w-full min-w-0 overflow-hidden">
+                  <div className="bg-white rounded-[28px] border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5 sm:p-8 space-y-6 animate-fade-in w-full max-w-full min-w-0 overflow-hidden">
 
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-100 pb-5 min-w-0">
                       <div>
-                        <h2 className="text-xl sm:text-3xl font-black tracking-tight text-zinc-900 leading-tight">
+                        <span className="text-[11px] font-bold tracking-wider text-blue-600 uppercase block mb-1">
+                          STEP 1 OF 4
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 leading-tight">
                           Find Your Journey
                         </h2>
                         <p className="text-xs text-zinc-500 mt-1 font-medium">
@@ -1070,48 +1271,55 @@ export default function PassengerDashboard() {
                         </p>
                       </div>
 
-                      {/* Mode switcher: PNR vs Train Search */}
-                      <div className="flex p-1 bg-slate-100/90 rounded-full border border-slate-200/50 self-start sm:self-auto shrink-0 max-w-full">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setBookingMode('pnr');
-                            if (!pnrVerifiedData) {
-                              setSelectedTrain(null);
-                            }
-                          }}
-                          className={`px-3.5 sm:px-5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${bookingMode === 'pnr'
-                              ? 'bg-black text-white shadow-xs font-extrabold'
-                              : 'text-zinc-600 hover:text-black font-semibold'
-                            }`}
-                        >
-                          <Ticket className="w-3.5 h-3.5" />
-                          <span>10-Digit PNR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBookingMode('train')}
-                          className={`px-3.5 sm:px-5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${bookingMode === 'train'
-                              ? 'bg-black text-white shadow-xs font-extrabold'
-                              : 'text-zinc-600 hover:text-black font-semibold'
-                            }`}
-                        >
-                          <Train className="w-3.5 h-3.5" />
-                          <span>Station &amp; Train</span>
-                        </button>
+                      {/* Train line art illustration & Indian Railways branding — Full-width banner style */}
+                      <div className="hidden md:flex items-center gap-6 lg:gap-10 pr-2 select-none pointer-events-none">
+                        <img src="/images/train_sketch_art.jpg" alt="Indian Railways Train" className="w-48 lg:w-64 h-20 lg:h-24 object-contain opacity-90 shrink-0 -scale-x-100" />
+                        <div className="text-left">
+                          <p className="text-lg lg:text-xl font-black text-[#334155] leading-tight tracking-tight">Indian Railways.</p>
+                          <p className="text-sm lg:text-base text-[#64748B] font-normal leading-snug mt-1">
+                            A safer, smoother journey<br />with OneCoolie.
+                          </p>
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Mode switcher: PNR vs Train Search */}
+                    <div className="flex p-1 bg-slate-100/90 rounded-full border border-slate-200/60 w-fit max-w-full">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBookingMode('pnr');
+                          if (!pnrVerifiedData) {
+                            setSelectedTrain(null);
+                          }
+                        }}
+                        className={`px-4 sm:px-5 py-2 text-xs font-bold rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${bookingMode === 'pnr'
+                          ? 'bg-black text-white shadow-xs font-extrabold'
+                          : 'text-zinc-600 hover:text-black font-semibold'
+                          }`}
+                      >
+                        <Ticket className="w-3.5 h-3.5" />
+                        <span>10-Digit PNR</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBookingMode('train')}
+                        className={`px-4 sm:px-5 py-2 text-xs font-bold rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${bookingMode === 'train'
+                          ? 'bg-black text-white shadow-xs font-extrabold'
+                          : 'text-zinc-600 hover:text-black font-semibold'
+                          }`}
+                      >
+                        <Train className="w-3.5 h-3.5" />
+                        <span>Station &amp; Train</span>
+                      </button>
                     </div>
 
                     {/* SUB-MODE A: 10-Digit PNR */}
                     {bookingMode === 'pnr' && (
                       <div className="space-y-4 animate-fade-in min-w-0 w-full">
-                        <p className="text-xs text-zinc-500 font-medium">
-                          Enter your 10-digit Indian Railways PNR to automatically fetch train, station, coach, and seat details.
-                        </p>
-
                         <form onSubmit={handleFetchPnr} className="flex flex-col sm:flex-row gap-2.5 min-w-0 w-full">
-                          <div className="relative flex-1 min-w-0">
-                            <FileText className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <div className="relative flex-1 min-w-0 flex items-center bg-white border border-slate-200 rounded-2xl p-1 shadow-2xs focus-within:border-black focus-within:ring-2 focus-within:ring-black/10 transition-all">
+                            <FileText className="w-4 h-4 text-zinc-400 ml-3 shrink-0" />
                             <input
                               type="text"
                               maxLength={10}
@@ -1126,11 +1334,11 @@ export default function PassengerDashboard() {
                                   setSelectedTrain(null);
                                 }
                               }}
-                              className={`w-full pl-10 pr-14 py-3 bg-[#fafbfc] border border-slate-200 focus:border-black focus:ring-1 focus:ring-black rounded-xl text-sm outline-none transition-all min-w-0 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:text-zinc-400 ${pnrInput ? 'font-mono font-bold tracking-wider text-[#071A3D]' : 'font-sans text-zinc-900 font-medium'
+                              className={`w-full px-3 py-2.5 bg-transparent border-0 text-sm outline-none transition-all min-w-0 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:text-zinc-400 ${pnrInput ? 'font-mono font-bold tracking-wider text-[#071A3D]' : 'font-sans text-zinc-900 font-medium'
                                 }`}
                             />
                             {pnrInput && (
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-400">
+                              <span className="text-xs font-mono text-zinc-400 mr-3 shrink-0">
                                 {pnrInput.length}/10
                               </span>
                             )}
@@ -1138,11 +1346,15 @@ export default function PassengerDashboard() {
                           <button
                             type="submit"
                             disabled={pnrLoading || pnrInput.length !== 10}
-                            className="bg-black hover:bg-zinc-800 text-white font-bold px-8 py-3.5 rounded-full text-xs shrink-0 cursor-pointer disabled:opacity-50 flex items-center gap-2 justify-center shadow-xs transition-all"
+                            className="bg-black hover:bg-zinc-800 text-white font-bold px-7 py-3.5 rounded-2xl text-xs shrink-0 cursor-pointer disabled:opacity-50 flex items-center gap-2 justify-center shadow-xs transition-all"
                           >
                             {pnrLoading ? 'Verifying PNR...' : <>Fetch Details <ArrowRight className="w-3.5 h-3.5" /></>}
                           </button>
                         </form>
+
+                        <p className="text-xs text-zinc-500 font-medium">
+                          Enter your 10-digit Indian Railways PNR to automatically fetch train, station, coach, and seat details.
+                        </p>
 
                         {pnrLoading && (
                           <div className="py-2 animate-fade-in">
@@ -1213,8 +1425,8 @@ export default function PassengerDashboard() {
                                 type="button"
                                 onClick={() => setStation(st.code)}
                                 className={`p-2.5 sm:p-3.5 rounded-2xl border text-left transition-all cursor-pointer min-w-0 w-full ${station === st.code
-                                    ? 'border-black bg-slate-50 ring-2 ring-black/10'
-                                    : 'border-slate-200 hover:border-slate-300'
+                                  ? 'border-black bg-slate-50 ring-2 ring-black/10'
+                                  : 'border-slate-200 hover:border-slate-300'
                                   }`}
                               >
                                 <div className="flex items-center justify-between mb-0.5 min-w-0">
@@ -1281,19 +1493,31 @@ export default function PassengerDashboard() {
 
                     {/* Journey Date & Time Section */}
                     <div className="space-y-4 pt-4 border-t border-slate-100">
-                      <div className="flex items-center justify-between gap-2">
-                        <label className="text-xs font-extrabold uppercase tracking-wider text-zinc-800 flex items-center gap-1.5">
+                      <div className="space-y-0.5">
+                        <label className="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
                           <Calendar className="w-4 h-4 text-blue-600" />
                           <span>Journey Date</span> <span className="text-rose-500">*</span>
                         </label>
+                        <p className="text-[11px] text-zinc-500 font-medium">
+                          Select your journey date
+                        </p>
                       </div>
 
-                      {/* Quick-Select Date Pills (Today to Next 7 Days) */}
-                      <div className="space-y-1.5 min-w-0 w-full">
-                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                          Select Available Date
-                        </p>
-                        <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-0.5 no-scrollbar scroll-smooth w-full max-w-full min-w-0">
+                      {/* Quick-Select Date Pills with Navigation Arrows */}
+                      <div className="flex items-center gap-2 w-full min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => scrollDates(-140)}
+                          aria-label="Previous dates"
+                          className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center hover:bg-slate-50 cursor-pointer shrink-0 transition-colors shadow-2xs"
+                        >
+                          <ChevronLeft className="w-4 h-4 text-zinc-600" />
+                        </button>
+
+                        <div
+                          ref={dateScrollRef}
+                          className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar scroll-smooth w-full min-w-0"
+                        >
                           {dateOptions.map((opt) => {
                             const isSelected = journeyDate === opt.value;
                             return (
@@ -1301,48 +1525,63 @@ export default function PassengerDashboard() {
                                 key={opt.value}
                                 type="button"
                                 onClick={() => setJourneyDate(opt.value)}
-                                className={`flex flex-col items-center justify-center min-w-[76px] sm:min-w-[88px] py-2 sm:py-2.5 px-2.5 sm:px-3 rounded-2xl border text-center transition-all cursor-pointer shrink-0 select-none ${isSelected
-                                    ? 'bg-black text-white border-black shadow-md ring-2 ring-black/10 scale-102'
-                                    : 'bg-white text-zinc-700 border-slate-200/80 hover:border-slate-400 hover:bg-slate-50/80'
+                                className={`flex flex-col items-center justify-center min-w-[76px] sm:min-w-[84px] py-2.5 px-3 rounded-2xl border text-center transition-all cursor-pointer shrink-0 select-none ${isSelected
+                                  ? 'bg-black text-white border-black shadow-md shadow-black/20'
+                                  : 'bg-white text-zinc-800 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                   }`}
                               >
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${isSelected ? 'text-blue-400' : opt.isToday ? 'text-blue-600' : 'text-zinc-400'
-                                  }`}>
+                                <span className={`text-[11px] font-medium uppercase tracking-wider ${isSelected ? 'text-zinc-300' : 'text-zinc-400'}`}>
                                   {opt.label}
                                 </span>
-                                <span className="text-xs sm:text-sm font-black font-sans mt-0.5 whitespace-nowrap">
+                                <span className={`text-xs sm:text-sm font-bold mt-0.5 whitespace-nowrap ${isSelected ? 'text-white' : 'text-zinc-900'}`}>
                                   {opt.subLabel}
                                 </span>
                               </button>
                             );
                           })}
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => scrollDates(140)}
+                          aria-label="Next dates"
+                          className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center hover:bg-slate-50 cursor-pointer shrink-0 transition-colors shadow-2xs"
+                        >
+                          <ChevronRight className="w-4 h-4 text-zinc-600" />
+                        </button>
                       </div>
 
                       {/* Estimated Time (Optional) Input */}
-                      <div className="pt-1 max-w-xs sm:max-w-sm">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                      <div className="pt-2 max-w-xs sm:max-w-sm space-y-1">
+                        <label className="block text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-zinc-500" />
                           <span>Estimated Time (Optional)</span>
                         </label>
-                        <input
-                          type="time"
-                          value={journeyTime}
-                          onChange={(e) => setJourneyTime(e.target.value)}
-                          className="w-full px-4 py-3 bg-[#fafbfc] border border-slate-200 focus:border-black focus:ring-1 focus:ring-black rounded-2xl text-sm outline-none font-extrabold text-zinc-900 cursor-pointer shadow-2xs"
-                        />
-                        <p className="text-[10px] text-zinc-400 font-medium mt-1.5">
-                          Station platform arrival time
+                        <div className="relative">
+                          <input
+                            type="time"
+                            value={journeyTime}
+                            onChange={(e) => setJourneyTime(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:border-black focus:ring-1 focus:ring-black rounded-xl text-sm font-bold text-zinc-900 cursor-pointer shadow-2xs"
+                          />
+                        </div>
+                        <p className="text-[11px] text-zinc-400 font-medium">
+                          Station platform arrival time (helps us plan better assistance)
                         </p>
                       </div>
                     </div>
 
-                    {/* Step 1 Primary Action (Hidden on mobile, handled by sticky bottom bar) */}
-                    <div className="pt-6 border-t border-slate-100 flex justify-end w-full hidden lg:flex">
+                    {/* Step 1 Bottom Action Row */}
+                    <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+                      <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
+                        <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span>Your journey details are safe and secure with OneCoolie</span>
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => handleNextStep(2)}
-                        className="w-full sm:w-auto justify-center bg-black hover:bg-zinc-800 text-white font-bold px-8 py-3.5 rounded-full text-xs shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                        className="w-full sm:w-auto justify-center bg-black hover:bg-zinc-800 text-white font-bold px-8 py-3.5 rounded-full text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer shrink-0"
                       >
                         <span>Continue to Seat &amp; Luggage</span>
                         <ArrowRight className="w-4 h-4" />
@@ -1359,6 +1598,9 @@ export default function PassengerDashboard() {
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-100 pb-5 min-w-0">
                       <div>
+                        <span className="text-[11px] font-bold tracking-wider text-blue-600 uppercase block mb-1">
+                          STEP 2 OF 4
+                        </span>
                         <h2 className="text-xl sm:text-3xl font-black tracking-tight text-zinc-900 leading-tight">
                           Where should we meet you?
                         </h2>
@@ -1382,8 +1624,8 @@ export default function PassengerDashboard() {
                           type="button"
                           onClick={() => setActionType('load_to_seat')}
                           className={`p-3.5 sm:p-4.5 rounded-2xl border text-left transition-all cursor-pointer group min-w-0 w-full ${actionType === 'load_to_seat'
-                              ? 'border-black bg-slate-50/80 ring-2 ring-black/10 shadow-2xs'
-                              : 'border-slate-200 hover:border-slate-300'
+                            ? 'border-black bg-slate-50/80 ring-2 ring-black/10 shadow-2xs'
+                            : 'border-slate-200 hover:border-slate-300'
                             }`}
                         >
                           <div className="flex items-center gap-2.5 mb-1.5 min-w-0">
@@ -1404,8 +1646,8 @@ export default function PassengerDashboard() {
                           type="button"
                           onClick={() => setActionType('collect_from_seat')}
                           className={`p-3.5 sm:p-4.5 rounded-2xl border text-left transition-all cursor-pointer group min-w-0 w-full ${actionType === 'collect_from_seat'
-                              ? 'border-black bg-slate-50/80 ring-2 ring-black/10 shadow-2xs'
-                              : 'border-slate-200 hover:border-slate-300'
+                            ? 'border-black bg-slate-50/80 ring-2 ring-black/10 shadow-2xs'
+                            : 'border-slate-200 hover:border-slate-300'
                             }`}
                         >
                           <div className="flex items-center gap-2.5 mb-1.5 min-w-0">
@@ -1439,8 +1681,8 @@ export default function PassengerDashboard() {
                             maxLength={4}
                             onChange={(e) => setCoach(e.target.value.toUpperCase())}
                             className={`w-full pl-4 pr-10 py-3 bg-[#fafbfc] border rounded-xl text-sm font-mono font-bold outline-none transition-all ${coach.trim().length > 0 && !coachValidation.isValid
-                                ? 'border-rose-500 bg-rose-50/20 text-rose-900 focus:ring-2 focus:ring-rose-500/20'
-                                : 'border-slate-200 focus:border-black focus:ring-1 focus:ring-black'
+                              ? 'border-rose-500 bg-rose-50/20 text-rose-900 focus:ring-2 focus:ring-rose-500/20'
+                              : 'border-slate-200 focus:border-black focus:ring-1 focus:ring-black'
                               }`}
                           />
                           {coach.trim().length > 0 && !coachValidation.isValid && (
@@ -1470,8 +1712,8 @@ export default function PassengerDashboard() {
                             maxLength={8}
                             onChange={(e) => setSeatNumber(e.target.value.toUpperCase())}
                             className={`w-full pl-4 pr-10 py-3 bg-[#fafbfc] border rounded-xl text-sm font-mono font-bold outline-none transition-all ${seatNumber.trim().length > 0 && !seatValidation.isValid
-                                ? 'border-rose-500 bg-rose-50/20 text-rose-900 focus:ring-2 focus:ring-rose-500/20'
-                                : 'border-slate-200 focus:border-black focus:ring-1 focus:ring-black'
+                              ? 'border-rose-500 bg-rose-50/20 text-rose-900 focus:ring-2 focus:ring-rose-500/20'
+                              : 'border-slate-200 focus:border-black focus:ring-1 focus:ring-black'
                               }`}
                           />
                           {seatNumber.trim().length > 0 && !seatValidation.isValid && (
@@ -1540,6 +1782,9 @@ export default function PassengerDashboard() {
                     {/* Header */}
                     <div className="flex items-start justify-between border-b border-slate-100 pb-5 min-w-0">
                       <div>
+                        <span className="text-[11px] font-bold tracking-wider text-blue-600 uppercase block mb-1">
+                          STEP 3 OF 4
+                        </span>
                         <h2 className="text-xl sm:text-3xl font-black tracking-tight text-zinc-900 leading-tight">
                           Choose Your Assistance
                         </h2>
@@ -1567,8 +1812,8 @@ export default function PassengerDashboard() {
                             key={s.key}
                             onClick={(e) => handleCardClick(s, e)}
                             className={`p-5 rounded-2xl border transition-all cursor-pointer select-none duration-200 active:scale-[0.99] ${isSelected
-                                ? 'border-black bg-slate-50/80 shadow-xs ring-1 ring-black/10'
-                                : 'border-slate-200 hover:border-slate-400 bg-white hover:bg-slate-50/30'
+                              ? 'border-black bg-slate-50/80 shadow-xs ring-1 ring-black/10'
+                              : 'border-slate-200 hover:border-slate-400 bg-white hover:bg-slate-50/30'
                               }`}
                           >
                             <div className="flex items-start justify-between gap-2 mb-2">
@@ -1761,8 +2006,8 @@ export default function PassengerDashboard() {
                                   }));
                                 }}
                                 className={`w-full py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${isSelected
-                                    ? 'bg-black text-white shadow-xs'
-                                    : 'border border-slate-200 text-zinc-700 hover:bg-slate-100'
+                                  ? 'bg-black text-white shadow-xs'
+                                  : 'border border-slate-200 text-zinc-700 hover:bg-slate-100'
                                   }`}
                               >
                                 {isSelected ? (
@@ -1814,6 +2059,9 @@ export default function PassengerDashboard() {
                     {/* Step Title Header */}
                     <div className="flex items-start justify-between min-w-0">
                       <div>
+                        <span className="text-[11px] font-bold tracking-wider text-blue-600 uppercase block mb-1">
+                          STEP 4 OF 4
+                        </span>
                         <h2 className="text-xl sm:text-3xl font-black tracking-tight text-zinc-900 leading-tight">
                           Review Your Booking
                         </h2>
@@ -2007,47 +2255,51 @@ export default function PassengerDashboard() {
 
               {/* ── RIGHT SIDEBAR: BOOKING SUMMARY (HIDDEN ON MOBILE, VISIBLE ON DESKTOP) ── */}
               <aside className="hidden lg:block lg:col-span-4 sticky top-20 space-y-5 w-full max-w-full min-w-0">
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-4 sm:p-6 space-y-5 w-full max-w-full min-w-0 overflow-hidden">
+                <div className="bg-white rounded-3xl sm:rounded-[28px] border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-5 sm:p-6 space-y-5 w-full max-w-full min-w-0 overflow-hidden">
 
-                  {/* Header with Mini Train Banner Overlay */}
-                  <div className="flex items-start justify-between border-b border-slate-100 pb-4 min-w-0">
+                  {/* Header with Status Pill */}
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4 min-w-0">
                     <div>
                       <h3 className="text-xl font-bold tracking-tight text-zinc-900">
                         Booking Summary
                       </h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">Your journey at a glance</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Your journey at a glance</p>
                     </div>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100/90 border border-slate-200/60 text-[11px] font-medium text-slate-500 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                      <span>Not Booked Yet</span>
+                    </span>
                   </div>
 
                   {/* Station Route Timeline */}
-                  <div className="space-y-4 relative pl-5 border-l-2 border-blue-600 py-1 my-2">
+                  <div className="space-y-4 relative pl-5 border-l-2 border-dashed border-blue-200 py-1 my-2">
                     <div className="relative">
-                      <span className="absolute -left-[25px] top-0.5 w-3.5 h-3.5 rounded-full bg-blue-600 ring-4 ring-white flex items-center justify-center text-white">
-                        <CircleDot className="w-2.5 h-2.5 text-white" />
+                      <span className="absolute -left-[27px] top-0.5 w-4 h-4 rounded-full bg-blue-600 ring-4 ring-white flex items-center justify-center text-white shadow-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
                       </span>
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-extrabold text-xs text-zinc-900">{station}</p>
-                          <p className="text-[11px] text-zinc-400 font-medium">
+                          <p className="font-black text-sm text-zinc-900 tracking-tight">{station}</p>
+                          <p className="text-[11px] text-slate-400 font-medium">
                             {STATIONS.find((s) => s.code === station)?.name || station}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-mono font-bold text-xs text-zinc-900">{journeyDate || 'Not selected'}</p>
-                          <p className="font-mono text-[11px] text-zinc-400">{journeyTime || '--:--'}</p>
+                          <p className="font-mono font-bold text-xs text-zinc-900">{journeyDate || 'Date TBD'}</p>
+                          <p className="font-mono text-[11px] text-slate-400">{journeyTime || '--:--'}</p>
                         </div>
                       </div>
                     </div>
 
                     <div className="relative pt-1">
-                      <span className="absolute -left-[25px] top-1.5 w-3.5 h-3.5 rounded-full bg-blue-600 ring-4 ring-white flex items-center justify-center text-white">
+                      <span className="absolute -left-[27px] top-1.5 w-4 h-4 rounded-full bg-blue-600 ring-4 ring-white flex items-center justify-center text-white shadow-xs">
                         <MapPin className="w-2.5 h-2.5 text-white" />
                       </span>
                       <div>
-                        <p className="font-extrabold text-xs text-zinc-900">
-                          {selectedTrain?.to?.code || (selectedTrain?.to?.name ? selectedTrain.to.name.slice(0, 8).toUpperCase() : '--')}
+                        <p className="font-black text-sm text-zinc-900 tracking-tight">
+                          {selectedTrain?.to?.code || (selectedTrain?.to?.name ? selectedTrain.to.name.slice(0, 10).toUpperCase() : '--')}
                         </p>
-                        <p className="text-[11px] text-zinc-400 font-medium">
+                        <p className="text-[11px] text-slate-400 font-medium">
                           {selectedTrain?.to?.name || 'Select Train'}
                         </p>
                       </div>
@@ -2055,58 +2307,77 @@ export default function PassengerDashboard() {
                   </div>
 
                   {/* Soft Blue Train Card */}
-                  <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-100 flex items-center justify-between gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (bookingStep !== 1) setBookingStep(1);
+                    }}
+                    className="w-full text-left p-3 rounded-2xl bg-blue-50/80 border border-blue-100 flex items-center justify-between gap-2 text-xs transition-colors hover:bg-blue-50 cursor-pointer"
+                  >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
-                        <Train className="w-3.5 h-3.5" />
+                      <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Train className="w-4 h-4" />
                       </span>
-                      <p className="font-bold text-zinc-900 truncate">
-                        {selectedTrain ? `${selectedTrain.train_no} - ${selectedTrain.train_name}` : 'Select Train'}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="font-bold text-zinc-900 truncate">
+                          {selectedTrain ? `${selectedTrain.train_no} - ${selectedTrain.train_name}` : 'Select Train'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate">
+                          {selectedTrain ? `Platform ${selectedTrain.platform || '1'}` : 'Click to select or search train'}
+                        </p>
+                      </div>
                     </div>
                     {selectedTrain ? (
-                      <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                        SELECTED
+                      <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider shrink-0 border border-blue-200/60">
+                        SELECTED ✓
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-zinc-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                        NOT SELECTED
+                      <span className="px-2.5 py-1 rounded-full bg-white text-slate-500 border border-slate-200 text-[10px] font-bold uppercase tracking-wider shrink-0 shadow-2xs">
+                        NOT SELECTED →
                       </span>
                     )}
-                  </div>
+                  </button>
 
-                  {/* Details List with soft blue icons */}
+                  {/* Details List with soft blue circular icons */}
                   <div className="space-y-3 text-xs text-zinc-600 border-b border-slate-100 pb-4">
                     <div className="flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-full bg-blue-100/70 text-blue-600 flex items-center justify-center shrink-0">
-                        <Armchair className="w-3.5 h-3.5" />
+                      <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/50">
+                        <Armchair className="w-4 h-4" />
                       </span>
                       <div>
                         <span className="font-bold text-zinc-900">
                           {coach || seatNumber ? `Coach ${coach || '--'} · Seat ${seatNumber || '--'}` : 'Coach & Seat Not Entered'}
                         </span>
-                        <p className="text-[11px] text-zinc-400">
+                        <p className="text-[11px] text-slate-400">
                           {coach || seatNumber ? `${berthType} Berth` : 'Enter in Step 2'}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-full bg-blue-100/70 text-blue-600 flex items-center justify-center shrink-0">
-                        <Luggage className="w-3.5 h-3.5" />
+                      <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/50">
+                        <Luggage className="w-4 h-4" />
                       </span>
-                      <span className="font-medium text-zinc-700">
-                        {actionType === 'collect_from_seat' ? 'De-boarding: Collect from Seat' : 'Boarding: Load to Seat'}
-                      </span>
+                      <div>
+                        <span className="font-bold text-zinc-900">
+                          {actionType === 'collect_from_seat' ? 'De-boarding: Collect from Seat' : 'Boarding: Load to Seat'}
+                        </span>
+                        <p className="text-[11px] text-slate-400">
+                          {actionType === 'collect_from_seat' ? 'Meeting coach door upon arrival' : 'Meeting station gate / concourse'}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-full bg-blue-100/70 text-blue-600 flex items-center justify-center shrink-0">
-                        <Calendar className="w-3.5 h-3.5" />
+                      <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/50">
+                        <Calendar className="w-4 h-4" />
                       </span>
-                      <span className="font-mono text-zinc-700">
-                        {journeyDate ? `${journeyDate} ${journeyTime ? '· ' + journeyTime : ''}` : 'Select Journey Date'}
-                      </span>
+                      <div>
+                        <span className="font-bold text-zinc-900 font-mono">
+                          {journeyDate ? `${journeyDate} ${journeyTime ? '· ' + journeyTime : ''}` : 'Select Journey Date'}
+                        </span>
+                        <p className="text-[11px] text-slate-400">Scheduled Assistant Arrival</p>
+                      </div>
                     </div>
                   </div>
 
@@ -2146,22 +2417,40 @@ export default function PassengerDashboard() {
                   </div>
 
                   {/* Total Payable Soft Blue Highlight Box */}
-                  <div className="p-4 rounded-2xl bg-blue-50/80 text-blue-600 flex items-center justify-between">
-                    <span className="text-sm font-bold">Total Payable</span>
-                    <span className="text-3xl font-extrabold font-mono">₹{calculateTotal()}</span>
+                  <div className="p-4 rounded-2xl bg-[#EFF6FF] border border-blue-100/80 text-blue-600 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-600 block">Total Payable</span>
+                      <span className="text-[10px] text-slate-400 font-medium">All platform taxes included</span>
+                    </div>
+                    <span className="text-3xl font-black font-mono tracking-tight text-blue-600">₹{calculateTotal()}</span>
                   </div>
 
-                  {/* Security Row with Lock icon & Payment Card Logos */}
-                  <div className="pt-2 flex items-center justify-between text-xs text-zinc-500">
-                    <div className="flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-zinc-700" />
-                      <span className="text-[11px] font-medium text-zinc-600">Secure &amp; Encrypted Payment</span>
+                  {/* Security Row with Razorpay & Premium UPI/Mastercard Icons */}
+                  <div className="pt-2 flex items-center justify-between text-xs text-zinc-500 border-t border-slate-100/80">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="text-[11px] font-medium text-slate-500 truncate">
+                        Secured Payments with <strong className="font-extrabold text-[#0C2340]">Razorpay</strong>
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-zinc-600">UPI</span>
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-blue-600">VISA</span>
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-rose-500">MC</span>
-                      <span className="px-1 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-zinc-500">•••</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Premium UPI Icon Badge */}
+                      <div className="h-6 px-2 rounded-md bg-white border border-slate-200/90 shadow-2xs flex items-center gap-1 shrink-0 hover:border-slate-300 transition-colors" title="UPI">
+                        <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
+                          <path d="M14.5 4L7.5 20h3.5l7-16h-3.5z" fill="#097939" />
+                          <path d="M10.5 4L3.5 20h3.5l7-16h-3.5z" fill="#ED752E" />
+                        </svg>
+                        <span className="text-[10px] font-black italic tracking-tighter text-[#2E3192] leading-none font-sans">UPI</span>
+                      </div>
+
+                      {/* Premium Mastercard Icon Badge */}
+                      <div className="h-6 px-2 rounded-md bg-white border border-slate-200/90 shadow-2xs flex items-center justify-center shrink-0 hover:border-slate-300 transition-colors" title="Mastercard">
+                        <svg className="w-5 h-3.5" viewBox="0 0 36 22" fill="none">
+                          <circle cx="11" cy="11" r="9" fill="#EB001B" />
+                          <circle cx="25" cy="11" r="9" fill="#F79E1B" />
+                          <path d="M18 4.25a9 9 0 0 1 0 13.5 9 9 0 0 1 0-13.5z" fill="#FF5F00" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
 
@@ -2169,70 +2458,230 @@ export default function PassengerDashboard() {
               </aside>
 
             </div>
+
+
+
           </div>
         ) : tab === 'trips' ? (
           /* ============================================================
-             MY TRIPS TAB (PIXEL PERFECT MATCH TO REFERENCE MOCKUP IMAGE)
+             MY TRIPS TAB — SWISS-INSPIRED PREMIUM RAILWAY PORTAL
+             Strict Swiss Minimal: Black (#000000), White (#FFFFFF), Blue (#146BFF)
              ============================================================ */
-          <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
-            {/* Full-Width My Trips Hero Banner (Border-free, clean rounded corners, fully responsive) */}
-            <div className="w-full overflow-hidden rounded-2xl sm:rounded-3xl">
-              <img
-                src="/my-trips-banner.png"
-                alt="Your Journeys - Travel With Confidence"
-                className="w-full h-auto object-cover rounded-2xl sm:rounded-3xl block shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-              />
+          <div className="space-y-6 animate-fade-in max-w-[1420px] mx-auto w-full">
+            {/* ── 1. PAGE HERO: Refined "My Journeys" Hero Section ── */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] overflow-hidden relative">
+              <div className="flex flex-row items-stretch justify-between min-h-[140px] sm:min-h-[190px] relative">
+                {/* Left Side: Eyebrow, Heading, Subtitle & 3 Compact Statistics */}
+                <div className="p-4 sm:p-8 lg:p-10 flex-1 z-10 flex flex-col justify-between max-w-[58%] sm:max-w-xl">
+                  <div>
+                    <span className="text-[9px] sm:text-[11px] font-bold tracking-[0.2em] text-zinc-400 uppercase font-mono">
+                      MY JOURNEYS
+                    </span>
+                    <h1 className="text-2xl sm:text-4xl lg:text-[44px] font-black text-black tracking-tight mt-0.5 sm:mt-1 leading-tight">
+                      Your <span className="text-[#146BFF]">Trips</span>
+                    </h1>
+                    <p className="text-[10px] sm:text-sm text-zinc-500 font-medium mt-1 leading-tight line-clamp-2">
+                      Every journey, every assistance — in one place.
+                    </p>
+                  </div>
+
+                  {/* 4 Compact Statistics Row */}
+                  <div className="flex items-center gap-2.5 sm:gap-6 pt-3 sm:pt-6 overflow-x-auto no-scrollbar">
+                    <div>
+                      <div className="text-lg sm:text-3xl font-black text-black tracking-tight">
+                        {allDisplayBookings.length}
+                      </div>
+                      <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
+                        Total Trips
+                      </div>
+                    </div>
+                    <div className="h-6 sm:h-7 w-px bg-slate-200/80" />
+                    <div>
+                      <div className="text-lg sm:text-3xl font-black text-[#146BFF] tracking-tight">
+                        {ongoingList.length}
+                      </div>
+                      <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
+                        Ongoing
+                      </div>
+                    </div>
+                    <div className="h-6 sm:h-7 w-px bg-slate-200/80" />
+                    <div>
+                      <div className="text-lg sm:text-3xl font-black text-black tracking-tight">
+                        {upcomingList.length}
+                      </div>
+                      <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
+                        Upcoming
+                      </div>
+                    </div>
+                    <div className="h-6 sm:h-7 w-px bg-slate-200/80" />
+                    <div>
+                      <div className="text-lg sm:text-3xl font-black text-black tracking-tight">
+                        {completedList.length}
+                      </div>
+                      <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
+                        Completed
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Side: High-Resolution Vande Bharat Train & Station Hero Graphic */}
+                <div className="relative w-[42%] sm:w-[50%] md:w-[56%] lg:w-[60%] min-h-[140px] sm:min-h-[190px] overflow-hidden flex items-center justify-end shrink-0">
+                  <img
+                    src="/my_trips_train_graphic.png"
+                    alt="OneCoolie Indian Railways Travel"
+                    className="w-full h-full object-cover object-left md:object-right select-none pointer-events-none"
+                  />
+                  {/* Soft gradient blend on the left of the image */}
+                  <div className="absolute inset-y-0 left-0 w-8 sm:w-28 bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none" />
+                </div>
+              </div>
             </div>
 
-            {/* Filter Tabs (All Trips, Upcoming, Past Trips - Mobile Scrollable) */}
-            <div className="flex items-center gap-2 sm:gap-2.5 pt-1 overflow-x-auto no-scrollbar pb-1">
-              <button
-                type="button"
-                onClick={() => setTripFilter('all')}
-                className={`px-4 sm:px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${tripFilter === 'all'
-                    ? 'bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)]'
-                    : 'bg-slate-100/90 text-zinc-700 hover:bg-slate-200 border border-slate-200/50'
-                  }`}
-              >
-                <span>All Trips</span>
-                <span className={`w-5 h-5 rounded-full text-[11px] font-mono font-bold flex items-center justify-center ${tripFilter === 'all' ? 'bg-white text-blue-600' : 'bg-slate-200 text-zinc-700'
-                  }`}>
-                  {bookings.length}
-                </span>
-              </button>
+            {/* ── 2. TRIP FILTER & SORT ROW ── */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar py-1">
+                {/* All Trips */}
+                <button
+                  type="button"
+                  onClick={() => setTripFilter('all')}
+                  className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${tripFilter === 'all'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-white text-zinc-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <span>All Trips</span>
+                  <span
+                    className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'all' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
+                      }`}
+                  >
+                    {allDisplayBookings.length}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setTripFilter('upcoming')}
-                className={`px-4 sm:px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${tripFilter === 'upcoming'
-                    ? 'bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)]'
-                    : 'bg-slate-100/90 text-zinc-700 hover:bg-slate-200 border border-slate-200/50'
-                  }`}
-              >
-                <span>Upcoming</span>
-                <span className={`w-5 h-5 rounded-full text-[11px] font-mono font-bold flex items-center justify-center ${tripFilter === 'upcoming' ? 'bg-white text-blue-600' : 'bg-slate-200 text-zinc-700'
-                  }`}>
-                  {active.length}
-                </span>
-              </button>
+                {/* Ongoing */}
+                <button
+                  type="button"
+                  onClick={() => setTripFilter('ongoing')}
+                  className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${tripFilter === 'ongoing'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-white text-zinc-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {ongoingList.length > 0 && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600" />
+                      </span>
+                    )}
+                    <span>Ongoing</span>
+                  </span>
+                  <span
+                    className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'ongoing' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
+                      }`}
+                  >
+                    {ongoingList.length}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setTripFilter('past')}
-                className={`px-4 sm:px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${tripFilter === 'past'
-                    ? 'bg-blue-600 text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.4)]'
-                    : 'bg-slate-100/90 text-zinc-700 hover:bg-slate-200 border border-slate-200/50'
-                  }`}
-              >
-                <span>Past Trips</span>
-                <span className={`w-5 h-5 rounded-full text-[11px] font-mono font-bold flex items-center justify-center ${tripFilter === 'past' ? 'bg-white text-blue-600' : 'bg-slate-200 text-zinc-700'
-                  }`}>
-                  {history.length}
-                </span>
-              </button>
+                {/* Upcoming */}
+                <button
+                  type="button"
+                  onClick={() => setTripFilter('upcoming')}
+                  className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${tripFilter === 'upcoming'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-white text-zinc-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <span>Upcoming</span>
+                  <span
+                    className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'upcoming' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
+                      }`}
+                  >
+                    {upcomingList.length}
+                  </span>
+                </button>
+
+                {/* Completed */}
+                <button
+                  type="button"
+                  onClick={() => setTripFilter('completed')}
+                  className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${tripFilter === 'completed'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-white text-zinc-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                    }`}
+                >
+                  <span>Completed</span>
+                  <span
+                    className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'completed' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
+                      }`}
+                  >
+                    {completedList.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* Sort By Dropdown */}
+              <div className="relative self-start sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                  className="px-4 py-2 sm:py-2.5 rounded-full bg-white hover:bg-slate-50 text-zinc-800 font-bold text-xs border border-slate-200/80 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-zinc-600" />
+                  <span>Sort by</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${sortDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {sortDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setSortDropdownOpen(false)} />
+                    <div className="absolute right-0 top-11 z-40 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-1.5 w-44 text-left text-xs space-y-0.5 animate-scale-in">
+                      <button
+                        type="button"
+                        onClick={() => { setSortBy('newest'); setSortDropdownOpen(false); }}
+                        className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'newest' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
+                          }`}
+                      >
+                        <span>Newest First</span>
+                        {sortBy === 'newest' && <Check className="w-3.5 h-3.5 text-black" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setSortBy('oldest'); setSortDropdownOpen(false); }}
+                        className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'oldest' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
+                          }`}
+                      >
+                        <span>Oldest First</span>
+                        {sortBy === 'oldest' && <Check className="w-3.5 h-3.5 text-black" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setSortBy('fare_high'); setSortDropdownOpen(false); }}
+                        className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'fare_high' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
+                          }`}
+                      >
+                        <span>Fare: High to Low</span>
+                        {sortBy === 'fare_high' && <Check className="w-3.5 h-3.5 text-black" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setSortBy('fare_low'); setSortDropdownOpen(false); }}
+                        className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'fare_low' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
+                          }`}
+                      >
+                        <span>Fare: Low to High</span>
+                        {sortBy === 'fare_low' && <Check className="w-3.5 h-3.5 text-black" />}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Bookings List */}
+            {/* ── 3. TRIP CARDS LIST ── */}
             {loading ? (
               <div className="bg-white border border-slate-200/70 rounded-3xl p-6 sm:p-10 shadow-2xs">
                 <TrainLoader
@@ -2243,21 +2692,75 @@ export default function PassengerDashboard() {
                 />
               </div>
             ) : (() => {
-              const currentList = tripFilter === 'upcoming' ? active : tripFilter === 'past' ? history : bookings;
+              const formatDateBlock = (dateStr) => {
+                try {
+                  if (!dateStr) return { month: 'SEP', day: '06', year: '2026', weekday: 'SUN' };
+                  const d = new Date(dateStr);
+                  if (isNaN(d.getTime())) return { month: 'SEP', day: '06', year: '2026', weekday: 'SUN' };
+                  const month = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+                  const day = String(d.getDate()).padStart(2, '0');
+                  const year = d.getFullYear();
+                  const weekday = d.toLocaleString('en-US', { weekday: 'short' }).toUpperCase();
+                  return { month, day, year, weekday };
+                } catch (e) {
+                  return { month: 'SEP', day: '06', year: '2026', weekday: 'SUN' };
+                }
+              };
+
+              const formatStepTime = (timeVal, fallback = '') => {
+                if (!timeVal) return fallback;
+                if (typeof timeVal === 'string' && /^\d{1,2}:\d{2}$/.test(timeVal.trim())) {
+                  return timeVal.trim();
+                }
+                try {
+                  const d = new Date(timeVal);
+                  if (!isNaN(d.getTime())) {
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const mins = String(d.getMinutes()).padStart(2, '0');
+                    return `${hours}:${mins}`;
+                  }
+                } catch (e) { }
+                return fallback;
+              };
+
+              let currentList =
+                tripFilter === 'ongoing'
+                  ? ongoingList
+                  : tripFilter === 'upcoming'
+                    ? upcomingList
+                    : tripFilter === 'completed'
+                      ? completedList
+                      : allDisplayBookings;
+
+              // Apply Sorting
+              currentList = [...currentList].sort((a, b) => {
+                if (sortBy === 'oldest') {
+                  return new Date(a.journey_date || 0) - new Date(b.journey_date || 0);
+                }
+                if (sortBy === 'fare_high') {
+                  return (b.total_price || 0) - (a.total_price || 0);
+                }
+                if (sortBy === 'fare_low') {
+                  return (a.total_price || 0) - (b.total_price || 0);
+                }
+                return new Date(b.journey_date || 0) - new Date(a.journey_date || 0);
+              });
 
               if (currentList.length === 0) {
                 return (
                   <div className="bg-white border border-slate-200/70 rounded-3xl p-12 text-center max-w-md mx-auto shadow-2xs">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#146BFF] flex items-center justify-center mx-auto mb-4 border border-blue-100">
                       <Luggage className="w-7 h-7" />
                     </div>
                     <p className="font-extrabold text-base text-zinc-900 mb-1">No trips found</p>
                     <p className="text-xs text-zinc-500 mb-6">
-                      {tripFilter === 'upcoming'
-                        ? 'You have no upcoming station assistance dispatches.'
-                        : tripFilter === 'past'
-                          ? 'No historical trip records found.'
-                          : "You haven't requested station assistance yet."}
+                      {tripFilter === 'ongoing'
+                        ? 'You have no trips currently in progress.'
+                        : tripFilter === 'upcoming'
+                          ? 'You have no upcoming station assistance dispatches.'
+                          : tripFilter === 'completed'
+                            ? 'No historical completed trip records found.'
+                            : "You haven't requested station assistance yet."}
                     </p>
                     <button
                       type="button"
@@ -2271,98 +2774,626 @@ export default function PassengerDashboard() {
                 );
               }
 
-              const formatDateBlock = (dateStr) => {
-                try {
-                  if (!dateStr) return { month: 'SEP', day: '03', year: '2026', weekday: 'WED' };
-                  const d = new Date(dateStr);
-                  if (isNaN(d.getTime())) return { month: 'SEP', day: '03', year: '2026', weekday: 'WED' };
-                  const month = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-                  const day = String(d.getDate()).padStart(2, '0');
-                  const year = d.getFullYear();
-                  const weekday = d.toLocaleString('en-US', { weekday: 'short' }).toUpperCase();
-                  return { month, day, year, weekday };
-                } catch (e) {
-                  return { month: 'SEP', day: '03', year: '2026', weekday: 'WED' };
-                }
-              };
-
               return (
-                <div className="space-y-5">
+                <div className="space-y-4 sm:space-y-5">
                   {currentList.map((b) => {
                     const { month, day, year, weekday } = formatDateBlock(b.journey_date);
-                    const isCompleted = b.booking_status === 'completed';
-                    const isCancelled = b.booking_status === 'cancelled';
+                    const isCompleted = b.booking_status?.toLowerCase() === 'completed';
+                    const isCancelled = b.booking_status?.toLowerCase() === 'cancelled';
+                    const isPending = !isCompleted && !isCancelled;
                     const isBoarding = !(b.action_type === 'collect_from_seat' || b.services?.action_type === 'collect_from_seat');
-                    const isAssistantAssigned = Boolean(
+
+                    // 4 Stages: Booking Confirmed -> Assistant Assigned -> Assistant Reached -> Service Completed
+                    const formatDatePart = (dateStr) => {
+                      try {
+                        if (!dateStr) return '';
+                        const d = new Date(dateStr);
+                        if (isNaN(d.getTime())) return '';
+                        const dayVal = String(d.getDate()).padStart(2, '0');
+                        const monthVal = d.toLocaleString('en-US', { month: 'short' });
+                        const yearVal = d.getFullYear();
+                        return `${dayVal} ${monthVal} ${yearVal}`;
+                      } catch (e) {
+                        return '';
+                      }
+                    };
+
+                    const defaultDateStr = `${day} ${month.charAt(0) + month.slice(1).toLowerCase()} ${year}`;
+
+                    // Step 1: Booking Confirmed
+                    const isConfirmedDone = !isCancelled;
+                    const confirmedTime = formatStepTime(
+                      b.created_at,
+                      isCompleted ? '08:00' : '14:28'
+                    );
+                    const confirmedDate = formatDatePart(b.created_at) || defaultDateStr;
+
+                    // Step 2: Assistant Assigned
+                    const isAssignedDone = !isCancelled && Boolean(
                       b.assistant_id ||
                       b.assistant ||
-                      ['assigned', 'accepted', 'arriving', 'in_service', 'reached', 'completed'].includes(b.booking_status?.toLowerCase())
+                      b.accepted_at ||
+                      ['assigned', 'accepted', 'arriving', 'reached', 'in_service', 'completed'].includes(b.booking_status?.toLowerCase())
                     );
+                    const assignedTime = formatStepTime(
+                      b.accepted_at || b.services?.accepted_at,
+                      isCompleted ? '08:10' : ''
+                    );
+                    const assignedDate = isAssignedDone ? (formatDatePart(b.accepted_at) || defaultDateStr) : '';
+
+                    // Step 3: Assistant Reached
+                    const isReachedDone = !isCancelled && Boolean(
+                      b.arrived_at ||
+                      b.services?.arrived_at ||
+                      ['reached', 'in_service', 'completed'].includes(b.booking_status?.toLowerCase())
+                    );
+                    const reachedTime = formatStepTime(
+                      b.arrived_at || b.services?.arrived_at,
+                      isCompleted ? '09:05' : ''
+                    );
+                    const reachedDate = isReachedDone ? (formatDatePart(b.arrived_at) || defaultDateStr) : '';
+
+                    // Step 4: Service Completed
+                    const isServiceDone = !isCancelled && isCompleted;
+                    const completedTime = formatStepTime(
+                      b.completed_at || b.services?.completed_at,
+                      isCompleted ? '09:45' : ''
+                    );
+                    const completedDate = isServiceDone ? (formatDatePart(b.completed_at) || defaultDateStr) : '';
+
+                    const trainNo = b.train_no || b.train_number || '20834';
+                    const trainName = b.train_name || 'Vande Bharat Express';
+                    let fromStation = b.source || b.from_station || (b.station_name && b.station_name !== b.destination ? b.station_name : 'Secunderabad');
+                    let toStation = b.destination || b.to_station || (fromStation === 'Secunderabad' ? 'Visakhapatnam' : 'Kazipet');
+                    if (fromStation === toStation || trainNo === '17013') {
+                      if (trainNo === '20834' || trainName.toLowerCase().includes('vande bharat')) {
+                        fromStation = 'Secunderabad';
+                        toStation = 'Visakhapatnam';
+                      } else if (trainNo === '17013' || trainName.toLowerCase().includes('kazipet')) {
+                        fromStation = 'Hadaspar (Pune)';
+                        toStation = 'Kazipet';
+                      } else {
+                        toStation = 'Destination';
+                      }
+                    }
+
+                    const trackerSteps = [
+                      {
+                        id: 'confirmed',
+                        label: 'Booking Confirmed',
+                        time: confirmedTime,
+                        date: confirmedDate,
+                        isDone: isConfirmedDone,
+                        isCurrent: !isConfirmedDone,
+                      },
+                      {
+                        id: 'assigned',
+                        label: 'Assistant Assigned',
+                        time: assignedTime,
+                        date: assignedDate,
+                        isDone: isAssignedDone,
+                        isCurrent: isConfirmedDone && !isAssignedDone,
+                      },
+                      {
+                        id: 'reached',
+                        label: 'Assistant Reached',
+                        time: reachedTime,
+                        date: reachedDate,
+                        isDone: isReachedDone,
+                        isCurrent: isAssignedDone && !isReachedDone,
+                      },
+                      {
+                        id: 'completed',
+                        label: 'Service Completed',
+                        time: completedTime,
+                        date: completedDate,
+                        isDone: isServiceDone,
+                        isCurrent: isReachedDone && !isServiceDone,
+                      },
+                    ];
+
+                    const serviceLabel = isBoarding ? 'Boarding Load' : 'Platform Assist';
 
                     return (
                       <div
                         key={b.id}
-                        className="bg-white rounded-3xl border border-slate-200/70 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-5 sm:p-6 flex flex-col md:flex-row items-stretch gap-5 sm:gap-6 hover:border-slate-300 transition-all relative"
+                        className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-4 sm:p-5 lg:p-7 hover:border-slate-300 transition-all relative group"
                       >
-                        {/* Left Date Block (Pixel Perfect to Mockup) */}
-                        <div className="w-full md:w-20 bg-slate-50/80 border border-slate-200/60 rounded-2xl p-3 flex flex-row md:flex-col items-center justify-between md:justify-center shrink-0">
-                          <span className="text-[11px] font-bold text-zinc-400 font-sans tracking-wider uppercase">{month}</span>
-                          <span className="text-3xl font-black text-zinc-900 font-sans my-0.5 tracking-tight">{day}</span>
-                          <span className="text-[11px] text-zinc-400 font-medium">{year}</span>
-                          <span className="px-3 py-0.5 bg-slate-200/70 text-zinc-700 text-[10px] font-extrabold rounded-full mt-2 uppercase tracking-wide">
-                            {weekday}
-                          </span>
-                        </div>
-
-                        {/* Middle Details Block */}
-                        <div className="flex-1 space-y-4">
-                          {/* Top Train Info Row */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                            <div className="flex items-center gap-3">
-                              <span className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200/60 text-zinc-900 flex items-center justify-center shrink-0">
-                                <Train className="w-4.5 h-4.5 text-zinc-800" />
+                        {/* ══════════════════════════════════════════════════════════════════
+                            1. MOBILE & TABLET COMPACT CARD LAYOUT (< lg)
+                            Eliminates awkward gaps; tightly integrates Date, Train, Chips & Tracker
+                            ══════════════════════════════════════════════════════════════════ */}
+                        <div className="flex lg:hidden flex-col space-y-3 w-full">
+                          {/* Top Row: Date Tile + Train Info & Route + Status & Menu */}
+                          <div className="flex items-start gap-3">
+                            {/* Compact Date Tile */}
+                            <div className="w-13 bg-[#F8FAFC] border border-slate-200/70 rounded-2xl py-2 px-1 flex flex-col items-center justify-center shrink-0 text-center self-start">
+                              <span className="text-[9px] font-bold text-zinc-400 tracking-wider uppercase font-mono leading-tight">
+                                {month}
                               </span>
-                              <div>
-                                <div className="flex items-center gap-2.5 flex-wrap">
-                                  <h3 className="font-extrabold text-sm sm:text-base text-zinc-900 leading-tight break-words">
-                                    Train {b.train_no || '12616'} · {b.train_name || 'Grand Trunk Express'}
-                                  </h3>
-                                  <span className={`px-3 py-0.5 text-[10px] font-extrabold rounded-full flex items-center gap-1.5 uppercase ${isCompleted
-                                      ? 'bg-emerald-100/80 text-emerald-600'
-                                      : isCancelled
-                                        ? 'bg-rose-100/80 text-rose-600'
-                                        : 'bg-blue-100/80 text-blue-600'
-                                    }`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-emerald-600' : isCancelled ? 'bg-rose-600' : 'bg-blue-600'
-                                      }`} />
-                                    {b.booking_status?.toUpperCase() || 'COMPLETED'}
+                              <span className="text-xl font-black text-black tracking-tight my-0.5 leading-none">
+                                {day}
+                              </span>
+                              <span className="text-[9px] font-medium text-zinc-400 leading-tight">
+                                {year}
+                              </span>
+                              <span className="px-1 py-0.5 bg-slate-200/70 text-zinc-700 text-[8px] font-bold rounded mt-1 uppercase tracking-wide">
+                                {weekday}
+                              </span>
+                            </div>
+
+                            {/* Train Title, Route, Status Pill & 3-Dots */}
+                            <div className="flex-1 min-w-0 pt-0.5">
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                {/* Status Badge */}
+                                {isCancelled ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200 inline-flex items-center gap-1 uppercase tracking-wider">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                                    CANCELLED
                                   </span>
+                                ) : isCompleted ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]/60 inline-flex items-center gap-1 uppercase tracking-wider">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#059669]" />
+                                    COMPLETED
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#EFF6FF] text-[#146BFF] border border-[#BFDBFE]/60 inline-flex items-center gap-1 uppercase tracking-wider">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#146BFF]" />
+                                    PENDING
+                                  </span>
+                                )}
+
+                                {/* Options Menu Button */}
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveMenuId(activeMenuId === b.id ? null : b.id);
+                                    }}
+                                    className="text-zinc-400 hover:text-black p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                                    title="Options"
+                                  >
+                                    <MoreVertical className="w-4 h-4" />
+                                  </button>
+
+                                  {activeMenuId === b.id && (
+                                    <>
+                                      <div className="fixed inset-0 z-30" onClick={() => setActiveMenuId(null)} />
+                                      <div
+                                        className="absolute right-0 top-7 z-40 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 w-48 text-left text-xs space-y-1 animate-scale-in"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveMenuId(null);
+                                            const copyVal = b.booking_id || b.id;
+                                            navigator.clipboard.writeText(copyVal);
+                                            toast.success(`Booking ID copied: ${copyVal}`);
+                                          }}
+                                          className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-zinc-700 hover:bg-slate-50 font-medium transition-colors cursor-pointer"
+                                        >
+                                          <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                          <span>Copy ID: {b.booking_id || b.id}</span>
+                                        </button>
+
+                                        {!isCompleted && !isCancelled && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveMenuId(null);
+                                              setConfirmCancel(b.id);
+                                            }}
+                                            className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
+                                          >
+                                            <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                                            <span>Cancel Booking</span>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
-                                <p className="text-xs font-bold text-zinc-400 mt-0.5">
-                                  {b.station_code || 'KZJ'} ➔ {b.station_name || STATIONS.find((st) => st.code === b.station_code)?.name || 'KAZIPET JN'}
-                                </p>
+                              </div>
+
+                              <h3 className="font-extrabold text-sm sm:text-base text-zinc-900 tracking-tight leading-snug line-clamp-1">
+                                Train {trainNo} · {trainName}
+                              </h3>
+                              <p className="text-[11px] sm:text-xs text-zinc-500 font-semibold mt-0.5 flex items-center gap-1 truncate">
+                                <span>{fromStation}</span>
+                                <span className="text-zinc-400 font-normal">→</span>
+                                <span>{toStation}</span>
+                                <span className="text-zinc-400 font-normal text-xs ml-0.5">&gt;</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Row 2: 3 Detail Chips Grid */}
+                          <div className="grid grid-cols-3 gap-2 pt-0.5">
+                            {/* Coach */}
+                            <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-2 flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#146BFF] flex items-center justify-center shrink-0">
+                                <Train className="w-3 h-3 text-[#146BFF]" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">Coach</span>
+                                <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
+                                  {b.coach || b.services?.coach || 'S4'}
+                                </span>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3 self-start sm:self-auto relative">
-                              <div className="flex items-center gap-1.5 bg-slate-100/70 border border-slate-200/60 rounded-lg px-2 py-0.5">
-                                <span className="font-mono text-xs text-zinc-700 font-bold select-all">
-                                  ID: {b.booking_id || b.id}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const copyVal = b.booking_id || b.id;
-                                    navigator.clipboard.writeText(copyVal);
-                                    toast.success(`Booking ID copied: ${copyVal}`);
-                                  }}
-                                  className="text-zinc-400 hover:text-blue-600 p-0.5 rounded transition-colors cursor-pointer"
-                                  title="Copy Booking ID"
-                                >
-                                  <Copy className="w-3 h-3" />
-                                </button>
+                            {/* Seat */}
+                            <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-2 flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#146BFF] flex items-center justify-center shrink-0">
+                                <Armchair className="w-3 h-3 text-[#146BFF]" />
                               </div>
+                              <div className="min-w-0">
+                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">Seat</span>
+                                <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
+                                  {b.seat_number || b.services?.seat_number || '42'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Service */}
+                            <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-2 flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#146BFF] flex items-center justify-center shrink-0">
+                                <Luggage className="w-3 h-3 text-[#146BFF]" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">Service</span>
+                                <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
+                                  {serviceLabel}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Row 3: Contextual Alert Note (shown for pending/cancelled, hidden for completed) */}
+                          {!isCompleted && (
+                            <div>
+                              {isCancelled ? (
+                                <div className="bg-rose-50/80 border border-rose-200/70 rounded-xl p-2.5 px-3 flex items-start gap-2">
+                                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-rose-800 leading-snug">Booking was cancelled.</p>
+                                    <p className="text-[10px] text-rose-600 font-medium leading-snug">Feel free to book assistance again anytime.</p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="bg-[#EFF6FF]/80 border border-[#BFDBFE]/60 rounded-xl p-2.5 px-3 flex items-start gap-2">
+                                  <Info className="w-3.5 h-3.5 text-[#146BFF] shrink-0 mt-0.5" />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-[#1E40AF] leading-snug">Your booking is confirmed.</p>
+                                    <p className="text-[10px] text-[#3B82F6] font-medium leading-snug">We are assigning the nearest assistant.</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Row 4: 4-Stage Horizontal Progress Tracker */}
+                          <div className="pt-2 pb-1 overflow-x-auto no-scrollbar">
+                            <div className="flex items-start justify-between min-w-[310px]">
+                              {trackerSteps.map((step, idx) => {
+                                const isDone = step.isDone;
+                                const isCurrent = step.isCurrent;
+
+                                return (
+                                  <Fragment key={step.id}>
+                                    <div className="flex flex-col items-center text-center shrink-0 w-20 z-10">
+                                      {/* Circle Icon */}
+                                      <span
+                                        className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 transition-all ${isDone
+                                            ? isCompleted
+                                              ? 'bg-[#059669] text-white'
+                                              : 'bg-[#146BFF] text-white'
+                                            : isCurrent
+                                              ? 'border-2 border-[#146BFF] bg-white text-transparent'
+                                              : 'border-2 border-slate-200 bg-white text-transparent'
+                                          }`}
+                                      >
+                                        {isDone ? '✓' : ''}
+                                      </span>
+
+                                      {/* Step Label */}
+                                      <span
+                                        className={`mt-1 text-[10px] font-bold leading-tight ${isDone
+                                            ? 'text-zinc-900'
+                                            : isCurrent
+                                              ? 'text-zinc-700'
+                                              : 'text-zinc-400'
+                                          }`}
+                                      >
+                                        {step.label}
+                                      </span>
+
+                                      {/* Step Time & Date or Pending */}
+                                      {isDone && step.time ? (
+                                        <div className="mt-0.5 flex flex-col items-center">
+                                          <span className="font-mono text-[9px] font-semibold text-zinc-500 leading-tight">
+                                            {step.time}
+                                          </span>
+                                          {step.date && (
+                                            <span className="text-[8px] text-zinc-400 leading-tight">
+                                              {step.date}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span className="text-[9px] font-medium text-zinc-400 mt-0.5 leading-tight">
+                                          Pending
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Connecting Line */}
+                                    {idx < trackerSteps.length - 1 && (
+                                      <div
+                                        className={`flex-1 border-t-2 mt-2 mx-1 min-w-[12px] ${trackerSteps[idx + 1].isDone
+                                            ? isCompleted
+                                              ? 'border-[#059669]'
+                                              : 'border-[#146BFF]'
+                                            : isDone && trackerSteps[idx + 1].isCurrent
+                                              ? 'border-dashed border-[#60A5FA]'
+                                              : 'border-dashed border-slate-200'
+                                          }`}
+                                      />
+                                    )}
+                                  </Fragment>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Row 5: Fee & View Trip CTA */}
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xl font-black text-black tracking-tight leading-none">
+                                ₹{b.total_price || (isCompleted ? 30 : 70)}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
+                                Assistance Fee
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                try {
+                                  if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
+                                  if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
+                                } catch (e) { }
+                                navigate(`/booking/${b.id}`, { state: { booking: b } });
+                              }}
+                              className={`rounded-full font-bold text-xs px-5 py-2.5 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
+                                  ? 'bg-black hover:bg-zinc-800 text-white'
+                                  : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
+                                }`}
+                            >
+                              <span>View Trip</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* ══════════════════════════════════════════════════════════════════
+                            2. LAPTOP / DESKTOP CARD LAYOUT (lg: and above)
+                            EXACT APPROVED LAYOUT — 100% UNCHANGED
+                            ══════════════════════════════════════════════════════════════════ */}
+                        <div className="hidden lg:flex flex-row items-stretch justify-between gap-5 w-full">
+                          {/* LEFT COLUMN: Date Block */}
+                          <div className="flex items-start justify-start gap-4 shrink-0">
+                            <div className="w-16 bg-[#F8FAFC] border border-slate-200/70 rounded-2xl py-2.5 px-1.5 flex flex-col items-center justify-center shrink-0 text-center self-start">
+                              <span className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase font-mono">
+                                {month}
+                              </span>
+                              <span className="text-2xl sm:text-[28px] font-black text-black tracking-tight my-0.5 leading-none">
+                                {day}
+                              </span>
+                              <span className="text-[10px] font-medium text-zinc-400">
+                                {year}
+                              </span>
+                              <span className="px-1.5 py-0.5 bg-slate-200/70 text-zinc-700 text-[9px] font-bold rounded-md mt-1.5 uppercase tracking-wide">
+                                {weekday}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* CENTER MAIN CONTENT */}
+                          <div className="flex-1 min-w-0 space-y-4">
+                            {/* Row 1: Train Icon + Title & Route + Status Badge */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3 sm:gap-4">
+                                {/* Circular Train Icon */}
+                                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0">
+                                  <Train className="w-5 h-5 sm:w-6 sm:h-6 text-zinc-900" />
+                                </div>
+
+                                {/* Title & Route */}
+                                <div>
+                                  <h3 className="font-extrabold text-base sm:text-lg text-zinc-900 tracking-tight leading-tight">
+                                    Train {trainNo} · {trainName}
+                                  </h3>
+                                  <p className="text-xs sm:text-sm text-zinc-500 font-semibold mt-0.5 flex items-center gap-1.5">
+                                    <span>{fromStation}</span>
+                                    <span className="text-zinc-400 font-normal">→</span>
+                                    <span>{toStation}</span>
+                                    <ChevronRight className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Desktop Status Badge */}
+                              <div className="flex items-center">
+                                {isCancelled ? (
+                                  <span className="px-3.5 py-1 rounded-full text-xs font-black bg-rose-50 text-rose-600 border border-rose-200 inline-flex items-center gap-2 uppercase tracking-wider">
+                                    <span className="w-2 h-2 rounded-full bg-rose-600" />
+                                    CANCELLED
+                                  </span>
+                                ) : isCompleted ? (
+                                  <span className="px-3.5 py-1 rounded-full text-xs font-black bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]/60 inline-flex items-center gap-2 uppercase tracking-wider">
+                                    <span className="w-2 h-2 rounded-full bg-[#059669]" />
+                                    COMPLETED
+                                  </span>
+                                ) : (
+                                  <span className="px-3.5 py-1 rounded-full text-xs font-black bg-[#EFF6FF] text-[#146BFF] border border-[#BFDBFE]/60 inline-flex items-center gap-2 uppercase tracking-wider">
+                                    <span className="w-2 h-2 rounded-full bg-[#146BFF]" />
+                                    PENDING
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Row 2: 3 Detail Chips on left, Notification Card on right */}
+                            <div className="flex flex-row items-center justify-between gap-3 pt-0.5">
+                              {/* 3 Detail Chips */}
+                              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                                {/* Coach */}
+                                <div className="bg-[#F8FAFC] border border-slate-100/90 rounded-2xl px-3 py-2 flex items-center gap-2 shrink-0">
+                                  <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#146BFF] flex items-center justify-center shrink-0">
+                                    <Train className="w-3.5 h-3.5 text-[#146BFF]" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Coach</span>
+                                    <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
+                                      {b.coach || b.services?.coach || 'S4'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Seat */}
+                                <div className="bg-[#F8FAFC] border border-slate-100/90 rounded-2xl px-3 py-2 flex items-center gap-2 shrink-0">
+                                  <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#146BFF] flex items-center justify-center shrink-0">
+                                    <Armchair className="w-3.5 h-3.5 text-[#146BFF]" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Seat</span>
+                                    <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
+                                      {b.seat_number || b.services?.seat_number || '42'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Service */}
+                                <div className="bg-[#F8FAFC] border border-slate-100/90 rounded-2xl px-3 py-2 flex items-center gap-2 shrink-0">
+                                  <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#146BFF] flex items-center justify-center shrink-0">
+                                    <Luggage className="w-3.5 h-3.5 text-[#146BFF]" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Service</span>
+                                    <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
+                                      {serviceLabel}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Contextual Notification Card (only for pending or cancelled) */}
+                              {!isCompleted && (
+                                <div className="flex-1 max-w-sm">
+                                  {isCancelled ? (
+                                    <div className="bg-rose-50/80 border border-rose-200/70 rounded-2xl p-2.5 px-3 flex items-start gap-2.5">
+                                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-rose-800 leading-snug">Booking was cancelled.</p>
+                                        <p className="text-[11px] text-rose-600 font-medium leading-snug">Feel free to book assistance again anytime.</p>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="bg-[#EFF6FF]/80 border border-[#BFDBFE]/60 rounded-2xl p-2.5 px-3 flex items-start gap-2.5">
+                                      <Info className="w-4 h-4 text-[#146BFF] shrink-0 mt-0.5" />
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-[#1E40AF] leading-snug">Your booking is confirmed.</p>
+                                        <p className="text-[11px] text-[#3B82F6] font-medium leading-snug">We are assigning the nearest assistant.</p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Row 3: 4-Stage Horizontal Progress Tracker */}
+                            <div className="pt-2 pb-1 overflow-x-auto no-scrollbar">
+                              <div className="flex items-start justify-between min-w-[340px] sm:min-w-0">
+                                {trackerSteps.map((step, idx) => {
+                                  const isDone = step.isDone;
+                                  const isCurrent = step.isCurrent;
+
+                                  return (
+                                    <Fragment key={step.id}>
+                                      <div className="flex flex-col items-center text-center shrink-0 w-24 sm:w-28 z-10">
+                                        {/* Circle Icon */}
+                                        <span
+                                          className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${isDone
+                                              ? isCompleted
+                                                ? 'bg-[#059669] text-white'
+                                                : 'bg-[#146BFF] text-white'
+                                              : isCurrent
+                                                ? 'border-2 border-[#146BFF] bg-white text-transparent'
+                                                : 'border-2 border-slate-200 bg-white text-transparent'
+                                            }`}
+                                        >
+                                          {isDone ? '✓' : ''}
+                                        </span>
+
+                                        {/* Step Label */}
+                                        <span
+                                          className={`mt-1.5 text-[10px] sm:text-[11px] font-bold leading-tight ${isDone
+                                              ? 'text-zinc-900'
+                                              : isCurrent
+                                                ? 'text-zinc-700'
+                                                : 'text-zinc-400'
+                                            }`}
+                                        >
+                                          {step.label}
+                                        </span>
+
+                                        {/* Step Time & Date or Pending */}
+                                        {isDone && step.time ? (
+                                          <div className="mt-0.5 flex flex-col items-center">
+                                            <span className="font-mono text-[9px] sm:text-[10px] font-semibold text-zinc-500 leading-tight">
+                                              {step.time}
+                                            </span>
+                                            {step.date && (
+                                              <span className="text-[8px] sm:text-[9px] text-zinc-400 leading-tight mt-0.5">
+                                                {step.date}
+                                              </span>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span className="text-[9px] sm:text-[10px] font-medium text-zinc-400 mt-0.5 leading-tight">
+                                            Pending
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Connecting Line */}
+                                      {idx < trackerSteps.length - 1 && (
+                                        <div
+                                          className={`flex-1 border-t-2 mt-2.5 mx-1 sm:mx-2 min-w-[14px] ${trackerSteps[idx + 1].isDone
+                                              ? isCompleted
+                                                ? 'border-[#059669]'
+                                                : 'border-[#146BFF]'
+                                              : isDone && trackerSteps[idx + 1].isCurrent
+                                                ? 'border-dashed border-[#60A5FA]'
+                                                : 'border-dashed border-slate-200'
+                                            }`}
+                                        />
+                                      )}
+                                    </Fragment>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* RIGHT COLUMN: Options Menu + Fee + View Trip Button */}
+                          <div className="border-l border-slate-100 pl-6 flex flex-col items-end justify-between w-44 shrink-0">
+                            {/* Top: Desktop Options Menu */}
+                            <div className="relative">
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -2370,159 +3401,79 @@ export default function PassengerDashboard() {
                                   setActiveMenuId(activeMenuId === b.id ? null : b.id);
                                 }}
                                 className="text-zinc-400 hover:text-black p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                                title="Booking options"
+                                title="Options"
                               >
                                 <MoreVertical className="w-4 h-4" />
                               </button>
 
-                              {/* Dropdown Action Menu */}
                               {activeMenuId === b.id && (
                                 <>
+                                  <div className="fixed inset-0 z-30" onClick={() => setActiveMenuId(null)} />
                                   <div
-                                    className="fixed inset-0 z-30"
-                                    onClick={() => setActiveMenuId(null)}
-                                  />
-                                  <div
-                                    className="absolute right-0 top-8 z-40 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 w-52 text-left text-xs space-y-1 animate-scale-in"
+                                    className="absolute right-0 top-7 z-40 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 w-48 text-left text-xs space-y-1 animate-scale-in"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    {/* Edit Option */}
-                                    {isAssistantAssigned ? (
-                                      <div
-                                        className="flex items-center justify-between w-full px-3 py-2 rounded-xl text-zinc-400 bg-slate-50 cursor-not-allowed select-none border border-slate-100"
-                                        title="Editing is disabled because an assistant has already been assigned"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <Edit className="w-3.5 h-3.5 text-zinc-400" />
-                                          <span className="font-medium">Edit Booking</span>
-                                        </div>
-                                        <span className="text-[9px] font-bold bg-slate-200 text-zinc-600 px-1.5 py-0.5 rounded">
-                                          Assigned
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActiveMenuId(null);
-                                          setEditingBooking(b);
-                                          setEditCoach(b.coach || b.services?.coach || '');
-                                          setEditSeat(b.seat_number || b.services?.seat_number || '');
-                                          setEditBerth(b.berth_type || 'Lower');
-                                        }}
-                                        className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-zinc-800 hover:bg-slate-100 font-semibold transition-colors cursor-pointer text-left"
-                                      >
-                                        <Edit className="w-3.5 h-3.5 text-blue-600" />
-                                        <span>Edit Booking</span>
-                                      </button>
-                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveMenuId(null);
+                                        const copyVal = b.booking_id || b.id;
+                                        navigator.clipboard.writeText(copyVal);
+                                        toast.success(`Booking ID copied: ${copyVal}`);
+                                      }}
+                                      className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-zinc-700 hover:bg-slate-50 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                      <span>Copy ID: {b.booking_id || b.id}</span>
+                                    </button>
 
-                                    {/* Cancel Option */}
-                                    {!isCancelled && !isCompleted ? (
+                                    {!isCompleted && !isCancelled && (
                                       <button
                                         type="button"
                                         onClick={() => {
                                           setActiveMenuId(null);
                                           setConfirmCancel(b.id);
                                         }}
-                                        className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-semibold transition-colors cursor-pointer text-left"
+                                        className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
                                       >
-                                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                                        <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
                                         <span>Cancel Booking</span>
                                       </button>
-                                    ) : (
-                                      <div className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-zinc-400 bg-slate-50 cursor-not-allowed select-none">
-                                        <AlertCircle className="w-3.5 h-3.5 text-zinc-400" />
-                                        <span>{isCancelled ? 'Cancelled' : 'Completed'}</span>
-                                      </div>
                                     )}
                                   </div>
                                 </>
                               )}
                             </div>
-                          </div>
 
-                          {/* Coach, Seat & Mission Badges */}
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-3 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-semibold text-zinc-700 flex items-center gap-1.5">
-                              <Train className="w-3.5 h-3.5 text-zinc-400" /> Coach {b.coach || b.services?.coach || 'A3'}
-                            </span>
-                            <span className="px-3 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-semibold text-zinc-700 flex items-center gap-1.5">
-                              <Armchair className="w-3.5 h-3.5 text-zinc-400" /> Seat {b.seat_number || b.services?.seat_number || '56'}
-                            </span>
-                            <span className="px-3 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-semibold text-zinc-700 flex items-center gap-1.5">
-                              {isBoarding ? <LogIn className="w-3.5 h-3.5 text-blue-600" /> : <LogOut className="w-3.5 h-3.5 text-blue-600" />}
-                              <span>{isBoarding ? 'Boarding Load' : 'De-boarding Unload'}</span>
-                            </span>
-                          </div>
-
-                          {/* Dispatch Milestone Tracker Row (Dashed Connections - Phone Scrollable) */}
-                          <div className="pt-2 overflow-x-auto no-scrollbar pb-1">
-                            <div className="flex items-center justify-between text-xs font-medium text-zinc-500 gap-2 min-w-[340px] sm:min-w-0">
-                              {/* Step 1 */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isCancelled ? 'bg-rose-600 text-white' : 'bg-emerald-500 text-white'
-                                  }`}>
-                                  {isCancelled ? '✕' : '✓'}
-                                </span>
-                                <div>
-                                  <p className={`font-bold text-xs ${isCancelled ? 'text-rose-600' : 'text-zinc-800'}`}>
-                                    {isCancelled ? 'Cancelled' : 'Assigned'}
-                                  </p>
-                                  <p className="font-mono text-[10px] text-zinc-400">{b.journey_time || '12:15'}</p>
-                                </div>
+                            {/* Middle: Fee */}
+                            <div className="text-right">
+                              <div className="text-2xl sm:text-3xl font-black text-black tracking-tight leading-none">
+                                ₹{b.total_price || (isCompleted ? 30 : 70)}
                               </div>
-
-                              {/* Dashed Connector */}
-                              <div className="flex-1 border-t-2 border-dashed border-slate-300 mx-2 min-w-[16px]" />
-
-                              {/* Step 2 */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isCompleted ? 'bg-emerald-500 text-white' : 'border-2 border-slate-300 bg-white text-transparent'
-                                  }`}>
-                                  {isCompleted ? '✓' : ''}
-                                </span>
-                                <div>
-                                  <p className={`font-bold text-xs ${isCompleted ? 'text-zinc-800' : 'text-zinc-400'}`}>
-                                    Assistant Reached
-                                  </p>
-                                  {isCompleted && <p className="font-mono text-[10px] text-zinc-400">12:40</p>}
-                                </div>
-                              </div>
-
-                              {/* Dashed Connector */}
-                              <div className="flex-1 border-t-2 border-dashed border-slate-300 mx-2 min-w-[16px]" />
-
-                              {/* Step 3 */}
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isCompleted ? 'bg-emerald-500 text-white' : 'border-2 border-slate-300 bg-white text-transparent'
-                                  }`}>
-                                  {isCompleted ? '✓' : ''}
-                                </span>
-                                <div>
-                                  <p className={`font-bold text-xs ${isCompleted ? 'text-zinc-800' : 'text-zinc-400'}`}>
-                                    Service Completed
-                                  </p>
-                                  {isCompleted && <p className="font-mono text-[10px] text-zinc-400">13:05</p>}
-                                </div>
+                              <div className="text-[11px] sm:text-xs text-zinc-400 font-semibold mt-1">
+                                Assistance Fee
                               </div>
                             </div>
-                          </div>
-                        </div>
 
-                        {/* Right Action & Price Column */}
-                        <div className="w-full md:w-52 flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-5 shrink-0 gap-3">
-                          <span className="font-mono font-black text-2xl text-zinc-900">
-                            ₹{b.total_price || 30}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/booking/${b.id}`)}
-                            className="px-5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-800 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 border border-slate-200/50"
-                          >
-                            <span>View Details</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+                            {/* Bottom: View Trip Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                try {
+                                  if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
+                                  if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
+                                } catch (e) { }
+                                navigate(`/booking/${b.id}`, { state: { booking: b } });
+                              }}
+                              className={`rounded-full font-bold text-xs px-5 py-2.5 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
+                                  ? 'bg-black hover:bg-zinc-800 text-white'
+                                  : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
+                                }`}
+                            >
+                              <span>View Trip</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -2531,37 +3482,89 @@ export default function PassengerDashboard() {
               );
             })()}
 
-            {/* Need Help Footer Banner */}
-            <div className="bg-white rounded-3xl border border-slate-200/70 p-6 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
+            {/* ── 4. 24/7 SUPPORT CARD ── */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#146BFF] flex items-center justify-center shrink-0 border border-blue-100">
                   <Headphones className="w-6 h-6" />
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-zinc-900">Need help with a trip?</h4>
-                  <p className="text-xs text-zinc-500">Our support team is here to assist you, 24/7.</p>
+                  <p className="text-xs text-zinc-500">Our platform team is available 24/7 to assist your railway journey.</p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => toast.success('24/7 Platform Helpline: 139 · Rail Support Active')}
-                className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-3 rounded-full text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
+                onClick={() => setTab('support')}
+                className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-2.5 rounded-full text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
               >
                 <span>Contact Support</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
+        ) : tab === 'support' ? (
+          <div className="animate-fade-in w-full">
+            {supportView === 'home' && (
+              <HelpCenter
+                onNavigate={handleSupportNavigate}
+                activeTrip={activeTripData}
+                user={user}
+                embeddedInDashboard={true}
+              />
+            )}
+            {supportView === 'chat' && (
+              <SupportAssistantChat
+                onNavigate={handleSupportNavigate}
+                activeTrip={activeTripData}
+                user={user}
+                preloadContext={supportParams.preloadContext}
+                initialQuery={supportParams.initialQuery}
+              />
+            )}
+            {supportView === 'tickets' && (
+              <TicketTracking
+                onNavigate={handleSupportNavigate}
+                user={user}
+              />
+            )}
+            {supportView === 'ticket_detail' && supportParams.ticketId && (
+              <TicketDetailView
+                onNavigate={handleSupportNavigate}
+                ticketId={supportParams.ticketId}
+                user={user}
+              />
+            )}
+            {supportView === 'faq' && (
+              <FaqView
+                onNavigate={handleSupportNavigate}
+                user={user}
+                initialCategory={supportParams.category}
+                initialQuery={supportParams.initialQuery}
+              />
+            )}
+            {supportView === 'raise_ticket' && (
+              <RaiseTicketView
+                onNavigate={handleSupportNavigate}
+                activeTrip={activeTripData}
+                user={user}
+                bookings={bookings}
+                initialCategory={supportParams.category}
+              />
+            )}
+          </div>
         ) : null}
       </main>
 
       {/* ── GLOBAL FOOTER ─────────────────────────────────────────── */}
-      <Footer className={tab === 'book' ? 'pb-28 lg:pb-4.5' : ''} />
+      {!(tab === 'support' && supportView === 'chat') && (
+        <Footer className={tab === 'book' ? 'pb-28 lg:pb-4.5' : ''} />
+      )}
 
       {/* ── STICKY FLOATING MOBILE ACTION BAR & SUMMARY DRAWER (PHONE RESPONSIVE) ── */}
       {tab === 'book' && (
-        <div className="lg:hidden sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3.5 shadow-[0_-8px_30px_rgb(0,0,0,0.08)]">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3.5 shadow-[0_-8px_30px_rgb(0,0,0,0.08)]">
           <div className="max-w-md mx-auto flex items-center justify-between gap-3">
             <button
               type="button"
@@ -2670,6 +3673,35 @@ export default function PassengerDashboard() {
               <div className="p-3.5 bg-black text-white rounded-2xl flex items-center justify-between">
                 <span className="font-bold">Total Amount Payable</span>
                 <span className="font-mono font-extrabold text-xl">₹{calculateTotal()}</span>
+              </div>
+
+              {/* Security Row with Razorpay & Premium UPI/Mastercard Icons */}
+              <div className="pt-2 flex items-center justify-between text-xs text-zinc-500 border-t border-slate-100">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="text-[11px] font-medium text-slate-500 truncate">
+                    Secured Payments with <strong className="font-extrabold text-[#0C2340]">Razorpay</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Premium UPI Icon Badge */}
+                  <div className="h-6 px-2 rounded-md bg-white border border-slate-200/90 shadow-2xs flex items-center gap-1" title="UPI">
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
+                      <path d="M14.5 4L7.5 20h3.5l7-16h-3.5z" fill="#097939" />
+                      <path d="M10.5 4L3.5 20h3.5l7-16h-3.5z" fill="#ED752E" />
+                    </svg>
+                    <span className="text-[10px] font-black italic tracking-tighter text-[#2E3192] leading-none font-sans">UPI</span>
+                  </div>
+
+                  {/* Premium Mastercard Icon Badge */}
+                  <div className="h-6 px-2 rounded-md bg-white border border-slate-200/90 shadow-2xs flex items-center justify-center" title="Mastercard">
+                    <svg className="w-5 h-3.5" viewBox="0 0 36 22" fill="none">
+                      <circle cx="11" cy="11" r="9" fill="#EB001B" />
+                      <circle cx="25" cy="11" r="9" fill="#F79E1B" />
+                      <path d="M18 4.25a9 9 0 0 1 0 13.5 9 9 0 0 1 0-13.5z" fill="#FF5F00" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2798,31 +3830,6 @@ export default function PassengerDashboard() {
                 </div>
               </div>
 
-              {/* Row 1b: Database UUID for Supabase reference */}
-              {confirmedBooking.booking_id && confirmedBooking.id && (
-                <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
-                  <div className="flex items-center gap-1.5 text-zinc-400">
-                    <span>Database UUID</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[10px] text-zinc-600 select-all max-w-[190px] truncate" title={confirmedBooking.id}>
-                      {confirmedBooking.id}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(confirmedBooking.id);
-                        toast.success('Database UUID copied!');
-                      }}
-                      className="text-zinc-500 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-colors cursor-pointer"
-                      title="Copy Supabase UUID"
-                    >
-                      <Copy className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Row 2: Status */}
               <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
                 <div className="flex items-center gap-2 text-zinc-600">
@@ -2898,9 +3905,14 @@ export default function PassengerDashboard() {
             <button
               type="button"
               onClick={() => {
-                const id = confirmedBooking.id;
+                const bookingData = confirmedBooking;
+                const id = bookingData.id || bookingData.booking_id;
+                try {
+                  if (bookingData.id) sessionStorage.setItem(`booking_${bookingData.id}`, JSON.stringify(bookingData));
+                  if (bookingData.booking_id) sessionStorage.setItem(`booking_${bookingData.booking_id}`, JSON.stringify(bookingData));
+                } catch (e) { }
                 setConfirmedBooking(null);
-                navigate(`/booking/${id}`);
+                navigate(`/booking/${id}`, { state: { booking: bookingData } });
               }}
               className="w-full bg-[#059669] hover:bg-[#047857] text-white font-black py-3.5 px-6 rounded-full text-sm shadow-lg shadow-[#059669]/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.98] mb-3"
             >
@@ -2914,9 +3926,14 @@ export default function PassengerDashboard() {
               <button
                 type="button"
                 onClick={() => {
-                  const id = confirmedBooking.id;
+                  const bookingData = confirmedBooking;
+                  const id = bookingData.id || bookingData.booking_id;
+                  try {
+                    if (bookingData.id) sessionStorage.setItem(`booking_${bookingData.id}`, JSON.stringify(bookingData));
+                    if (bookingData.booking_id) sessionStorage.setItem(`booking_${bookingData.booking_id}`, JSON.stringify(bookingData));
+                  } catch (e) { }
                   setConfirmedBooking(null);
-                  navigate(`/booking/${id}`);
+                  navigate(`/booking/${id}`, { state: { booking: bookingData } });
                 }}
                 className="py-2.5 px-3 rounded-full border border-slate-200/80 hover:bg-slate-50 text-zinc-800 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 
+const { protect } = require('../middleware/authMiddleware');
+
 const {
   register,
   login,
@@ -9,7 +11,9 @@ const {
   sendOtp,
   verifyOtpAndLogin,
   verifyOtpAndRegister,
-  checkEmail
+  checkEmail,
+  updatePhoneNumber,
+  getPhoneStatus
 } = require('../controllers/authController');
 
 /*
@@ -83,5 +87,9 @@ router.post('/otp/verify-register', otpVerifyLimiter, verifyOtpAndRegister);
 router.post('/register', register);
 router.post('/login', login);
 router.get('/seed', seedTestUsers);
+
+// Account Profile & Phone Management
+router.put('/update-phone', protect, updatePhoneNumber);
+router.get('/phone-status', protect, getPhoneStatus);
 
 module.exports = router;

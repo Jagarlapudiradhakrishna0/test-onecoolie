@@ -8,7 +8,9 @@ const {
   confirmStartOTP,
   markPaid,
   rateBooking,
-  triggerSOS
+  triggerSOS,
+  getChatMessages,
+  sendChatMessage
 } = require('../controllers/serviceController');
 
 router.patch(
@@ -39,6 +41,18 @@ router.post(
   '/:booking_id/sos',
   protect,
   triggerSOS
+);
+
+router.get(
+  '/:booking_id/chat',
+  protect,
+  getChatMessages
+);
+
+router.post(
+  '/:booking_id/chat',
+  protect,
+  sendChatMessage
 );
 
 module.exports = router;

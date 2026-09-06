@@ -148,7 +148,10 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     berth_type: booking.services?.berth_type || null,
     action_type: booking.services?.action_type || 'load_to_seat',
     pnr: booking.services?.pnr || null,
-    platform: booking.services?.platform || null,
+    platform: booking.platform || booking.services?.platform || null,
+    previous_platform: booking.previous_platform || booking.services?.previous_platform || null,
+    platform_changed: Boolean(booking.platform_changed || booking.services?.platform_changed),
+    platform_changed_at: booking.platform_changed_at || booking.services?.platform_changed_at || null,
 
     // ─── Pricing ─────────────────────────────────────────────────────────────
     total_price: Number(booking.total_price) || 0,
@@ -169,6 +172,7 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     // ─── Rating & Review ──────────────────────────────────────────────────────
     rating: booking.rating || null,
     review: booking.review || null,
+    chat_messages: (booking.services && Array.isArray(booking.services.chat_messages)) ? booking.services.chat_messages : [],
 
     // ─── OTP (conditional) ───────────────────────────────────────────────────
     //   start_otp is ONLY sent when the caller is the passenger or admin.

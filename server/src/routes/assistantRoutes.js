@@ -39,4 +39,9 @@ router.post('/:booking_id/cancel', protect, cancelByAssistant);
 // Complete booking
 router.post('/:booking_id/complete', protect, completeBooking);
 
+// Support & Operational Issue Tickets
+const { createTicket, getAssistantTickets } = require('../controllers/supportController');
+router.get('/support-tickets', protect, getAssistantTickets);
+router.post('/support-tickets', protect, createTicket);
+
 module.exports = router;

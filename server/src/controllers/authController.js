@@ -964,3 +964,167 @@ exports.seedTestUsers = async (req, res) => {
     });
   }
 };
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE USER PHONE NUMBER WITH 2-CHANGE MONTHLY LIMIT
+|--------------------------------------------------------------------------
+|
+| PUT /api/auth/update-phone
+| Header: Authorization: Bearer <token>
+| Body: { phone }
+|
+| Allows up to 2 phone number changes per calendar month.
+| Tracks change timestamps inside kyc_documents JSONB on the user row.
+|
+*/
+exports.updatePhoneNumber = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { phone } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized. Please sign in.' });
+    }
+
+    if (!phone) {
+      return res.status(400).json({ message: 'Phone number is required.' });
+    }
+
+    const cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ message: 'Please provide a valid 10-digit mobile phone number.' });
+    }
+
+    const formattedPhone = cleanPhone.length === 10 ? `+91 ${cleanPhone}` : `+${cleanPhone}`;
+
+    // Fetch user
+    const { data: user, error: fetchErr } = await supabase
+      .from('users')
+      .select('id, name, email, phone, role, kyc_documents')
+      .eq('id', userId)
+      .single();
+
+    if (fetchErr || !user) {
+      return res.status(404).json({ message: 'User account not found.' });
+    }
+
+    if (user.role === 'assistant') {
+      return res.status(403).json({
+        message: 'Assistant phone numbers are confidential and KYC-locked. Contact your Station Master or Administrator for any update.'
+      });
+    }
+
+    // Parse history from kyc_documents
+    const kycDocs = typeof user.kyc_documents === 'object' && user.kyc_documents !== null
+      ? user.kyc_documents
+      : {};
+    const history = Array.isArray(kycDocs.phone_change_history) ? kycDocs.phone_change_history : [];
+
+    // Filter updates in current calendar month (YYYY-MM)
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const changesThisMonth = history.filter(h => h.date && h.date.startsWith(currentMonth));
+
+    const MAX_MONTHLY_CHANGES = 2;
+
+    if (changesThisMonth.length >= MAX_MONTHLY_CHANGES) {
+      return res.status(429).json({
+        message: 'Monthly limit reached: You can only update your phone number 2 times per calendar month.',
+        changesRemaining: 0,
+        changesUsed: changesThisMonth.length,
+        limit: MAX_MONTHLY_CHANGES,
+        currentPhone: user.phone
+      });
+    }
+
+    // Append new update record
+    const newRecord = {
+      date: new Date().toISOString(),
+      from: user.phone || null,
+      to: formattedPhone
+    };
+    const updatedHistory = [...history, newRecord];
+    const updatedKycDocs = {
+      ...kycDocs,
+      phone_change_history: updatedHistory
+    };
+
+    // Update in Supabase
+    const { data: updatedUser, error: updateErr } = await supabase
+      .from('users')
+      .update({
+        phone: formattedPhone,
+        kyc_documents: updatedKycDocs,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select('id, name, email, phone, role, station_code, is_approved, kyc_status')
+      .single();
+
+    if (updateErr) {
+      console.error('UPDATE PHONE ERROR:', updateErr);
+      return res.status(500).json({ message: 'Unable to update phone number. Please try again.' });
+    }
+
+    const changesRemaining = MAX_MONTHLY_CHANGES - (changesThisMonth.length + 1);
+
+    return res.status(200).json({
+      message: 'Phone number updated successfully.',
+      phone: updatedUser.phone,
+      changesRemaining,
+      changesUsed: changesThisMonth.length + 1,
+      limit: MAX_MONTHLY_CHANGES,
+      user: updatedUser
+    });
+
+  } catch (err) {
+    console.error('UPDATE PHONE SERVER ERROR:', err);
+    return res.status(500).json({ message: 'Server error updating phone number.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| GET PHONE STATUS & REMAINING MONTHLY UPDATES
+|--------------------------------------------------------------------------
+|
+| GET /api/auth/phone-status
+| Header: Authorization: Bearer <token>
+|
+*/
+exports.getPhoneStatus = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, phone, kyc_documents')
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) {
+      return res.status(404).json({ message: 'User account not found' });
+    }
+
+    const kycDocs = typeof user.kyc_documents === 'object' && user.kyc_documents !== null
+      ? user.kyc_documents
+      : {};
+    const history = Array.isArray(kycDocs.phone_change_history) ? kycDocs.phone_change_history : [];
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const changesThisMonth = history.filter(h => h.date && h.date.startsWith(currentMonth));
+    const MAX_MONTHLY_CHANGES = 2;
+    const changesRemaining = Math.max(0, MAX_MONTHLY_CHANGES - changesThisMonth.length);
+
+    return res.status(200).json({
+      phone: user.phone || null,
+      changesUsed: changesThisMonth.length,
+      changesRemaining,
+      limit: MAX_MONTHLY_CHANGES
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error retrieving phone status.' });
+  }
+};
