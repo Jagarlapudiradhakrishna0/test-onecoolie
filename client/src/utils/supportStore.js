@@ -337,14 +337,19 @@ export function getTickets() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed;
       }
     }
+    // Seed initial tickets if not present
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_TICKETS));
+    }
+    return INITIAL_TICKETS;
   } catch (e) {
     console.error('Error reading support tickets:', e);
   }
-  return [];
+  return INITIAL_TICKETS;
 }
 
 /**
