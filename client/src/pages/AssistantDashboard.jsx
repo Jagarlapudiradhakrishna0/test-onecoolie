@@ -194,34 +194,16 @@ export default function AssistantDashboard() {
     }
   }, []);
 
-  /* ── Load Wallet & Payouts (Phase 3B) ─────────────────────── */
-  const loadWallet = useCallback(async () => {
-    try {
-      const [wRes, pRes] = await Promise.all([
-        axios.get('/assistant-wallet').catch(() => ({ data: {} })),
-        axios.get('/assistant-payouts').catch(() => ({ data: { payouts: [] } })),
-      ]);
-      if (wRes.data?.wallet) setWallet(wRes.data.wallet);
-      if (pRes.data?.payouts) setPayouts(pRes.data.payouts);
-    } catch (err) {
-      console.error('Unable to load wallet data:', err);
-    }
-  }, []);
-
   /* ── Initial Load & Auto Refresh ────────────────────────── */
   useEffect(() => {
     loadProfile();
     loadDashboard();
-    loadWallet();
-  }, [loadProfile, loadDashboard, loadWallet]);
+  }, [loadProfile, loadDashboard]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadDashboard();
-      loadWallet();
-    }, 8000);
+    const interval = setInterval(() => loadDashboard(), 8000);
     return () => clearInterval(interval);
-  }, [loadDashboard, loadWallet]);
+  }, [loadDashboard]);
 
   /* ── Real-Time Rating & Review Sync (BroadcastChannel, Storage, WebSocket) ── */
   useEffect(() => {
@@ -321,7 +303,6 @@ export default function AssistantDashboard() {
       window.socket.on('new_booking', handleSocketNewBooking);
       window.socket.on('rating_submitted', handleSocketRating);
       window.socket.on('status_update', handleSocketStatus);
-      window.socket.on('wallet_updated', loadWallet);
     }
 
     return () => {
@@ -332,65 +313,9 @@ export default function AssistantDashboard() {
         window.socket.off('new_booking', handleSocketNewBooking);
         window.socket.off('rating_submitted', handleSocketRating);
         window.socket.off('status_update', handleSocketStatus);
-        window.socket.off('wallet_updated', loadWallet);
       }
     };
-  }, [loadDashboard, loadProfile, loadWallet]);
-
-  /* ── Request Payout Handler (Phase 3B) ───────────────────── */
-  const handleRequestPayout = async (e) => {
-    e?.preventDefault();
-    const amt = parseFloat(payoutAmount);
-    if (isNaN(amt) || amt <= 0) {
-      setError('Please enter a valid payout amount.');
-      return;
-    }
-    if (amt < 100) {
-      setError('Minimum withdrawal threshold is ₹100.');
-      return;
-    }
-    if (amt > (wallet.available_balance || 0)) {
-      setError(`Requested amount (₹${amt}) exceeds your available balance (₹${wallet.available_balance || 0}).`);
-      return;
-    }
-
-    setPayoutLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      await axios.post('/assistant-payouts/request', {
-        amount: amt,
-        payout_method: payoutMethod,
-      });
-      setMessage('Payout request submitted successfully. Awaiting administrative review.');
-      setPayoutModalOpen(false);
-      setPayoutAmount('');
-      await loadWallet();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Unable to submit payout request.');
-    } finally {
-      setPayoutLoading(false);
-    }
-  };
-
-  /* ── Cancel Payout Handler (Phase 3B) ───────────────────── */
-  const handleCancelPayout = async (payoutId) => {
-    if (!window.confirm('Cancel this pending payout request and release earnings back to your available balance?')) {
-      return;
-    }
-    setActionLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      await axios.post(`/assistant-payouts/${payoutId}/cancel`);
-      setMessage('Payout request cancelled.');
-      await loadWallet();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Unable to cancel payout request.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  }, [loadDashboard, loadProfile]);
 
   /* ── Online Status & Active Job Tracking ─────────────────── */
   const activeJobs = myJobs.filter(
@@ -550,7 +475,7 @@ export default function AssistantDashboard() {
       te: {
         luggage: '🧳 లగేజీ సహాయం',
         escort: '🚶 సీట్ ఎస్కార్ట్',
-        wheelchair: '♿ వీల్‌చైర్ సహాయం',
+        wheelchair: '♿ వీల్చైర్ సహాయం',
         language: '🗣️ భాషా సహాయం',
         snacks: '🍱 స్నాక్స్ & నీరు',
         transport: '🛺 ఎగ్జిట్ రవాణా',
@@ -580,7 +505,7 @@ export default function AssistantDashboard() {
         return rawLabel
           .replace(/Luggage Assistance/gi, 'లగేజీ సహాయం')
           .replace(/Seat Escorting|Seat Escort/gi, 'సీట్ ఎస్కార్ట్')
-          .replace(/Wheelchair & Elderly|Wheelchair/gi, 'వీల్‌చైర్ సహాయం')
+          .replace(/Wheelchair & Elderly|Wheelchair/gi, 'వీల్చైర్ సహాయం')
           .replace(/Language Help/gi, 'భాషా సహాయం')
           .replace(/Snacks & Water/gi, 'స్నాక్స్ & నీరు')
           .replace(/Exit Transport/gi, 'ఎగ్జిట్ రవాణా');
@@ -1634,154 +1559,6 @@ export default function AssistantDashboard() {
                 </div>
               </div>
 
-              {/* ── Authoritative Treasury Wallet Card (Phase 3B) ── */}
-              <div className="bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xs space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-zinc-800">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <IndianRupee size={20} className="text-[#2563EB]" />
-                      <h3 className="text-lg sm:text-xl font-extrabold text-black dark:text-white tracking-tight">
-                        Assistant Treasury Wallet &amp; Payouts
-                      </h3>
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                        Verified Ledger
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
-                      Guaranteed payouts directly to your registered bank account or UPI ID.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPayoutModalOpen(true);
-                      setPayoutAmount('');
-                    }}
-                    disabled={actionLoading || (wallet.available_balance || 0) < 100}
-                    className="px-5 py-2.5 rounded-full bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
-                  >
-                    <span>Request Payout</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-
-                {/* 3 Wallet Metric Pill Tiles */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/40">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block mb-1">
-                      Available for Withdrawal
-                    </span>
-                    <p className="text-2xl sm:text-3xl font-black text-black dark:text-white font-mono">
-                      ₹{wallet.available_balance || 0}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1">Min threshold: ₹100</p>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-800/40 border border-slate-200/60 dark:border-zinc-700/60">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block mb-1">
-                      Pending Clearance
-                    </span>
-                    <p className="text-2xl sm:text-3xl font-black text-black dark:text-white font-mono">
-                      ₹{wallet.pending_balance || 0}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1">Auto-releases upon ride completion</p>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/40">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block mb-1">
-                      Lifetime Disbursed
-                    </span>
-                    <p className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                      ₹{wallet.paid_out_total || 0}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1">Settled into bank account</p>
-                  </div>
-                </div>
-
-                {/* Payout History List */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-xs text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
-                      Recent Withdrawal Records ({payouts.length})
-                    </h4>
-                  </div>
-
-                  {payouts.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400 dark:text-zinc-500 bg-slate-50 dark:bg-zinc-800/40 rounded-2xl border border-slate-200/60 dark:border-zinc-700/60">
-                      No withdrawal requests yet. Earnings of ₹100 or more can be withdrawn instantly.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="border-b border-slate-200 dark:border-zinc-800 text-slate-400 dark:text-zinc-500 font-mono text-[10px] uppercase">
-                            <th className="py-2.5 px-3">ID</th>
-                            <th className="py-2.5 px-3">Amount</th>
-                            <th className="py-2.5 px-3">Method</th>
-                            <th className="py-2.5 px-3">Status</th>
-                            <th className="py-2.5 px-3">Requested</th>
-                            <th className="py-2.5 px-3 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/60 font-mono">
-                          {payouts.map((p) => {
-                            const statusColors = {
-                              requested: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-                              approved: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-                              processing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
-                              paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-                              rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
-                              failed: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
-                              cancelled: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
-                            };
-
-                            return (
-                              <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-zinc-800/40">
-                                <td className="py-3 px-3 text-zinc-500 text-[11px]">
-                                  {p.id.slice(0, 8)}...
-                                </td>
-                                <td className="py-3 px-3 font-black text-black dark:text-white">
-                                  ₹{p.amount}
-                                </td>
-                                <td className="py-3 px-3 capitalize text-zinc-500">
-                                  {p.payout_method?.replace('_', ' ') || 'Bank Transfer'}
-                                </td>
-                                <td className="py-3 px-3">
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColors[p.status] || 'bg-zinc-100'}`}>
-                                    {p.status}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 text-zinc-400 text-[11px]">
-                                  {new Date(p.requested_at || p.created_at).toLocaleDateString()}
-                                </td>
-                                <td className="py-3 px-3 text-right">
-                                  {p.status === 'requested' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCancelPayout(p.id)}
-                                      disabled={actionLoading}
-                                      className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                  )}
-                                  {p.status === 'paid' && (
-                                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                                      ✓ Settled {p.payout_reference ? `(${p.payout_reference})` : ''}
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-
               {/* Passenger Feedback & Reviews Section */}
               <div className="bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xs space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-zinc-800">
@@ -2267,20 +2044,22 @@ export default function AssistantDashboard() {
                             <button
                               type="button"
                               onClick={() => setTicketPriority('normal')}
-                              className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${ticketPriority === 'normal'
-                                ? 'bg-blue-50 border-[#2563EB] text-[#2563EB] dark:bg-blue-950/40 dark:text-blue-400'
-                                : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
-                                }`}
+                              className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                                ticketPriority === 'normal'
+                                  ? 'bg-blue-50 border-[#2563EB] text-[#2563EB] dark:bg-blue-950/40 dark:text-blue-400'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
+                              }`}
                             >
                               Standard Notice
                             </button>
                             <button
                               type="button"
                               onClick={() => setTicketPriority('urgent')}
-                              className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${ticketPriority === 'urgent'
-                                ? 'bg-rose-50 border-rose-600 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
-                                : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
-                                }`}
+                              className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                                ticketPriority === 'urgent'
+                                  ? 'bg-rose-50 border-rose-600 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
+                              }`}
                             >
                               Urgent Concourse
                             </button>
@@ -2357,10 +2136,11 @@ export default function AssistantDashboard() {
                                     #{tk.id}
                                   </span>
                                   <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${tk.priority === 'urgent'
-                                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
-                                      : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950/60 dark:text-blue-400'
-                                      }`}
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      tk.priority === 'urgent'
+                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                                        : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950/60 dark:text-blue-400'
+                                    }`}
                                   >
                                     {tk.category}
                                   </span>
@@ -2419,34 +2199,34 @@ export default function AssistantDashboard() {
 
                     <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium leading-relaxed">
                       {lang === 'te'
-                        ? 'ప్లాట్‌ఫారమ్‌పై సాధారణ సమస్యల పరిష్కారానికి తక్షణ మార్గదర్శకాలు మరియు నిబంధనలు.'
+                        ? 'ప్లాట్ఫారమ్పై సాధారణ సమస్యల పరిష్కారానికి తక్షణ మార్గదర్శకాలు మరియు నిబంధనలు.'
                         : lang === 'hi'
-                          ? 'प्लेटफॉर्म पर सामान्य समस्याओं के त्वरित समाधान के लिए मानक संचालन प्रक्रियाएं।'
-                          : 'Standard operating procedures for immediate resolution of common on-platform transit situations.'}
+                        ? 'प्लेटफॉर्म पर सामान्य समस्याओं के त्वरित समाधान के लिए मानक संचालन प्रक्रियाएं।'
+                        : 'Standard operating procedures for immediate resolution of common on-platform transit situations.'}
                     </p>
 
                     <div className="space-y-2.5 pt-1">
                       {(lang === 'te'
                         ? [
-                          {
-                            q: 'కోచ్ వద్ద ప్రయాణీకుడు కనిపించకపోతే నేను ఏమి చేయాలి?',
-                            a: 'రైలు చేరిన తర్వాత కనీసం 10 నిమిషాల పాటు కేటాయించిన కోచ్ వద్ద వేచి ఉండండి. యాప్‌లోని "ప్రయాణీకుడికి కాల్ చేయండి" బటన్‌ను ఉపయోగించండి. వారు అందుబాటులో లేకుంటే, పక్కన ఉన్న ఆపరేషనల్ టిక్కెట్‌ను సబ్మిట్ చేయండి, తద్వారా మీ డ్యూటీ రేటింగ్‌కు ఎటువంటి ప్రభావం పడకుండా సూపర్ వైజర్ వెరిఫై చేస్తారు.'
-                          },
-                          {
-                            q: 'లగేజీ ప్రామాణిక బుకింగ్ పరిమితి కంటే ఎక్కువగా ఉంటే ఏమి చేయాలి?',
-                            a: 'ప్రామాణిక పోర్టర్ సహాయం 40 కిలోల వరకు లగేజీని కవర్ చేస్తుంది. లగేజీ పరిమితి మించితే, అదనపు లగేజీ వోచర్ లేదా రెండవ అసిస్టెంట్ బుకింగ్ అవసరమని ప్రయాణీకుడికి మర్యాదగా వివరించండి. ప్లాట్‌ఫారమ్‌పై ఎప్పుడూ వాదించవద్దు; వివాదం ఉంటే టిక్కెట్ రైజ్ చేయండి.'
-                          },
-                          {
-                            q: 'చివరి నిమిషంలో ప్లాట్‌ఫారమ్ మార్పులను ఎలా నిర్వహించాలి?',
-                            a: 'వన్ కూలీ రాడార్ స్టేషన్ ప్రకటనల వ్యవస్థతో రియల్ టైమ్‌లో సమన్వయం చేసుకుంటుంది. రైలు వేరే ప్లాట్‌ఫారమ్‌కు మారితే, మీ యాక్టివ్ జాబ్ కార్డ్‌లో అది కనిపిస్తుంది. ఎల్లప్పుడూ ర్యాంప్‌లు లేదా లిఫ్ట్‌లను ఉపయోగించి ప్రయాణీకులకు సహాయం చేయండి.'
-                          },
-                          {
-                            q: 'ప్లాట్‌ఫారమ్‌పై అత్యవసర వైద్య పరిస్థితి ఏర్పడితే తక్షణ ప్రొటోకాల్ ఏమిటి?',
-                            a: 'వెంటనే పైన ఉన్న హాట్‌లైన్‌ల నుండి 139 లేదా 112 కు డయల్ చేయండి. అదే సమయంలో డ్యూటీలో ఉన్న RPF లేదా ప్లాట్‌ఫారమ్ మాస్టర్‌ను అప్రమత్తం చేయండి. ప్లాట్‌ఫారమ్ 1 వద్ద అత్యవసర వీల్ చైర్లు మరియు ప్రథమ చికిత్స కిట్‌లు అందుబాటులో ఉంటాయి.'
-                          }
-                        ]
+                            {
+                              q: 'కోచ్ వద్ద ప్రయాణీకుడు కనిపించకపోతే నేను ఏమి చేయాలి?',
+                              a: 'రైలు చేరిన తర్వాత కనీసం 10 నిమిషాల పాటు కేటాయించిన కోచ్ వద్ద వేచి ఉండండి. యాప్లోని "ప్రయాణీకుడికి కాల్ చేయండి" బటన్ను ఉపయోగించండి. వారు అందుబాటులో లేకుంటే, పక్కన ఉన్న ఆపరేషనల్ టిక్కెట్ను సబ్మిట్ చేయండి, తద్వారా మీ డ్యూటీ రేటింగ్కు ఎటువంటి ప్రభావం పడకుండా సూపర్ వైజర్ వెరిఫై చేస్తారు.'
+                            },
+                            {
+                              q: 'లగేజీ ప్రామాణిక బుకింగ్ పరిమితి కంటే ఎక్కువగా ఉంటే ఏమి చేయాలి?',
+                              a: 'ప్రామాణిక పోర్టర్ సహాయం 40 కిలోల వరకు లగేజీని కవర్ చేస్తుంది. లగేజీ పరిమితి మించితే, అదనపు లగేజీ వోచర్ లేదా రెండవ అసిస్టెంట్ బుకింగ్ అవసరమని ప్రయాణీకుడికి మర్యాదగా వివరించండి. ప్లాట్ఫారమ్పై ఎప్పుడూ వాదించవద్దు; వివాదం ఉంటే టిక్కెట్ రైజ్ చేయండి.'
+                            },
+                            {
+                              q: 'చివరి నిమిషంలో ప్లాట్ఫారమ్ మార్పులను ఎలా నిర్వహించాలి?',
+                              a: 'వన్ కూలీ రాడార్ స్టేషన్ ప్రకటనల వ్యవస్థతో రియల్ టైమ్లో సమన్వయం చేసుకుంటుంది. రైలు వేరే ప్లాట్ఫారమ్కు మారితే, మీ యాక్టివ్ జాబ్ కార్డ్లో అది కనిపిస్తుంది. ఎల్లప్పుడూ ర్యాంప్లు లేదా లిఫ్ట్లను ఉపయోగించి ప్రయాణీకులకు సహాయం చేయండి.'
+                            },
+                            {
+                              q: 'ప్లాట్ఫారమ్పై అత్యవసర వైద్య పరిస్థితి ఏర్పడితే తక్షణ ప్రొటోకాల్ ఏమిటి?',
+                              a: 'వెంటనే పైన ఉన్న హాట్లైన్ల నుండి 139 లేదా 112 కు డయల్ చేయండి. అదే సమయంలో డ్యూటీలో ఉన్న RPF లేదా ప్లాట్ఫారమ్ మాస్టర్ను అప్రమత్తం చేయండి. ప్లాట్ఫారమ్ 1 వద్ద అత్యవసర వీల్ చైర్లు మరియు ప్రథమ చికిత్స కిట్లు అందుబాటులో ఉంటాయి.'
+                            }
+                          ]
                         : lang === 'hi'
-                          ? [
+                        ? [
                             {
                               q: 'यदि कोई यात्री अपने कोच पर नहीं मिलता है तो मुझे क्या करना चाहिए?',
                               a: 'ट्रेन आगमन के निर्धारित समय से कम से कम 10 मिनट तक निर्दिष्ट कोच पर प्रतीक्षा करें। ऐप में "यात्री को कॉल करें" बटन का उपयोग करें। यदि वे संपर्क से बाहर रहते हैं, तो ऊपर या बगल में एक परिचालन टिकट दर्ज करें ताकि आपकी ड्यूटी रेटिंग प्रभावित न हो।'
@@ -2464,7 +2244,7 @@ export default function AssistantDashboard() {
                               a: 'तुरंत ऊपर दिए गए हॉटलाइन से 139 या 112 डायल करें। साथ ही ड्यूटी पर तैनात आरपीएफ या प्लेटफॉर्म मास्टर को सतर्क करें। प्लेटफॉर्म 1 पर आपातकालीन व्हीलचेयर और प्राथमिक चिकित्सा किट उपलब्ध हैं।'
                             }
                           ]
-                          : [
+                        : [
                             {
                               q: 'What should I do if a passenger does not show up at their coach?',
                               a: 'Wait at the designated coach for at least 10 minutes past the scheduled train arrival. Use the in-app "Call Passenger" button. If they remain unreachable, submit an operational ticket beside so our concourse supervisor can verify without penalizing your duty acceptance rating.'
@@ -2499,8 +2279,9 @@ export default function AssistantDashboard() {
                               </span>
                               <ChevronDown
                                 size={16}
-                                className={`text-slate-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-[#2563EB]' : ''
-                                  }`}
+                                className={`text-slate-400 shrink-0 transition-transform duration-200 ${
+                                  isExpanded ? 'rotate-180 text-[#2563EB]' : ''
+                                }`}
                               />
                             </button>
                             {isExpanded && (
@@ -2629,19 +2410,21 @@ export default function AssistantDashboard() {
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${supportModal.type === 'emergency'
-                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
-                    : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950/60 dark:text-blue-400'
-                    }`}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                    supportModal.type === 'emergency'
+                      ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
+                      : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950/60 dark:text-blue-400'
+                  }`}
                 >
                   {supportModal.type === 'emergency' ? <ShieldAlert size={26} /> : <LifeBuoy size={26} />}
                 </div>
                 <div>
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider block w-fit mb-1 ${supportModal.type === 'emergency'
-                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-400'
-                      : 'bg-blue-100 text-[#2563EB] dark:bg-blue-950/70 dark:text-blue-400'
-                      }`}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider block w-fit mb-1 ${
+                      supportModal.type === 'emergency'
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-400'
+                        : 'bg-blue-100 text-[#2563EB] dark:bg-blue-950/70 dark:text-blue-400'
+                    }`}
                   >
                     {supportModal.badge}
                   </span>
@@ -2726,10 +2509,11 @@ export default function AssistantDashboard() {
 
               <a
                 href={`tel:${supportModal.number}`}
-                className={`flex-1 py-3 rounded-xl text-white text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${supportModal.type === 'emergency'
-                  ? 'bg-rose-600 hover:bg-rose-700'
-                  : 'bg-[#2563EB] hover:bg-blue-700'
-                  }`}
+                className={`flex-1 py-3 rounded-xl text-white text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  supportModal.type === 'emergency'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-[#2563EB] hover:bg-blue-700'
+                }`}
               >
                 {supportModal.type === 'emergency' ? <PhoneCall size={14} /> : <Phone size={14} />}
                 <span>{t('callNow')} ({supportModal.number})</span>
@@ -2737,105 +2521,6 @@ export default function AssistantDashboard() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* ── Request Payout Modal (Phase 3B) ── */}
-      {payoutModalOpen && createPortal(
-        <div
-          className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => {
-            setPayoutModalOpen(false);
-            setPayoutAmount('');
-          }}
-        >
-          <div
-            className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 sm:p-7 space-y-5 shadow-2xl animate-scale-in text-zinc-900 dark:text-white my-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-black text-black dark:text-white">
-                  Request Payout Withdrawal
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPayoutModalOpen(false);
-                    setPayoutAmount('');
-                  }}
-                  className="p-1 rounded-full text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                Available balance for transfer: <strong className="font-mono text-emerald-600 dark:text-emerald-400 font-black">₹{wallet.available_balance || 0}</strong>
-              </p>
-            </div>
-
-            <form onSubmit={handleRequestPayout} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 mb-1.5 uppercase tracking-wider">
-                  Withdrawal Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  min="100"
-                  max={wallet.available_balance || 0}
-                  step="1"
-                  required
-                  value={payoutAmount}
-                  onChange={(e) => setPayoutAmount(e.target.value)}
-                  placeholder="Enter amount (min ₹100)"
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl text-sm font-mono font-bold text-zinc-900 dark:text-white focus:outline-none focus:border-[#2563EB]"
-                />
-                <p className="text-[11px] text-zinc-400 mt-1 font-mono">
-                  Minimum withdrawal threshold: ₹100
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 mb-1.5 uppercase tracking-wider">
-                  Disbursement Method
-                </label>
-                <select
-                  value={payoutMethod}
-                  onChange={(e) => setPayoutMethod(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl text-xs font-bold text-zinc-900 dark:text-white focus:outline-none focus:border-[#2563EB]"
-                >
-                  <option value="bank_transfer">Direct Bank Transfer (NEFT/IMPS)</option>
-                  <option value="upi">UPI Instant Transfer</option>
-                </select>
-              </div>
-
-              <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/50 text-[11px] text-slate-600 dark:text-zinc-400 leading-relaxed">
-                🛡️ Payouts are verified by the station administrative ledger and released directly to your verified KYC account.
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPayoutModalOpen(false);
-                    setPayoutAmount('');
-                  }}
-                  disabled={payoutLoading}
-                  className="flex-1 py-3 text-xs font-bold rounded-2xl border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={payoutLoading || !payoutAmount || Number(payoutAmount) < 100}
-                  className="flex-1 py-3 text-xs font-bold rounded-2xl bg-[#2563EB] hover:bg-blue-700 text-white transition-all cursor-pointer shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {payoutLoading ? 'Submitting...' : 'Submit Request'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
       )}
     </div>
   );
