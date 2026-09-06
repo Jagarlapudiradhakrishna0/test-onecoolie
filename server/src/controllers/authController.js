@@ -330,7 +330,8 @@ exports.verifyOtpAndRegister = async (req, res) => {
       otp,
       password,
       role = 'passenger',
-      station_code
+      station_code,
+      phone
     } = req.body;
 
     if (!name || !email || !otp || !password || !role) {
@@ -445,6 +446,7 @@ exports.verifyOtpAndRegister = async (req, res) => {
         name: name.trim(),
         email: normalizedEmail,
         password: hashedPassword,
+        phone: phone ? String(phone).trim() : null,
         role,
         is_approved: isApproved,
         station_code: role === 'assistant' ? (station_code || null) : null
@@ -562,7 +564,8 @@ exports.register = async (req, res) => {
       email,
       password,
       role = 'passenger',
-      station_code
+      station_code,
+      phone
     } = req.body;
 
     // Validate required fields
@@ -617,6 +620,7 @@ exports.register = async (req, res) => {
           name,
           email,
           password: hashedPassword,
+          phone: phone ? String(phone).trim() : null,
           role,
           is_approved: isApproved,
           station_code:
@@ -684,24 +688,27 @@ exports.login = async (req, res) => {
   try {
     const {
       email,
+      phone,
+      identifier,
       password,
       role
     } = req.body;
 
+    const rawInput = (identifier || email || phone || '').trim();
+
     // Validate input
-    if (!email || !password || !role) {
+    if (!rawInput || !password || !role) {
       return res.status(400).json({
-        message: 'Email, password and role are required.'
+        message: 'Email or phone number, password, and role are required.'
       });
     }
-
-    const normalizedEmail = email.trim().toLowerCase();
 
     // Find user
     let user = null;
     let queryError = null;
 
     if (role === 'admin') {
+      const normalizedEmail = rawInput.toLowerCase();
       // Check exact email first
       const { data: exactAdmin, error: exactErr } = await supabase
         .from('users')
@@ -730,14 +737,36 @@ exports.login = async (req, res) => {
         }
       }
     } else {
-      const { data: standardUser, error: stdErr } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', normalizedEmail)
-        .maybeSingle();
+      if (rawInput.includes('@')) {
+        const normalizedEmail = rawInput.toLowerCase();
+        const { data: standardUser, error: stdErr } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', normalizedEmail)
+          .maybeSingle();
 
-      queryError = stdErr;
-      user = standardUser;
+        queryError = stdErr;
+        user = standardUser;
+      } else {
+        // Phone lookup: construct common formatting variants (+91..., 10 digits, etc.)
+        const digits = rawInput.replace(/\D/g, '');
+        const phoneCandidates = [
+          rawInput,
+          digits,
+          digits.length === 10 ? `+91${digits}` : null,
+          digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : null,
+          digits.length === 12 && digits.startsWith('91') ? `+${digits}` : null
+        ].filter(Boolean);
+
+        const { data: phoneUser, error: phoneErr } = await supabase
+          .from('users')
+          .select('*')
+          .in('phone', phoneCandidates)
+          .maybeSingle();
+
+        queryError = phoneErr;
+        user = phoneUser;
+      }
     }
 
     if (queryError) {
@@ -807,6 +836,7 @@ exports.login = async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone || null,
       role: user.role,
       station_code: user.station_code || null,
       is_approved: user.is_approved,

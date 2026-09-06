@@ -8,6 +8,7 @@ import passengerHeroBg from '../assets/images/passenger-hero-bg.jpg';
 import {
   Mail,
   Lock,
+  Phone,
   Eye,
   EyeOff,
   ShieldCheck,
@@ -143,13 +144,16 @@ export default function AuthPage({ role = 'passenger' }) {
   const [signupStep, setSignupStep] = useState('form');
 
   // Form fields
+  const [loginMethod, setLoginMethod] = useState('email'); // 'email' | 'phone'
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginPhone, setLoginPhone] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
+  const [signupPhone, setSignupPhone] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [stationCode, setStationCode] = useState('KZJ');
@@ -207,17 +211,38 @@ export default function AuthPage({ role = 'passenger' }) {
   };
 
   /* ============================================================
-     1. SIGN IN SUBMISSION (Direct Email + Password)
+     1. SIGN IN SUBMISSION (Email / Phone + Password)
      ============================================================ */
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     clearAlerts();
 
-    const email = loginEmail.trim().toLowerCase();
-    if (!email) {
-      setError('Please enter your email address.');
-      return;
+    let identifier = '';
+    if (loginMethod === 'phone') {
+      const cleanDigits = loginPhone.replace(/\D/g, '');
+      if (!cleanDigits) {
+        setError('Please enter your 10-digit mobile number.');
+        return;
+      }
+      if (cleanDigits.length < 10) {
+        setError('Please enter a valid 10-digit mobile number.');
+        return;
+      }
+      identifier = `+91${cleanDigits}`;
+    } else {
+      const email = loginEmail.trim().toLowerCase();
+      if (!email) {
+        setError('Please enter your email address or mobile number.');
+        return;
+      }
+      // If user typed a 10-digit mobile number in the email field, format gracefully
+      if (/^\d{10}$/.test(email.replace(/\s+/g, ''))) {
+        identifier = `+91${email.replace(/\D/g, '')}`;
+      } else {
+        identifier = email;
+      }
     }
+
     if (!loginPassword) {
       setError('Please enter your password.');
       return;
@@ -225,7 +250,7 @@ export default function AuthPage({ role = 'passenger' }) {
 
     setLoading(true);
     try {
-      const userData = await login(email, loginPassword, role);
+      const userData = await login(identifier, loginPassword, role, '', loginMethod === 'phone' ? loginPhone : '');
       setSignupStep('success');
       setTimeout(() => {
         const search = location.search || '';
@@ -236,7 +261,7 @@ export default function AuthPage({ role = 'passenger' }) {
         }
       }, 900);
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Invalid email or password. Please try again.';
+      const msg = err?.response?.data?.message || 'Invalid credentials. Please check and try again.';
       if (/awaiting.*admin.*approval/i.test(msg)) {
         setSuccessMsg(msg);
       } else {
@@ -311,7 +336,8 @@ export default function AuthPage({ role = 'passenger' }) {
         otpValue,
         signupPassword,
         role,
-        isA ? stationCode : undefined
+        isA ? stationCode : undefined,
+        signupPhone.trim() ? (signupPhone.startsWith('+') ? signupPhone.trim() : `+91${signupPhone.replace(/\D/g, '')}`) : undefined
       );
 
       if (res?.token || res?.user?.token) {
@@ -670,29 +696,93 @@ export default function AuthPage({ role = 'passenger' }) {
               </div>
             )}
 
-            {/* ── TAB 1: SIGN IN (Direct Email + Password) ───────── */}
+            {/* ── TAB 1: SIGN IN (Email / Phone + Password) ───────── */}
             {activeTab === 'login' && (
               <form onSubmit={handleLoginSubmit} className="space-y-4">
-                {/* Email Address */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-3 px-4 py-3 bg-zinc-50/70 hover:bg-white focus-within:bg-white border border-[#E3E8F0] focus-within:border-[#1463FF] focus-within:ring-4 focus-within:ring-[#1463FF]/10 rounded-2xl transition-all duration-200">
-                    <Mail className="w-5 h-5 text-[#7C8494] shrink-0" />
-                    <input
-                      id="login-email"
-                      type="email"
-                      required
-                      autoComplete="email"
-                      placeholder="Email address"
-                      value={loginEmail}
-                      onChange={(e) => {
-                        setLoginEmail(e.target.value);
-                        if (error) clearAlerts();
-                      }}
-                      disabled={loading}
-                      className="w-full bg-transparent text-sm text-[#071A3D] placeholder:text-[#7C8494] outline-none font-medium"
-                    />
-                  </div>
+
+                {/* Sign-in Method Switcher: Email Address vs Phone Number */}
+                <div className="flex items-center p-1 bg-slate-100 rounded-2xl mb-3 border border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMethod('email');
+                      clearAlerts();
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer ${
+                      loginMethod === 'email'
+                        ? 'bg-white text-[#1463FF] shadow-xs'
+                        : 'text-[#7C8494] hover:text-[#071A3D]'
+                    }`}
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Email Address</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginMethod('phone');
+                      clearAlerts();
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer ${
+                      loginMethod === 'phone'
+                        ? 'bg-white text-[#1463FF] shadow-xs'
+                        : 'text-[#7C8494] hover:text-[#071A3D]'
+                    }`}
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>Mobile Number</span>
+                  </button>
                 </div>
+
+                {/* Identifier Input (Email or Phone Number) */}
+                {loginMethod === 'phone' ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 px-3.5 py-3 bg-zinc-50/70 hover:bg-white focus-within:bg-white border border-[#E3E8F0] focus-within:border-[#1463FF] focus-within:ring-4 focus-within:ring-[#1463FF]/10 rounded-2xl transition-all duration-200">
+                      <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-200 text-xs font-bold text-zinc-700 select-none shrink-0">
+                        <span className="text-sm leading-none">🇮🇳</span>
+                        <span>+91</span>
+                      </div>
+                      <Phone className="w-4 h-4 text-[#7C8494] shrink-0" />
+                      <input
+                        id="login-phone"
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
+                        required
+                        autoComplete="tel"
+                        placeholder="10-digit mobile number"
+                        value={loginPhone}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setLoginPhone(digits);
+                          if (error) clearAlerts();
+                        }}
+                        disabled={loading}
+                        className="w-full bg-transparent text-sm text-[#071A3D] placeholder:text-[#7C8494] outline-none font-medium tracking-wide"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-zinc-50/70 hover:bg-white focus-within:bg-white border border-[#E3E8F0] focus-within:border-[#1463FF] focus-within:ring-4 focus-within:ring-[#1463FF]/10 rounded-2xl transition-all duration-200">
+                      <Mail className="w-5 h-5 text-[#7C8494] shrink-0" />
+                      <input
+                        id="login-email"
+                        type="text"
+                        required
+                        autoComplete="email"
+                        placeholder="Email address or mobile number"
+                        value={loginEmail}
+                        onChange={(e) => {
+                          setLoginEmail(e.target.value);
+                          if (error) clearAlerts();
+                        }}
+                        disabled={loading}
+                        className="w-full bg-transparent text-sm text-[#071A3D] placeholder:text-[#7C8494] outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Password Field */}
                 <div className="space-y-1">
@@ -739,10 +829,18 @@ export default function AuthPage({ role = 'passenger' }) {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!loginEmail.trim()) {
-                        setError('Please enter your email above to receive password reset instructions.');
+                      if (loginMethod === 'phone') {
+                        if (!loginPhone.trim()) {
+                          setError('Please enter your mobile number above to receive password reset instructions.');
+                        } else {
+                          setInfoMsg(`Password recovery instructions sent to +91 ${loginPhone}. Please check your phone.`);
+                        }
                       } else {
-                        setInfoMsg(`Password recovery instructions sent to ${loginEmail}. Please check your inbox.`);
+                        if (!loginEmail.trim()) {
+                          setError('Please enter your email above to receive password reset instructions.');
+                        } else {
+                          setInfoMsg(`Password recovery instructions sent to ${loginEmail}. Please check your inbox.`);
+                        }
                       }
                     }}
                     className="font-semibold text-[#1463FF] hover:underline cursor-pointer"
@@ -755,7 +853,11 @@ export default function AuthPage({ role = 'passenger' }) {
                 <button
                   type="submit"
                   id="btn-login-submit"
-                  disabled={loading || !loginEmail.trim() || !loginPassword}
+                  disabled={
+                    loading ||
+                    (loginMethod === 'email' ? !loginEmail.trim() : loginPhone.replace(/\D/g, '').length < 10) ||
+                    !loginPassword
+                  }
                   className="w-full h-[54px] sm:h-[56px] px-6 rounded-[28px] bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading ? (
@@ -881,6 +983,29 @@ export default function AuthPage({ role = 'passenger' }) {
                       onChange={(e) => setSignupEmail(e.target.value)}
                       disabled={loading}
                       className="w-full bg-transparent text-sm text-[#071A3D] placeholder:text-[#7C8494] outline-none font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Mobile Number Field (Optional) */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5 px-3.5 py-3 bg-zinc-50/70 hover:bg-white focus-within:bg-white border border-[#E3E8F0] focus-within:border-[#1463FF] focus-within:ring-4 focus-within:ring-[#1463FF]/10 rounded-2xl transition-all duration-200">
+                    <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-200 text-xs font-bold text-zinc-700 select-none shrink-0">
+                      <span className="text-sm leading-none">🇮🇳</span>
+                      <span>+91</span>
+                    </div>
+                    <Phone className="w-4 h-4 text-[#7C8494] shrink-0" />
+                    <input
+                      id="signup-phone"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      autoComplete="tel"
+                      placeholder="10-digit mobile number (Optional)"
+                      value={signupPhone}
+                      onChange={(e) => setSignupPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      disabled={loading}
+                      className="w-full bg-transparent text-sm text-[#071A3D] placeholder:text-[#7C8494] outline-none font-medium tracking-wide"
                     />
                   </div>
                 </div>

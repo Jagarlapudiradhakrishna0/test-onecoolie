@@ -145,14 +145,18 @@ export const AuthProvider = ({ children }) => {
   // LOGIN (legacy — used by admin portal)
   // ============================================================
   const login = async (
-    email,
+    emailOrPhone,
     password,
     role = 'passenger',
-    admin_code = ''
+    admin_code = '',
+    phone = ''
   ) => {
     try {
+      const isPhone = typeof emailOrPhone === 'string' && !emailOrPhone.includes('@') && /^[+\d\s-]+$/.test(emailOrPhone);
       const { data } = await axios.post('/auth/login', {
-        email,
+        email: isPhone ? '' : emailOrPhone,
+        phone: isPhone ? emailOrPhone : (phone || ''),
+        identifier: emailOrPhone,
         password,
         role,
         admin_code
