@@ -21,6 +21,7 @@ const PassengerDashboard = lazy(() => import('./pages/PassengerDashboard'));
 const AssistantDashboard = lazy(() => import('./pages/AssistantDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const BookingLive = lazy(() => import('./pages/BookingLive'));
+const HelpSupportPage = lazy(() => import('./pages/HelpSupportPage'));
 
 function ProtectedRoute({
   children,
@@ -30,6 +31,7 @@ function ProtectedRoute({
     user,
     authLoading
   } = useContext(AuthContext);
+  const location = useLocation();
 
   // Wait until localStorage authentication is restored
   if (authLoading) {
@@ -40,8 +42,6 @@ function ProtectedRoute({
       />
     );
   }
-
-  const location = useLocation();
 
   // Not logged in
   if (!user) {
@@ -185,6 +185,18 @@ export default function App() {
                   allowedRoles={['passenger']}
                 >
                   <BookingLive />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Help & Support */}
+            <Route
+              path="/help"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['passenger', 'assistant']}
+                >
+                  <HelpSupportPage />
                 </ProtectedRoute>
               }
             />

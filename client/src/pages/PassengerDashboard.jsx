@@ -5,7 +5,6 @@ import oneCoolieLogo from '../assets/onecoolie-logo.png';
 import {
   Calendar,
   Briefcase,
-  Bell,
   Check,
   CheckCircle2,
   AlertCircle,
@@ -63,6 +62,7 @@ import { loadRazorpayScript } from '../utils/razorpay';
 import Brand from '../components/Brand';
 import Footer from '../components/Footer';
 import TrainLoader from '../components/TrainLoader';
+import PassengerNotifications from '../components/PassengerNotifications';
 
 /* ============================================================
    PASSENGER DASHBOARD — Swiss Minimal Product with Premium Icons
@@ -877,16 +877,13 @@ export default function PassengerDashboard() {
           <div className="flex items-center gap-3">
             <div className="hidden md:block h-6 w-[1px] bg-slate-200 mr-1" />
 
-            <button
-              type="button"
-              className="w-10 h-10 rounded-full bg-slate-100/80 hover:bg-slate-200/80 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/50"
-              title="Notifications"
-            >
-              <Bell className="w-4 h-4 text-zinc-700 group-hover:scale-110 transition-transform" />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
-            </button>
+            <PassengerNotifications
+              bookings={bookings}
+              activeBookings={active}
+              onNavigateTab={setTab}
+            />
 
-            <ProfileMenu role="passenger" onNavigate={(t) => setTab(t)} />
+            <ProfileMenu role="passenger" onNavigate={(t) => setTab(t)} helpPath="/help" />
           </div>
         </div>
 

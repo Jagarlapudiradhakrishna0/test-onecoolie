@@ -5,6 +5,7 @@ import { activeServices } from '../utils/services';
 import AssistantJobCard from '../components/AssistantJobCard';
 import Brand from '../components/Brand';
 import TrainLoader from '../components/TrainLoader';
+import AssistantNotifications from '../components/AssistantNotifications';
 
 /* ============================================================
    ASSISTANT DASHBOARD — Swiss Operations Dispatch
@@ -275,10 +276,7 @@ export default function AssistantDashboard() {
   );
   const completedJobs = myJobs.filter((j) => j.booking_status === 'completed');
   // Phase 1: Assistant earns 80% net share of completed tariffs (20% platform commission)
-  const totalEarnings = completedJobs.reduce(
-    (t, j) => t + Math.round(Number(j.total_price || 0) * 0.8),
-    0
-  );
+  const totalEarnings = Number(wallet.total_earnings || 0);
   const ratedJobs = completedJobs.filter((j) => j.rating);
   const averageRating =
     ratedJobs.length > 0
@@ -324,7 +322,16 @@ export default function AssistantDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            <ProfileMenu role="assistant" onNavigate={(t) => setTab(t)} />
+            <AssistantNotifications
+              requests={requests}
+              activeJobs={activeJobs}
+              ratedJobs={ratedJobs}
+              online={online}
+              station={station}
+              stationName={STATIONS.find((item) => item.code === station)?.name || station}
+              onNavigate={setTab}
+            />
+            <ProfileMenu role="assistant" onNavigate={(t) => setTab(t)} helpPath="/help" />
           </div>
         </div>
       </header>
