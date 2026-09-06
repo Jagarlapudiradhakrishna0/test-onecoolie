@@ -199,7 +199,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
         setCurrentPlatform(newP);
         setPlatformChangedAt(
           data.changedAt ||
-            new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+          new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
         );
         setIsSuddenChange(true);
       }
@@ -262,7 +262,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
                 return changed ? merged : prev;
               });
             }
-          } catch (err) {}
+          } catch (err) { }
         }
       }
     };
@@ -310,7 +310,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
 
     return () => {
       if (bc) {
-        try { bc.close(); } catch (e) {}
+        try { bc.close(); } catch (e) { }
       }
       window.removeEventListener('storage', handleStorage);
       if (window.socket) {
@@ -508,7 +508,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
     } else if (typeof rawCounts === 'string') {
       try {
         parsedLuggageCounts = JSON.parse(rawCounts);
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -631,7 +631,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
 
   return (
     <article className="w-full bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xs space-y-5">
-      
+
       {/* ── TOP BAR INSIDE CARD ──────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-zinc-800">
         <div className="flex items-center gap-4">
@@ -670,11 +670,10 @@ export default function AssistantJobCard({ job, onUpdate }) {
           </p>
           <div className="mt-1">
             <span
-              className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md inline-block tracking-wider ${
-                paid
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                  : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
-              }`}
+              className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md inline-block tracking-wider ${paid
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                }`}
             >
               {paid ? 'PAID · SUCCEEDED' : 'PAYMENT PENDING'}
             </span>
@@ -1047,26 +1046,24 @@ export default function AssistantJobCard({ job, onUpdate }) {
                       </div>
                     )}
                     <span
-                      className={`font-semibold ${
-                        state === 'current'
-                          ? 'text-black dark:text-white font-bold'
-                          : state === 'completed'
+                      className={`font-semibold ${state === 'current'
+                        ? 'text-black dark:text-white font-bold'
+                        : state === 'completed'
                           ? 'text-slate-800 dark:text-zinc-200'
                           : 'text-slate-400 dark:text-zinc-500'
-                      }`}
+                        }`}
                     >
                       {step.label}
                     </span>
                   </div>
 
                   <span
-                    className={`text-[11px] font-semibold ${
-                      state === 'completed'
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : state === 'current'
+                    className={`text-[11px] font-semibold ${state === 'completed'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : state === 'current'
                         ? 'text-[#2563EB] dark:text-blue-400 font-bold'
                         : 'text-slate-400 dark:text-zinc-500'
-                    }`}
+                      }`}
                   >
                     {text}
                   </span>
@@ -1126,11 +1123,10 @@ export default function AssistantJobCard({ job, onUpdate }) {
                 return (
                   <div key={i} className={`flex flex-col ${isAssistant ? 'items-end' : 'items-start'}`}>
                     <div
-                      className={`max-w-[85%] sm:max-w-md px-4 py-2 rounded-2xl text-xs font-semibold leading-relaxed shadow-2xs ${
-                        isAssistant
-                          ? 'bg-[#2563EB] text-white rounded-br-xs'
-                          : 'bg-white dark:bg-zinc-800 text-black dark:text-white border border-slate-200/80 dark:border-zinc-700 rounded-bl-xs'
-                      }`}
+                      className={`max-w-[85%] sm:max-w-md px-4 py-2 rounded-2xl text-xs font-semibold leading-relaxed shadow-2xs ${isAssistant
+                        ? 'bg-[#2563EB] text-white rounded-br-xs'
+                        : 'bg-white dark:bg-zinc-800 text-black dark:text-white border border-slate-200/80 dark:border-zinc-700 rounded-bl-xs'
+                        }`}
                     >
                       {m.text}
                     </div>

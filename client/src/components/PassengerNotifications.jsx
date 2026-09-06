@@ -5,9 +5,12 @@ import {
   Luggage,
   ShieldCheck,
   CheckCircle2,
+  Clock,
   ArrowRight,
   Check,
   X,
+  Sparkles,
+  MapPin,
   Info,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -62,13 +65,13 @@ export default function PassengerNotifications({
   useEffect(() => {
     try {
       localStorage.setItem('passenger_dismissed_notifications', JSON.stringify(dismissedIds));
-    } catch {}
+    } catch { }
   }, [dismissedIds]);
 
   useEffect(() => {
     try {
       localStorage.setItem('passenger_read_notifications', JSON.stringify(readIds));
-    } catch {}
+    } catch { }
   }, [readIds]);
 
   // Build notifications feed
@@ -130,7 +133,7 @@ export default function PassengerNotifications({
               : `Assistance Confirmed · Train ${b.train_no}`,
           description: isCompleted
             ? `Assistance at ${b.station_code || 'station'} completed. Thank you for travelling with OneCoolie.`
-              : `Booking Ref #${b.booking_id || b.id} · Coach ${b.coach || '--'} · Total: ${b.total_price != null ? `₹${b.total_price}` : 'Amount from booking'}`,
+            : `Booking Ref #${b.booking_id || b.id} · Coach ${b.coach || '--'} · Total: ₹${b.total_price || 30}`,
           badge: isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : 'Confirmed',
           badgeStyle: isCompleted
             ? 'bg-slate-100 text-zinc-700 border-slate-200'
@@ -223,8 +226,7 @@ export default function PassengerNotifications({
         onClick={() => setOpen((prev) => !prev)}
         className={
           buttonClassName ||
-          `w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs ${
-            open ? 'bg-slate-200 ring-2 ring-black/10' : ''
+          `w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs ${open ? 'bg-slate-200 ring-2 ring-black/10' : ''
           }`
         }
         title="Notifications & Travel Alerts"
@@ -301,13 +303,12 @@ export default function PassengerNotifications({
                     onClick={() => handleItemClick(item)}
                     role="button"
                     tabIndex={0}
-                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${
-                      isUrgent
-                        ? 'bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 shadow-2xs'
-                        : isUnread
-                          ? 'bg-slate-50/60 hover:bg-slate-100 border border-transparent'
-                          : 'hover:bg-slate-50 border border-transparent opacity-80 hover:opacity-100'
-                    }`}
+                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${isUrgent
+                      ? 'bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 shadow-2xs'
+                      : isUnread
+                        ? 'bg-slate-50/60 hover:bg-slate-100 border border-transparent'
+                        : 'hover:bg-slate-50 border border-transparent opacity-80 hover:opacity-100'
+                      }`}
                   >
                     {/* Icon */}
                     <div

@@ -1442,6 +1442,7 @@ export default function AssistantDashboard() {
                       key={job.id}
                       job={job}
                       onUpdate={handleJobUpdate}
+                      onRedirectDashboard={() => setTab('dashboard')}
                     />
                   ))}
                 </div>

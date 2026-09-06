@@ -17,22 +17,26 @@ import {
   ChevronRight,
   CheckCircle2
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import oneCoolieLogo from '../assets/onecoolie-logo.png';
+import axios from '../api/axios';
+import { loadRazorpayScript } from '../utils/razorpay';
+import { useAuth } from '../context/AuthContext';
 
 /* ============================================================
    ONECOOLIE PAYMENT MODAL — Swiss Mobility Fintech Checkout
    • UPI Merchant: onecoolie@ybl (VPA hidden from display as requested)
    • Desktop: QR code with 15-minute countdown timer & 5-step walkthrough
-   • Phone Screen: NO QR CODE; Direct 1-tap native UPI app launchers
-     (PhonePe, Google Pay, Paytm, Other UPI Apps) that autofill the exact
-     amount and launch directly to the payment stage
-   • Zero backend changes; preserves existing confirmation mechanism
+   • Phone Screen: Direct 1-tap native UPI app launchers
+   • Razorpay Live Online Payment Checkout Integration
+   • Cash on Service direct confirmation
    ============================================================ */
 
 const UPI_MERCHANT_ID = 'onecoolie@ybl';
 const MERCHANT_NAME = 'OneCoolie';
 
 export default function PaymentModal({ open, total = 0, onClose, onPaid, bookingData }) {
+  const { user } = useAuth();
   const [processing, setProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState('select'); // 'select' | 'online'
   const [timeLeft, setTimeLeft] = useState(899); // 14:59 (15 minutes)
@@ -188,9 +192,98 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
   const handleConfirmPayment = async () => {
     setProcessing(true);
     try {
-      sessionStorage.removeItem('onecoolie_active_payment');
-      await onPaid('upi');
-    } finally {
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || typeof window === 'undefined' || !window.Razorpay) {
+        toast.error('Payment gateway SDK failed to load. Please check your connection.');
+        setProcessing(false);
+        return;
+      }
+
+      // 1. Create order on backend with authoritative pricing & Option C rules
+      const orderPayload = {
+        train_no: bookingData?.selectedTrain?.train_no || '12727',
+        train_name: bookingData?.selectedTrain?.train_name || 'Godavari Express',
+        station_code: bookingData?.station || 'KZJ',
+        journey_date: bookingData?.journeyDate || new Date().toISOString().split('T')[0],
+        journey_time: bookingData?.journeyTime || '10:00',
+        services: {
+          ...(bookingData?.services || {}),
+          platform: bookingData?.selectedTrain?.platform || '2',
+          luggage: bookingData?.luggageTotalCount || 0,
+          luggageCounts: bookingData?.luggageCounts || { small: 0, medium: 0, large: 0 },
+          luggage_details: bookingData?.luggageSummaryLabel || '',
+        },
+        payment_method: 'online',
+        coach: bookingData?.coach || 'S1',
+        seat_number: bookingData?.seatNumber || '1',
+        berth_type: bookingData?.berthType || 'LB',
+        action_type: bookingData?.actionType || 'load_to_seat',
+        pnr: bookingData?.pnrInput || '',
+        platform: bookingData?.selectedTrain?.platform || '2',
+      };
+
+      const { data: orderRes } = await axios.post('/payments/create-order', orderPayload);
+
+      if (!orderRes || !orderRes.razorpay || !orderRes.razorpay.order_id) {
+        throw new Error(orderRes?.message || 'Failed to initialize payment gateway order.');
+      }
+
+      const bookingObj = orderRes.booking || {};
+      const targetBookingId = bookingObj.id || orderRes.booking_id;
+
+      // 2. Launch Razorpay Standard Checkout
+      const options = {
+        key: orderRes.razorpay.key_id,
+        amount: orderRes.razorpay.amount,
+        currency: orderRes.razorpay.currency || 'INR',
+        name: 'OneCoolie',
+        description: `Station Assistance #${bookingObj.booking_id || targetBookingId}`,
+        image: oneCoolieLogo,
+        order_id: orderRes.razorpay.order_id,
+        handler: async function (response) {
+          try {
+            setProcessing(true);
+            const { data: verifyRes } = await axios.post('/payments/verify', {
+              booking_id: targetBookingId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            sessionStorage.removeItem('onecoolie_active_payment');
+            await onPaid('online', verifyRes.booking || bookingObj);
+          } catch (vErr) {
+            console.error('Verification error:', vErr);
+            toast.error(vErr.response?.data?.message || 'Payment verification failed. Please contact support.');
+          } finally {
+            setProcessing(false);
+          }
+        },
+        prefill: {
+          name: user?.name || user?.full_name || '',
+          email: user?.email || '',
+          contact: user?.phone || user?.phoneNumber || user?.phone_number || ''
+        },
+        theme: {
+          color: '#1463FF'
+        },
+        modal: {
+          ondismiss: function () {
+            setProcessing(false);
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        toast.error(`Payment failed: ${resp?.error?.description || 'Transaction cancelled'}`);
+        setProcessing(false);
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Razorpay checkout error:', err);
+      const msg = err.response?.data?.message || err.message || 'Unable to open online checkout';
+      toast.error(msg);
       setProcessing(false);
     }
   };

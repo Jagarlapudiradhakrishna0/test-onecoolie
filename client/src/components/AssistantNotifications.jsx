@@ -9,7 +9,9 @@ import {
   PhoneCall,
   ArrowRight,
   Clock,
+  Sparkles,
   Check,
+  Radio,
   X,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -28,7 +30,7 @@ export default function AssistantNotifications({
   stationName = 'Kazipet Junction',
   onNavigate,
 }) {
-  const { t } = useLanguage();
+  const { lang, t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState(() => {
     try {
@@ -74,7 +76,7 @@ export default function AssistantNotifications({
         const pnr = req.pnr_number || req.pnr || 'PNR Pending';
         const pf = req.platform_number || '1';
         const bags = req.baggage_count || 1;
-        const fare = req.total_price != null ? `₹${req.total_price}` : 'Amount on request';
+        const fare = req.total_price ? `₹${req.total_price}` : '₹150';
         const passenger = req.passenger_name || 'Passenger Assistance';
 
         list.push({
@@ -103,8 +105,8 @@ export default function AssistantNotifications({
           job.booking_status === 'confirmed'
             ? 'Awaiting OTP'
             : job.booking_status === 'in_progress'
-            ? 'In Service'
-            : 'Active';
+              ? 'In Service'
+              : 'Active';
 
         list.push({
           id: jobId,
@@ -200,7 +202,7 @@ export default function AssistantNotifications({
       const next = prev.includes(itemId) ? prev : [...prev, itemId];
       try {
         localStorage.setItem('assistant_dismissed_alerts', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -211,7 +213,7 @@ export default function AssistantNotifications({
     setDismissedIds(nextDismissed);
     try {
       localStorage.setItem('assistant_dismissed_alerts', JSON.stringify(nextDismissed));
-    } catch {}
+    } catch { }
     setMarkedAllRead(true);
   };
 
@@ -238,11 +240,10 @@ export default function AssistantNotifications({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className={`relative p-2.5 rounded-full transition-all cursor-pointer ${
-          open
-            ? 'bg-slate-100 dark:bg-zinc-800 text-black dark:text-white ring-2 ring-blue-500/20'
-            : 'hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300'
-        }`}
+        className={`relative p-2.5 rounded-full transition-all cursor-pointer ${open
+          ? 'bg-slate-100 dark:bg-zinc-800 text-black dark:text-white ring-2 ring-blue-500/20'
+          : 'hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300'
+          }`}
         title="Notifications & Duty Alerts"
         aria-label="Notifications"
       >
@@ -318,11 +319,10 @@ export default function AssistantNotifications({
                     onClick={() => handleItemClick(item)}
                     role="button"
                     tabIndex={0}
-                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${
-                      isUrgent
-                        ? 'bg-blue-50/70 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/40'
-                        : 'hover:bg-slate-50 dark:hover:bg-zinc-800/50 border border-transparent'
-                    }`}
+                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${isUrgent
+                      ? 'bg-blue-50/70 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/40'
+                      : 'hover:bg-slate-50 dark:hover:bg-zinc-800/50 border border-transparent'
+                      }`}
                   >
                     {/* Icon */}
                     <div
@@ -382,9 +382,8 @@ export default function AssistantNotifications({
           <div className="pt-3 mt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
               <span
-                className={`w-2 h-2 rounded-full ${
-                  online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                }`}
+                className={`w-2 h-2 rounded-full ${online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                  }`}
               />
               <span>{station} {t('stationRadar')}</span>
             </div>

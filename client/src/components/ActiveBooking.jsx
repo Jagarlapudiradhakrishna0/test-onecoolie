@@ -178,6 +178,8 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showSosModal, setShowSosModal] = useState(false);
   const [sosSent, setSosSent] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(5);
 
   // ── 4. Derived Booking Details with Reference Defaults ──
   const rawStatus = (booking?.booking_status || booking?.status || 'pending').toLowerCase();
@@ -570,12 +572,29 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
         await axios.post(`/bookings/${targetId}/rate`, { rating, review }).catch(() => { });
       }
       toast.success('Thank you for your rating!');
+      setShowCompletionModal(true);
+      setRedirectCountdown(5);
     } catch (e) {
       toast.success('Feedback saved.');
+      setShowCompletionModal(true);
+      setRedirectCountdown(5);
     } finally {
       setSubmittingRating(false);
     }
   };
+
+  useEffect(() => {
+    if (!showCompletionModal) return;
+    if (redirectCountdown <= 0) {
+      setShowCompletionModal(false);
+      navigate('/dashboard');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setRedirectCountdown((c) => c - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [showCompletionModal, redirectCountdown, navigate]);
 
   const handleCancel = async () => {
     try {
@@ -804,15 +823,14 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                     {/* Circle Node & Connecting Line */}
                     <div className="flex flex-col items-center shrink-0">
                       <span
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 transition-all ${
-                          isDone
-                            ? isCompleted
-                              ? 'bg-[#059669] text-white'
-                              : 'bg-[#1463FF] text-white'
-                            : isCurrent
-                              ? 'border-2 border-[#1463FF] bg-white ring-4 ring-blue-50 text-[#1463FF]'
-                              : 'border-2 border-slate-200 bg-white text-transparent'
-                        }`}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 transition-all ${isDone
+                          ? isCompleted
+                            ? 'bg-[#059669] text-white'
+                            : 'bg-[#1463FF] text-white'
+                          : isCurrent
+                            ? 'border-2 border-[#1463FF] bg-white ring-4 ring-blue-50 text-[#1463FF]'
+                            : 'border-2 border-slate-200 bg-white text-transparent'
+                          }`}
                       >
                         {isDone ? (
                           '✓'
@@ -826,15 +844,14 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       {/* Connecting Line to next step */}
                       {idx < steps.length - 1 && (
                         <div
-                          className={`w-[2px] h-10 mt-1 transition-all ${
-                            steps[idx + 1].isDone
-                              ? isCompleted
-                                ? 'bg-[#059669]'
-                                : 'bg-[#1463FF]'
-                              : isDone && steps[idx + 1].isCurrent
-                                ? 'bg-gradient-to-b from-[#1463FF] to-slate-200'
-                                : 'bg-slate-200'
-                          }`}
+                          className={`w-[2px] h-10 mt-1 transition-all ${steps[idx + 1].isDone
+                            ? isCompleted
+                              ? 'bg-[#059669]'
+                              : 'bg-[#1463FF]'
+                            : isDone && steps[idx + 1].isCurrent
+                              ? 'bg-gradient-to-b from-[#1463FF] to-slate-200'
+                              : 'bg-slate-200'
+                            }`}
                         />
                       )}
                     </div>
@@ -843,16 +860,14 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                     <div className="flex-1 min-w-0 pt-0.5">
                       <div className="flex items-start justify-between gap-1">
                         <p
-                          className={`text-xs font-bold leading-snug ${
-                            isDone ? 'text-zinc-900' : isCurrent ? 'text-zinc-900' : 'text-zinc-400'
-                          }`}
+                          className={`text-xs font-bold leading-snug ${isDone ? 'text-zinc-900' : isCurrent ? 'text-zinc-900' : 'text-zinc-400'
+                            }`}
                         >
                           {step.label}
                         </p>
                         <span
-                          className={`font-mono text-xs font-bold shrink-0 ${
-                            isDone ? 'text-zinc-600' : 'text-zinc-300'
-                          }`}
+                          className={`font-mono text-xs font-bold shrink-0 ${isDone ? 'text-zinc-600' : 'text-zinc-300'
+                            }`}
                         >
                           {step.time}
                         </span>
@@ -877,11 +892,23 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             )}
 
             {isCompleted && (
-              <div className="bg-[#ECFDF5] border border-[#A7F3D0]/70 rounded-2xl p-3.5 flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-[#059669] shrink-0 mt-0.5" />
-                <p className="text-xs font-semibold text-[#065F46] leading-snug">
-                  Service completed successfully. Thank you for traveling with OneCoolie!
-                </p>
+              <div className="bg-[#ECFDF5] dark:bg-emerald-950/40 border border-[#A7F3D0]/70 dark:border-emerald-800/60 rounded-2xl p-3.5 flex items-center justify-between gap-2.5">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-[#059669] dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <p className="text-xs font-semibold text-[#065F46] dark:text-emerald-300 leading-snug">
+                    Service completed successfully. Thank you for traveling with OneCoolie!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCompletionModal(true);
+                    setRedirectCountdown(5);
+                  }}
+                  className="px-3 py-1 rounded-full bg-[#059669] text-white text-xs font-bold shrink-0 cursor-pointer hover:bg-[#047857] transition-colors"
+                >
+                  View Summary
+                </button>
               </div>
             )}
 
@@ -1160,11 +1187,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                             className={`flex flex-col ${m.from === 'passenger' ? 'items-end' : 'items-start'}`}
                           >
                             <div
-                              className={`px-3.5 py-2 rounded-2xl max-w-[85%] ${
-                                m.from === 'passenger'
-                                  ? 'bg-[#1463FF] text-white rounded-br-xs'
-                                  : 'bg-white text-zinc-900 border border-slate-200 rounded-bl-xs'
-                              }`}
+                              className={`px-3.5 py-2 rounded-2xl max-w-[85%] ${m.from === 'passenger'
+                                ? 'bg-[#1463FF] text-white rounded-br-xs'
+                                : 'bg-white text-zinc-900 border border-slate-200 rounded-bl-xs'
+                                }`}
                             >
                               {m.text}
                             </div>
@@ -1220,9 +1246,8 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       className="p-1 text-zinc-300 hover:text-amber-400 transition-colors disabled:cursor-default"
                     >
                       <Star
-                        className={`w-6 h-6 ${
-                          star <= (rating || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
-                        }`}
+                        className={`w-6 h-6 ${star <= (rating || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                          }`}
                       />
                     </button>
                   ))}
@@ -1412,6 +1437,133 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                 Send SOS Alert
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── Passenger Trip Completion Modal (Theme Sunk) ── */}
+      {showCompletionModal && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/65 backdrop-blur-md animate-fade-in select-none"
+          onClick={() => {
+            setShowCompletionModal(false);
+            navigate('/dashboard');
+          }}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-[32px] p-6 sm:p-8 shadow-2xl border border-slate-200/90 dark:border-zinc-800 text-zinc-900 dark:text-white relative overflow-hidden animate-scale-in text-center transition-colors duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Ambient Emerald Glow Overlay */}
+            <div className="absolute top-0 inset-x-0 h-36 bg-gradient-to-b from-emerald-500/15 via-emerald-500/5 to-transparent pointer-events-none -z-0" />
+
+            {/* Header / Dismiss */}
+            <div className="relative z-10 flex items-center justify-between mb-2">
+              <span className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Service Completed</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompletionModal(false);
+                  navigate('/dashboard');
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 flex items-center justify-center transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Centered Grand Animated Checkmark Badge */}
+            <div className="relative z-10 my-4">
+              <div className="w-20 h-20 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-[0_10px_25px_-5px_rgba(16,185,129,0.4)] ring-8 ring-emerald-500/15 ring-offset-4 ring-offset-white dark:ring-offset-zinc-900 transition-colors">
+                <Check className="w-10 h-10 stroke-[3.5]" />
+              </div>
+            </div>
+
+            {/* Title & Subtitle */}
+            <div className="relative z-10 space-y-1 mb-5">
+              <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 dark:text-white">
+                Trip <span className="text-emerald-600 dark:text-emerald-400">Completed!</span>
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium max-w-xs mx-auto leading-relaxed">
+                Thank you for traveling with OneCoolie! Your assistance mission has been completed successfully.
+              </p>
+            </div>
+
+            {/* Sunk Details Card */}
+            <div className="relative z-10 bg-slate-50 dark:bg-zinc-800/70 border border-slate-200/80 dark:border-zinc-700/80 rounded-2xl p-4 mb-5 text-left space-y-3 text-xs shadow-2xs">
+              {/* Row 1: Train */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                  <span className="w-6.5 h-6.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#1463FF] dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Train size={14} />
+                  </span>
+                  <span className="font-semibold text-zinc-600 dark:text-zinc-400">Train</span>
+                </div>
+                <span className="font-extrabold text-zinc-900 dark:text-white font-mono">
+                  {trainNo} · {rawTrainName}
+                </span>
+              </div>
+
+              {/* Row 2: Coach & Seat */}
+              <div className="flex items-center justify-between border-t border-slate-200/60 dark:border-zinc-700/60 pt-2.5">
+                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                  <span className="w-6.5 h-6.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#1463FF] dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Armchair size={14} />
+                  </span>
+                  <span className="font-semibold text-zinc-600 dark:text-zinc-400">Coach &amp; Seat</span>
+                </div>
+                <span className="font-bold text-zinc-900 dark:text-white">
+                  {coach} · Seat {seatNumber}
+                </span>
+              </div>
+
+              {/* Row 3: Station Hub */}
+              <div className="flex items-center justify-between border-t border-slate-200/60 dark:border-zinc-700/60 pt-2.5">
+                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                  <span className="w-6.5 h-6.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#1463FF] dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <MapPin size={14} />
+                  </span>
+                  <span className="font-semibold text-zinc-600 dark:text-zinc-400">Station</span>
+                </div>
+                <span className="font-bold text-zinc-900 dark:text-white">
+                  {stationName} ({stationCode})
+                </span>
+              </div>
+
+              {/* Row 4: Assistant */}
+              <div className="flex items-center justify-between border-t border-slate-200/60 dark:border-zinc-700/60 pt-2.5">
+                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                  <span className="w-6.5 h-6.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#1463FF] dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <User size={14} />
+                  </span>
+                  <span className="font-semibold text-zinc-600 dark:text-zinc-400">Assistant</span>
+                </div>
+                <span className="font-bold text-zinc-900 dark:text-white">
+                  {assistantName}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Button: Return to Dashboard */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowCompletionModal(false);
+                navigate('/dashboard');
+              }}
+              className="w-full bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-black py-3.5 px-6 rounded-full text-sm shadow-lg shadow-[#1463FF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer mb-2"
+            >
+              <span>Return to Dashboard</span>
+              <ArrowRight size={16} />
+            </button>
+
+            {/* Auto Redirect Countdown */}
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium">
+              Redirecting automatically in <span className="font-mono font-bold text-zinc-700 dark:text-zinc-300">{redirectCountdown}s</span>...
+            </p>
           </div>
         </div>
       )}
