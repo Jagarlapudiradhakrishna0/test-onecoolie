@@ -224,22 +224,23 @@ export default function AuthPage({ role = 'passenger' }) {
         setError('Please enter your 10-digit mobile number.');
         return;
       }
-      if (cleanDigits.length < 10) {
+      if (cleanDigits.length !== 10) {
         setError('Please enter a valid 10-digit mobile number.');
         return;
       }
-      identifier = `+91${cleanDigits}`;
+      identifier = cleanDigits;
     } else {
-      const email = loginEmail.trim().toLowerCase();
-      if (!email) {
+      const raw = loginEmail.trim();
+      if (!raw) {
         setError('Please enter your email address or mobile number.');
         return;
       }
-      // If user typed a 10-digit mobile number in the email field, format gracefully
-      if (/^\d{10}$/.test(email.replace(/\s+/g, ''))) {
-        identifier = `+91${email.replace(/\D/g, '')}`;
+      // If user typed a 10-digit mobile number in the email field, extract digits
+      const digitsOnly = raw.replace(/\D/g, '');
+      if (digitsOnly.length === 10 && !raw.includes('@')) {
+        identifier = digitsOnly;
       } else {
-        identifier = email;
+        identifier = raw.toLowerCase();
       }
     }
 
@@ -281,13 +282,18 @@ export default function AuthPage({ role = 'passenger' }) {
 
     const name = signupName.trim();
     const email = signupEmail.trim().toLowerCase();
+    const cleanPhone = signupPhone.replace(/\D/g, '');
 
     if (!name) {
       setError('Please enter your full name.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address.');
+      setError('Please enter a valid email address (e.g. name@gmail.com).');
+      return;
+    }
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setError('Please enter a valid 10-digit mobile phone number.');
       return;
     }
     if (signupPassword.length < 6) {
@@ -330,6 +336,9 @@ export default function AuthPage({ role = 'passenger' }) {
 
     setLoading(true);
     try {
+      const cleanPhone = signupPhone.replace(/\D/g, '');
+      const formattedPhone = cleanPhone.length === 10 ? `+91 ${cleanPhone}` : signupPhone.trim();
+
       const res = await verifyOtpRegister(
         signupName.trim(),
         signupEmail.trim().toLowerCase(),
@@ -337,7 +346,7 @@ export default function AuthPage({ role = 'passenger' }) {
         signupPassword,
         role,
         isA ? stationCode : undefined,
-        signupPhone.trim() ? (signupPhone.startsWith('+') ? signupPhone.trim() : `+91${signupPhone.replace(/\D/g, '')}`) : undefined
+        formattedPhone
       );
 
       if (res?.token || res?.user?.token) {
@@ -855,7 +864,7 @@ export default function AuthPage({ role = 'passenger' }) {
                   id="btn-login-submit"
                   disabled={
                     loading ||
-                    (loginMethod === 'email' ? !loginEmail.trim() : loginPhone.replace(/\D/g, '').length < 10) ||
+                    (loginMethod === 'email' ? !loginEmail.trim() : loginPhone.replace(/\D/g, '').length !== 10) ||
                     !loginPassword
                   }
                   className="w-full h-[54px] sm:h-[56px] px-6 rounded-[28px] bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -978,7 +987,7 @@ export default function AuthPage({ role = 'passenger' }) {
                       type="email"
                       required
                       autoComplete="email"
-                      placeholder="Email address"
+                      placeholder="Email address (e.g. name@gmail.com) *"
                       value={signupEmail}
                       onChange={(e) => setSignupEmail(e.target.value)}
                       disabled={loading}
@@ -987,7 +996,7 @@ export default function AuthPage({ role = 'passenger' }) {
                   </div>
                 </div>
 
-                {/* Mobile Number Field (Optional) */}
+                {/* Mobile Number Field (Required) */}
                 <div className="space-y-1">
                   <div className="flex items-center gap-2.5 px-3.5 py-3 bg-zinc-50/70 hover:bg-white focus-within:bg-white border border-[#E3E8F0] focus-within:border-[#1463FF] focus-within:ring-4 focus-within:ring-[#1463FF]/10 rounded-2xl transition-all duration-200">
                     <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-200 text-xs font-bold text-zinc-700 select-none shrink-0">
@@ -1000,8 +1009,9 @@ export default function AuthPage({ role = 'passenger' }) {
                       type="tel"
                       inputMode="numeric"
                       maxLength={10}
+                      required
                       autoComplete="tel"
-                      placeholder="10-digit mobile number (Optional)"
+                      placeholder="10-digit mobile number *"
                       value={signupPhone}
                       onChange={(e) => setSignupPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       disabled={loading}
@@ -1063,7 +1073,7 @@ export default function AuthPage({ role = 'passenger' }) {
                 <button
                   type="submit"
                   id="btn-signup-send-otp"
-                  disabled={loading || !signupName.trim() || !signupEmail.trim() || signupPassword.length < 6}
+                  disabled={loading || !signupName.trim() || !signupEmail.trim() || signupPhone.replace(/\D/g, '').length !== 10 || signupPassword.length < 6}
                   className="w-full h-[54px] sm:h-[56px] px-6 rounded-[28px] bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading ? (

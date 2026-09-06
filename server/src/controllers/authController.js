@@ -297,6 +297,7 @@ exports.verifyOtpAndLogin = async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone || null,
       role: user.role,
       station_code: user.station_code || null,
       is_approved: user.is_approved,
@@ -438,6 +439,13 @@ exports.verifyOtpAndRegister = async (req, res) => {
     // Determine approval status
     const isApproved = role === 'passenger';
 
+    // Format phone consistently
+    let formattedPhone = null;
+    if (phone) {
+      const cleanDigits = String(phone).replace(/\D/g, '');
+      formattedPhone = cleanDigits.length === 10 ? `+91 ${cleanDigits}` : String(phone).trim();
+    }
+
     // Create user with real hashed password
     const hashedPassword = await bcrypt.hash(password, 10);
     const { data: newUser, error: insertError } = await supabase
@@ -446,7 +454,7 @@ exports.verifyOtpAndRegister = async (req, res) => {
         name: name.trim(),
         email: normalizedEmail,
         password: hashedPassword,
-        phone: phone ? String(phone).trim() : null,
+        phone: formattedPhone,
         role,
         is_approved: isApproved,
         station_code: role === 'assistant' ? (station_code || null) : null
@@ -476,6 +484,7 @@ exports.verifyOtpAndRegister = async (req, res) => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
+        phone: newUser.phone || null,
         role: newUser.role,
         station_code: newUser.station_code,
         is_approved: newUser.is_approved
@@ -492,6 +501,7 @@ exports.verifyOtpAndRegister = async (req, res) => {
       id: newUser.id,
       name: newUser.name,
       email: newUser.email,
+      phone: newUser.phone || null,
       role: newUser.role,
       station_code: newUser.station_code || null,
       is_approved: newUser.is_approved,
@@ -612,6 +622,13 @@ exports.register = async (req, res) => {
     const isApproved =
       role === 'passenger' || role === 'admin';
 
+    // Format phone consistently
+    let formattedPhone = null;
+    if (phone) {
+      const cleanDigits = String(phone).replace(/\D/g, '');
+      formattedPhone = cleanDigits.length === 10 ? `+91 ${cleanDigits}` : String(phone).trim();
+    }
+
     // Create user
     const { data, error } = await supabase
       .from('users')
@@ -620,7 +637,7 @@ exports.register = async (req, res) => {
           name,
           email,
           password: hashedPassword,
-          phone: phone ? String(phone).trim() : null,
+          phone: formattedPhone,
           role,
           is_approved: isApproved,
           station_code:
@@ -650,6 +667,7 @@ exports.register = async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        phone: user.phone || null,
         role: user.role,
         station_code: user.station_code,
         is_approved: user.is_approved
@@ -663,6 +681,7 @@ exports.register = async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone || null,
       role: user.role,
       station_code: user.station_code || null,
       is_approved: user.is_approved,
@@ -748,14 +767,17 @@ exports.login = async (req, res) => {
         queryError = stdErr;
         user = standardUser;
       } else {
-        // Phone lookup: construct common formatting variants (+91..., 10 digits, etc.)
+        // Phone lookup: construct common formatting variants (+91..., 10 digits, with/without space, etc.)
         const digits = rawInput.replace(/\D/g, '');
+        const tenDigits = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : (digits.length === 10 ? digits : digits);
         const phoneCandidates = [
           rawInput,
           digits,
-          digits.length === 10 ? `+91${digits}` : null,
-          digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : null,
-          digits.length === 12 && digits.startsWith('91') ? `+${digits}` : null
+          tenDigits,
+          `+91${tenDigits}`,
+          `+91 ${tenDigits}`,
+          `+${digits}`,
+          digits.length === 10 ? `91${digits}` : null
         ].filter(Boolean);
 
         const { data: phoneUser, error: phoneErr } = await supabase

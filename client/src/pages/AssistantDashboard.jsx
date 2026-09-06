@@ -1745,7 +1745,7 @@ export default function AssistantDashboard() {
                     <Phone className="w-4 h-4 text-slate-600 dark:text-zinc-300 shrink-0" />
                     <span>
                       {profile?.phone || user?.phone ? (
-                        (profile?.phone || user?.phone).startsWith('+91')
+                        (profile?.phone || user?.phone)?.startsWith('+91')
                           ? (profile?.phone || user?.phone)
                           : `+91 ${profile?.phone || user?.phone}`
                       ) : (
