@@ -241,9 +241,17 @@ export default function PassengerNotifications({
         )}
       </button>
 
+      {/* Mobile Backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/25 z-40 sm:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
       {/* Flyout Notification Popover Panel */}
       {open && (
-        <div className="absolute right-0 mt-3 w-84 sm:w-96 max-w-[calc(100vw-24px)] bg-white border border-slate-200/90 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] p-4 sm:p-5 z-50 text-zinc-900 animate-scale-in">
+        <div className="fixed inset-x-3 top-[68px] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-3 w-auto sm:w-96 max-w-lg bg-white border border-slate-200/90 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] p-4 sm:p-5 z-50 text-zinc-900 animate-scale-in">
           {/* Header */}
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-3">
             <div className="flex items-center gap-2.5">

@@ -256,9 +256,17 @@ export default function AssistantNotifications({
         )}
       </button>
 
+      {/* Mobile Backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/25 z-40 sm:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
       {/* Flyout Popover */}
       {open && (
-        <div className="absolute right-0 mt-2.5 w-84 sm:w-96 max-w-[calc(100vw-24px)] bg-white dark:bg-zinc-900 border border-slate-200/90 dark:border-zinc-800 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-4 sm:p-5 z-50 text-zinc-900 dark:text-white animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-x-3 top-[68px] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2.5 w-auto sm:w-96 max-w-lg bg-white dark:bg-zinc-900 border border-slate-200/90 dark:border-zinc-800 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-4 sm:p-5 z-50 text-zinc-900 dark:text-white animate-in fade-in zoom-in-95 duration-150">
           {/* Header */}
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-zinc-800/80 mb-3">
             <div className="flex items-center gap-2.5">
