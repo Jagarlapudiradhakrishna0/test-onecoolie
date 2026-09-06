@@ -16,7 +16,7 @@ import {
   Users, Check, X, ExternalLink, Printer, Key, Briefcase, Calendar, Info, Layers,
   Compass, ArrowUpRight, CheckSquare, Power, ToggleLeft, ToggleRight,
   ShieldCheck, FileText, Activity, DollarSign, ShieldAlert, AlertOctagon, RotateCcw,
-  Headphones
+  Headphones, LifeBuoy
 } from 'lucide-react';
 
 /* ============================================================
@@ -1076,6 +1076,14 @@ export default function AdminDashboard() {
   // Support Tickets Integration
   const [supportTicketCount, setSupportTicketCount] = useState(0);
 
+  // Station Desk & Support Tickets State
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketStationFilter, setTicketStationFilter] = useState('ALL');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('ALL');
+  const [ticketPriorityFilter, setTicketPriorityFilter] = useState('ALL');
+  const [ticketUpdatingId, setTicketUpdatingId] = useState(null);
+
   useEffect(() => {
     const updateCount = () => {
       try {
@@ -1143,7 +1151,7 @@ export default function AdminDashboard() {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const [sRes, pRes, bRes, aRes, uRes, sosRes, payRes, incRes, incStatRes, healthRes, recovRes] = await Promise.all([
+      const [sRes, pRes, bRes, aRes, uRes, sosRes, payRes, incRes, incStatRes, healthRes, recovRes, tRes] = await Promise.all([
         axios.get('/admin/stats').catch(() => ({ data: {} })),
         axios.get('/admin/pending-assistants').catch(() => ({ data: [] })),
         axios.get('/admin/bookings').catch(() => ({ data: [] })),
@@ -1155,6 +1163,7 @@ export default function AdminDashboard() {
         axios.get('/admin/incidents/stats').catch(() => ({ data: {} })),
         axios.get('/admin/finance/health').catch(() => ({ data: { health: null } })),
         axios.get('/admin/finance/payment-recovery').catch(() => ({ data: { stuck_payments: [] } })),
+        axios.get('/admin/support-tickets').catch(() => ({ data: [] })),
       ]);
 
       setStats(sRes.data || {});
@@ -1168,6 +1177,7 @@ export default function AdminDashboard() {
       setIncidentStats(incStatRes.data || { total: 0, open: 0, investigating: 0, critical: 0, warning: 0 });
       setFinancialHealth(healthRes.data?.health || null);
       setPaymentRecoveryList(recovRes.data?.stuck_payments || []);
+      setSupportTickets(tRes.data || []);
       setLastSynced(new Date());
 
       // If inspecting a booking, sync it with newest data
@@ -1429,6 +1439,24 @@ export default function AdminDashboard() {
     }
   };
 
+  // Update Support Ticket Status
+  const handleUpdateTicketStatus = async (ticketId, newStatus, resolutionNotes = '') => {
+    try {
+      setTicketUpdatingId(ticketId);
+      const { data } = await axios.patch(`/admin/support-tickets/${ticketId}`, {
+        status: newStatus,
+        resolution_notes: resolutionNotes,
+      });
+      setSupportTickets((prev) => prev.map((t) => (t.id === ticketId ? data : t)));
+      toast.success(`Ticket #${ticketId} status updated to ${newStatus}`);
+    } catch (err) {
+      console.error('Update ticket error:', err);
+      toast.error('Failed to update ticket status');
+    } finally {
+      setTicketUpdatingId(null);
+    }
+  };
+
   const handleFilterToAssistant = (assistantName) => {
     setActiveTab('bookings');
     setFilterQuery(assistantName);
@@ -1640,6 +1668,30 @@ export default function AdminDashboard() {
     }));
   }, [stats.statusBreakdown]);
 
+  // Support Tickets Filtered
+  const filteredSupportTickets = useMemo(() => {
+    return supportTickets.filter((t) => {
+      if (ticketStationFilter !== 'ALL' && t.station !== ticketStationFilter) return false;
+      if (ticketStatusFilter !== 'ALL' && t.status !== ticketStatusFilter) return false;
+      if (ticketPriorityFilter !== 'ALL' && t.priority !== ticketPriorityFilter) return false;
+      if (ticketSearch) {
+        const q = ticketSearch.toLowerCase();
+        const matches =
+          (t.id && t.id.toLowerCase().includes(q)) ||
+          (t.pnr && t.pnr.toLowerCase().includes(q)) ||
+          (t.assistant_name && t.assistant_name.toLowerCase().includes(q)) ||
+          (t.desc && t.desc.toLowerCase().includes(q)) ||
+          (t.category && t.category.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [supportTickets, ticketStationFilter, ticketStatusFilter, ticketPriorityFilter, ticketSearch]);
+
+  const pendingTicketsCount = useMemo(() => {
+    return supportTickets.filter((t) => t.status === 'Dispatched to Station Supervisor').length;
+  }, [supportTickets]);
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black text-black dark:text-white font-sans flex flex-col">
       {/* Toast feedback provider */}
@@ -1708,7 +1760,7 @@ export default function AdminDashboard() {
             { id: 'overview', label: 'Operations & Analytics', icon: TrendingUp },
             { id: 'finance', label: 'Finance & Reconciliation', icon: ShieldCheck, alert: reconReport?.health?.critical_issues > 0 ? reconReport.health.critical_issues : undefined },
             { id: 'incidents', label: 'Financial Incidents', icon: ShieldAlert, alert: incidentStats.critical > 0 ? incidentStats.critical : undefined, badge: incidentStats.open > 0 ? incidentStats.open : undefined },
-            { id: 'support', label: 'Support & Tickets', icon: Headphones, badge: supportTicketCount },
+            { id: 'support_tickets', label: 'Station Desk & Support', icon: LifeBuoy, count: supportTickets.length, badge: pendingTicketsCount > 0 ? pendingTicketsCount : (supportTicketCount > 0 ? supportTicketCount : undefined) },
             { id: 'launch', label: 'Launch Center', icon: Activity },
             { id: 'payouts', label: 'Sahayak Payouts', icon: CreditCard, badge: payoutsList.filter(p => p.status === 'requested').length },
             { id: 'assistants', label: 'Sahayak Force & KYC', icon: Briefcase, badge: kycQueue.length },
@@ -3455,10 +3507,168 @@ export default function AdminDashboard() {
           <LaunchCenter />
         )}
 
-        {/* ── TAB: SUPPORT & TICKETS ──────────────────────────────── */}
-        {activeTab === 'support' && (
-          <div className="space-y-4 animate-fade-in">
-            <SupportInbox />
+        {/* ── TAB: STATION DESK & SUPPORT TICKETS ───────────────── */}
+        {(activeTab === 'support' || activeTab === 'support_tickets') && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Header & Metric Cards */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold font-mono uppercase tracking-wider text-black dark:text-white flex items-center gap-2">
+                  <LifeBuoy className="w-5 h-5 text-blue-600" />
+                  <span>Station Desk & Support Inbox</span>
+                </h3>
+                <p className="text-xs text-zinc-500 font-mono mt-0.5">
+                  Real-time ticket management, station supervisor dispatch, and passenger assistance support.
+                </p>
+              </div>
+            </div>
+
+            {/* Operational Tickets Management Panel from Assistants */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+                  <h4 className="font-bold text-sm text-black dark:text-white font-mono uppercase">
+                    Platform Assistant Operational Tickets ({filteredSupportTickets.length})
+                  </h4>
+                </div>
+                {pendingTicketsCount > 0 && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
+                    {pendingTicketsCount} Awaiting Station Supervisor
+                  </span>
+                )}
+              </div>
+
+              {/* Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search tickets, PNR, assistant..."
+                    value={ticketSearch}
+                    onChange={(e) => setTicketSearch(e.target.value)}
+                    className="input-base text-xs pl-8 py-1.5 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                  />
+                </div>
+
+                <select
+                  value={ticketStationFilter}
+                  onChange={(e) => setTicketStationFilter(e.target.value)}
+                  className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
+                >
+                  <option value="ALL">All Station Hubs</option>
+                  {STATIONS.map((st) => (
+                    <option key={st.code} value={st.code}>
+                      {st.code} - {st.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={ticketStatusFilter}
+                  onChange={(e) => setTicketStatusFilter(e.target.value)}
+                  className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="Dispatched to Station Supervisor">Dispatched</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Resolved by Station Master">Resolved</option>
+                </select>
+
+                <select
+                  value={ticketPriorityFilter}
+                  onChange={(e) => setTicketPriorityFilter(e.target.value)}
+                  className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
+                >
+                  <option value="ALL">All Priorities</option>
+                  <option value="normal">Normal</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+
+              {/* Table of Operational Tickets */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400 font-mono">
+                      <th className="pb-2">Ticket ID</th>
+                      <th className="pb-2">Station</th>
+                      <th className="pb-2">Category</th>
+                      <th className="pb-2">PNR</th>
+                      <th className="pb-2">Description</th>
+                      <th className="pb-2">Priority</th>
+                      <th className="pb-2">Status</th>
+                      <th className="pb-2 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-mono">
+                    {filteredSupportTickets.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-6 text-center text-zinc-400 font-mono">
+                          No operational tickets match filter criteria.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSupportTickets.map((t) => (
+                        <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                          <td className="py-2.5 font-bold text-blue-600 dark:text-blue-400 font-mono">
+                            #{t.id}
+                          </td>
+                          <td className="py-2.5 font-bold">
+                            {t.station}
+                          </td>
+                          <td className="py-2.5 font-sans">
+                            {t.category}
+                          </td>
+                          <td className="py-2.5 text-zinc-500 font-mono">
+                            {t.pnr || '—'}
+                          </td>
+                          <td className="py-2.5 text-zinc-600 dark:text-zinc-300 max-w-xs truncate font-sans">
+                            {t.desc}
+                          </td>
+                          <td className="py-2.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                t.priority === 'urgent'
+                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
+                              }`}
+                            >
+                              {t.priority}
+                            </span>
+                          </td>
+                          <td className="py-2.5">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                              {t.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-right font-sans">
+                            {t.status !== 'Resolved by Station Master' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateTicketStatus(t.id, 'Resolved by Station Master', 'Resolved via Admin Console')}
+                                disabled={ticketUpdatingId === t.id}
+                                className="py-1 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                {ticketUpdatingId === t.id ? 'Updating...' : 'Resolve'}
+                              </button>
+                            ) : (
+                              <span className="text-emerald-600 text-[10px] font-bold">✓ Resolved</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Passenger Live Support Chat Inbox */}
+            <div className="pt-2">
+              <SupportInbox />
+            </div>
           </div>
         )}
 
