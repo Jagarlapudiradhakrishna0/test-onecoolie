@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Brand from '../components/Brand';
 import LaunchCenter from '../components/LaunchCenter';
+import SupportInbox from '../components/support/SupportInbox';
+import { getTickets, subscribeToSupportUpdates } from '../utils/supportStore';
 import axios from '../api/axios';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -13,7 +15,8 @@ import {
   Download, RefreshCw, Eye, Phone, Mail, MapPin, CreditCard, ChevronRight, TrendingUp,
   Users, Check, X, ExternalLink, Printer, Key, Briefcase, Calendar, Info, Layers,
   Compass, ArrowUpRight, CheckSquare, Power, ToggleLeft, ToggleRight,
-  ShieldCheck, FileText, Activity, DollarSign, ShieldAlert, AlertOctagon, RotateCcw
+  ShieldCheck, FileText, Activity, DollarSign, ShieldAlert, AlertOctagon, RotateCcw,
+  Headphones
 } from 'lucide-react';
 
 /* ============================================================
@@ -1070,6 +1073,22 @@ export default function AdminDashboard() {
   const [financialHealth, setFinancialHealth] = useState(null);
   const [paymentRecoveryList, setPaymentRecoveryList] = useState([]);
 
+  // Support Tickets Integration
+  const [supportTicketCount, setSupportTicketCount] = useState(0);
+
+  useEffect(() => {
+    const updateCount = () => {
+      try {
+        const all = getTickets();
+        const open = all.filter(t => ['open', 'in_progress', 'bot_escalated'].includes(t.status)).length;
+        setSupportTicketCount(open);
+      } catch (e) {}
+    };
+    updateCount();
+    const unsub = subscribeToSupportUpdates(updateCount);
+    return () => unsub?.();
+  }, []);
+
   // Core Data States
   const [stats, setStats] = useState({
     totalBookings: 0,
@@ -1689,6 +1708,7 @@ export default function AdminDashboard() {
             { id: 'overview', label: 'Operations & Analytics', icon: TrendingUp },
             { id: 'finance', label: 'Finance & Reconciliation', icon: ShieldCheck, alert: reconReport?.health?.critical_issues > 0 ? reconReport.health.critical_issues : undefined },
             { id: 'incidents', label: 'Financial Incidents', icon: ShieldAlert, alert: incidentStats.critical > 0 ? incidentStats.critical : undefined, badge: incidentStats.open > 0 ? incidentStats.open : undefined },
+            { id: 'support', label: 'Support & Tickets', icon: Headphones, badge: supportTicketCount },
             { id: 'launch', label: 'Launch Center', icon: Activity },
             { id: 'payouts', label: 'Sahayak Payouts', icon: CreditCard, badge: payoutsList.filter(p => p.status === 'requested').length },
             { id: 'assistants', label: 'Sahayak Force & KYC', icon: Briefcase, badge: kycQueue.length },
@@ -3433,6 +3453,13 @@ export default function AdminDashboard() {
         {/* ── TAB: LAUNCH CENTER (PHASE 9) ────────────────────────── */}
         {activeTab === 'launch' && (
           <LaunchCenter />
+        )}
+
+        {/* ── TAB: SUPPORT & TICKETS ──────────────────────────────── */}
+        {activeTab === 'support' && (
+          <div className="space-y-4 animate-fade-in">
+            <SupportInbox />
+          </div>
         )}
 
       </main>

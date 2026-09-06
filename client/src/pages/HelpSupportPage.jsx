@@ -41,7 +41,13 @@ export default function HelpSupportPage() {
   const handleNavigate = (view, params = {}) => {
     if (view === 'back') {
       if (currentView === 'home') {
-        navigate('/dashboard?tab=book');
+        if (user?.role === 'assistant') {
+          navigate('/assistant');
+        } else if (user?.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard?tab=book');
+        }
       } else {
         setSearchParams({ view: 'home' });
       }

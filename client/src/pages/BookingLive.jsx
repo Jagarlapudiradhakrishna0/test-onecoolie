@@ -22,6 +22,7 @@ import ActiveBooking from '../components/ActiveBooking';
 import ProfileMenu from '../context/ProfileMenu';
 import { STATIONS } from '../utils/services';
 import TrainLoader from '../components/TrainLoader';
+import PassengerNotifications from '../components/PassengerNotifications';
 
 /* ============================================================
    BOOKING LIVE / TRIP DETAILS PAGE (PIXEL PERFECT MATCH TO MOCKUP)
@@ -171,14 +172,11 @@ export default function BookingLive() {
 
           {/* Right Bell & Profile */}
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="w-10 h-10 rounded-full bg-slate-100/80 hover:bg-slate-200/80 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer border border-slate-200/50"
-              title="Notifications"
-            >
-              <Bell className="w-4 h-4 text-zinc-700" />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
-            </button>
+            <PassengerNotifications
+              bookings={booking ? [booking] : []}
+              activeBookings={booking ? [booking] : []}
+              onNavigateTab={(target) => navigate(`/dashboard${target === 'trips' ? '?tab=trips' : '?tab=book'}`)}
+            />
 
             <ProfileMenu role="passenger" onNavigate={(target) => navigate(`/dashboard${target === 'trips' ? '?tab=trips' : '?tab=book'}`)} />
           </div>

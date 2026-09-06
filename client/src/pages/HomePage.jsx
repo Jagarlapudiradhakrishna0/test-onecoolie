@@ -837,7 +837,7 @@ function HomeCTA() {
             loop
             muted
             playsInline
-            poster="/images/banner-bharat-moves.jpg"
+            poster="/images/station-hub-bg.jpg"
             className="absolute inset-0 w-full h-full object-cover object-right opacity-80 pointer-events-none"
           >
             <source src="/images/video_train.MP4" type="video/mp4" />

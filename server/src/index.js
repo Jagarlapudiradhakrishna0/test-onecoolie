@@ -41,6 +41,9 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const assistantPayoutRoutes = require('./routes/assistantPayoutRoutes');
 const assistantWalletRoutes = require('./routes/assistantWalletRoutes');
 
+// Database Client
+const supabase = require('./config/db');
+
 // Controllers
 const serviceController = require('./controllers/serviceController');
 const payoutController = require('./controllers/payoutController');
@@ -142,6 +145,7 @@ io.on('connection', (socket) => {
   socket.on('join_assistant', (assistantId) => {
     if (!assistantId) return;
     socket.join(`assistant_${assistantId}`);
+    socket.join(`user_${assistantId}`);
   });
 
   // Join admin room for real-time operations, telemetry & incident sync (Phase 5)
@@ -193,7 +197,7 @@ app.get(['/health', '/api/health'], (req, res) => {
 // Readiness probe: verifies DB connectivity and essential infrastructure
 app.get(['/ready', '/api/ready'], async (req, res) => {
   try {
-    const report = await productionReadinessService.getProductionReadinessReport(req.supabase);
+    const report = await productionReadinessService.getProductionReadinessReport(supabase);
     const httpStatus = report.status === 'NOT_READY' ? 503 : 200;
     return res.status(httpStatus).json(report);
   } catch (err) {
