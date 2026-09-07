@@ -146,15 +146,45 @@ async function getEarningHistory(supabase, assistantId) {
   }
 
   try {
-    const { data, error } = await supabase
+    // Step 1: fetch earnings without relationship join
+    // (avoids "relationship not in schema cache" PostgREST errors)
+    const { data: earnings, error: earnErr } = await supabase
       .from('assistant_earnings')
-      .select('*, booking:booking_id(id, booking_id, station_code, created_at, completed_at, payment_method)')
+      .select('*')
       .eq('assistant_id', assistantId)
       .order('created_at', { ascending: false });
 
-    if (error) return { success: false, error };
+    if (earnErr) return { success: false, error: earnErr };
+    if (!earnings || earnings.length === 0) {
+      return { success: true, earnings: [] };
+    }
 
-    return { success: true, earnings: data || [] };
+    // Step 2: collect unique booking_ids and fetch booking details separately
+    const bookingIds = [...new Set(
+      earnings.map((e) => e.booking_id).filter(Boolean)
+    )];
+
+    let bookingMap = {};
+    if (bookingIds.length > 0) {
+      const { data: bookings } = await supabase
+        .from('bookings')
+        .select('id, booking_id, station_code, created_at, completed_at, payment_method')
+        .in('id', bookingIds);
+
+      if (bookings) {
+        for (const b of bookings) {
+          bookingMap[b.id] = b;
+        }
+      }
+    }
+
+    // Step 3: merge booking data onto each earning record
+    const enriched = earnings.map((e) => ({
+      ...e,
+      booking: e.booking_id ? (bookingMap[e.booking_id] || null) : null,
+    }));
+
+    return { success: true, earnings: enriched };
   } catch (err) {
     return { success: false, error: { message: err.message } };
   }
