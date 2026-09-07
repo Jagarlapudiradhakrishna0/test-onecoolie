@@ -173,8 +173,17 @@ router.post('/finance/canary/public', canaryPublicHandler);
 router.get('/finance/canary/metrics', getCanaryMetricsHandler);
 
 // Station Desk & Operational Support Tickets
-const { getAllTickets, updateTicketStatus, addMessageToTicket } = require('../controllers/supportController');
+const {
+  getAllTickets,
+  getTicketById,
+  updateTicketStatus,
+  addMessageToTicket,
+  createTicket
+} = require('../controllers/supportController');
+
 router.get('/support-tickets', getAllTickets);
+router.post('/support-tickets', createTicket);
+router.get('/support-tickets/:id', getTicketById);
 router.patch('/support-tickets/:id', updateTicketStatus);
 router.post('/support-tickets/:id/messages', addMessageToTicket);
 

@@ -94,7 +94,7 @@ export default function TicketTracking({ onNavigate, user }) {
 
         <button
           type="button"
-          onClick={() => onNavigate('chat')}
+          onClick={() => onNavigate('raise_ticket')}
           className="bg-black hover:bg-zinc-800 text-white font-bold px-4 py-2 rounded-full text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />

@@ -1,5 +1,276 @@
 [
   {
+    "id": "OC-50735",
+    "type": "passenger",
+    "subject": "Platform Assistance Dispute",
+    "category": "Assistant",
+    "issueType": "Assistant",
+    "desc": "Passenger requested immediate escort from Gate 1 to Coach S3",
+    "description": "Passenger requested immediate escort from Gate 1 to Coach S3",
+    "priority": "urgent",
+    "status": "Resolved by Station Master",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passenger_id": null,
+    "passengerName": "Karthik Rao",
+    "passengerPhone": "+91 98480 11223",
+    "passengerEmail": "passenger@onecoolie.com",
+    "trip": null,
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1788809786351",
+        "sender": "passenger",
+        "name": "Karthik Rao",
+        "text": "Passenger requested immediate escort from Gate 1 to Coach S3",
+        "timestamp": "01:06 AM"
+      },
+      {
+        "id": "sys-1788809786381",
+        "sender": "system",
+        "name": "System",
+        "text": "Ticket status updated to \"Resolved by Station Master\". Note: Platform escort deployed successfully",
+        "timestamp": "01:06 AM"
+      }
+    ],
+    "assistant_id": null,
+    "assistant_name": null,
+    "assistant_phone": null,
+    "resolution_notes": "Platform escort deployed successfully",
+    "created_at": "2026-09-07T19:36:26.364Z",
+    "updated_at": "2026-09-07T19:36:26.381Z",
+    "createdAt": "2026-09-07T19:36:26.364Z",
+    "updatedAt": "2026-09-07T19:36:26.381Z"
+  },
+  {
+    "id": "OC-10571",
+    "type": "passenger",
+    "subject": "Trip Support: Train 12722",
+    "category": "General",
+    "issueType": "General",
+    "desc": "Trip Support: Train 12722",
+    "description": "Trip Support: Train 12722",
+    "priority": "urgent",
+    "status": "in_progress",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "vikas",
+    "passengerPhone": "+91 94946 28724",
+    "passengerEmail": "globalxvikas@gmail.com",
+    "trip": {
+      "id": "363c38f8-1571-4770-ab33-5512ef11d006",
+      "seat": "Seat 3 (Lower)",
+      "coach": "Coach A1",
+      "route": "KZJ → KZJ",
+      "isReal": true,
+      "source": "KZJ",
+      "status": "PENDING",
+      "dateDay": "07",
+      "service": "Luggage Assistance",
+      "trainNo": "12722",
+      "dateYear": "2026",
+      "platform": "2",
+      "dateMonth": "SEP",
+      "trainName": "Dakshin Express",
+      "dateDayName": "MON",
+      "destination": "KZJ"
+    },
+    "aiSummary": "Passenger reported: \"Where will the assistant meet me at the railway station?\".\nTrip context: Train 12722 (KZJ → KZJ), Coach Coach A1, Seat Seat 3 (Lower), Service: Luggage Assistance.\nAI attempted automated assignment & telemetry check.\nIssue was unresolved automatically. Ticket escalated for immediate human assistance.",
+    "conversation": [
+      {
+        "id": "msg-welcome",
+        "name": "OneCoolie Support Assistant",
+        "text": "Hi! I'm your OneCoolie Support Assistant. Ask me anything about your booking, assistant, luggage, payment or journey. How can I help?",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Payment issue"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Cancel my booking"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Refund status"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Train delay"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to support"
+          }
+        ],
+        "tripCard": null,
+        "timestamp": "01:03"
+      },
+      {
+        "id": "msg-1788809616319",
+        "name": "vikas",
+        "text": "Where will the assistant meet me at the railway station?",
+        "sender": "passenger",
+        "timestamp": "01:03"
+      },
+      {
+        "id": "msg-1788809617021",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've analyzed your question regarding your journey on Train 12722 (KZJ → KZJ).\n\nOur platform assistants handle station porterage, wheelchair escort, and berth guidance seamlessly.\n\nIf this doesn't fully resolve what you need, let me know or click below to connect directly with our 24/7 human support team.",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to a support agent →"
+          }
+        ],
+        "tripCard": {
+          "id": "363c38f8-1571-4770-ab33-5512ef11d006",
+          "seat": "Seat 3 (Lower)",
+          "coach": "Coach A1",
+          "route": "KZJ → KZJ",
+          "isReal": true,
+          "source": "KZJ",
+          "status": "PENDING",
+          "dateDay": "07",
+          "service": "Luggage Assistance",
+          "trainNo": "12722",
+          "dateYear": "2026",
+          "platform": "2",
+          "dateMonth": "SEP",
+          "trainName": "Dakshin Express",
+          "dateDayName": "MON",
+          "destination": "KZJ"
+        },
+        "timestamp": "01:03",
+        "showFeedback": true
+      },
+      {
+        "id": "msg-1788809627353-sys",
+        "name": "System",
+        "text": "Your conversation has been transferred to OneCoolie Support. A support executive has joined this chat.",
+        "sender": "system",
+        "timestamp": "01:03"
+      },
+      {
+        "id": "msg-1788809628024",
+        "name": "System",
+        "text": "Connected to OneCoolie Support · Ticket #OC-10571",
+        "sender": "system",
+        "timestamp": "07:33 PM"
+      },
+      {
+        "id": "msg-1788809629551",
+        "name": "Support Executive",
+        "text": "Hello vikas! I'm coordinating with the station team right now. I can see your booking for Train 12722 (Coach A1, Seat 3 (Lower)). How can I assist you right away?",
+        "sender": "support",
+        "timestamp": "07:33 PM"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-09-07T19:33:48.239118+00:00",
+    "updated_at": "2026-09-07T19:33:49.674132+00:00",
+    "createdAt": "2026-09-07T19:33:48.239118+00:00",
+    "updatedAt": "2026-09-07T19:33:49.674132+00:00"
+  },
+  {
+    "id": "OC-99999",
+    "type": "passenger",
+    "subject": "Test issue",
+    "category": "Booking",
+    "issueType": "Booking",
+    "desc": "This is a test description",
+    "description": "This is a test description",
+    "priority": "urgent",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "Test User",
+    "passengerPhone": "+91 99999 88888",
+    "passengerEmail": "test@example.com",
+    "trip": null,
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1788809397407",
+        "name": "Test User",
+        "text": "This is a test description",
+        "sender": "passenger",
+        "timestamp": "12:59 AM"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-09-07T19:30:00.426037+00:00",
+    "updated_at": "2026-09-07T19:29:57.698+00:00",
+    "createdAt": "2026-09-07T19:30:00.426037+00:00",
+    "updatedAt": "2026-09-07T19:29:57.698+00:00"
+  },
+  {
+    "id": "OC-10564",
+    "type": "passenger",
+    "subject": "1",
+    "category": "Booking",
+    "issueType": "Booking",
+    "desc": "12",
+    "description": "12",
+    "priority": "medium",
+    "status": "in_progress",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "rk",
+    "passengerPhone": "+91 9398553191",
+    "passengerEmail": "2303a52055@sru.edu.in",
+    "trip": {
+      "id": "2040091b-ef08-4e44-98c0-23c1f7255afe",
+      "seat": "Seat 12 (Lower)",
+      "coach": "Coach D2",
+      "route": "KZJ → KZJ",
+      "isReal": true,
+      "source": "KZJ",
+      "status": "CANCELLED",
+      "dateDay": "07",
+      "service": "Luggage Assistance",
+      "trainNo": "57606",
+      "dateYear": "2026",
+      "platform": "1",
+      "dateMonth": "SEP",
+      "trainName": "Vikarabad Secunderabad",
+      "dateDayName": "MON",
+      "destination": "KZJ"
+    },
+    "aiSummary": "Booking: 12",
+    "conversation": [
+      {
+        "id": "msg-1788807881799",
+        "name": "rk",
+        "text": "1\n\n12",
+        "sender": "passenger",
+        "timestamp": "12:34 AM"
+      },
+      {
+        "id": "msg-1788807881800-sys",
+        "name": "System",
+        "text": "Your conversation has been transferred to OneCoolie Support. A support executive has joined this chat.",
+        "sender": "system",
+        "timestamp": "12:34 AM"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-09-07T19:04:44.945726+00:00",
+    "updated_at": "2026-09-07T19:04:44.816+00:00",
+    "createdAt": "2026-09-07T19:04:44.945726+00:00",
+    "updatedAt": "2026-09-07T19:04:44.816+00:00"
+  },
+  {
     "id": "OC-34670",
     "type": "passenger",
     "subject": "Deployed Verification Ticket",
@@ -11,7 +282,6 @@
     "status": "resolved",
     "station": "KZJ",
     "pnr": "N/A",
-    "passenger_id": null,
     "passengerName": "Test Passenger",
     "passengerPhone": "+91 98765 43210",
     "passengerEmail": "passenger@onecoolie.com",
@@ -20,34 +290,38 @@
     "conversation": [
       {
         "id": "msg-1788805961150",
-        "sender": "passenger",
         "name": "Test Passenger",
         "text": "Testing deployed support ticket integration and Supabase sync",
+        "sender": "passenger",
         "timestamp": "12:02 AM"
       },
       {
         "id": "msg-1788805961181",
-        "sender": "support",
         "name": "Station Master",
         "text": "Support desk response test",
+        "sender": "support",
         "timestamp": "12:02 AM"
       },
       {
         "id": "sys-1788805961189",
-        "sender": "system",
         "name": "System",
         "text": "Ticket status updated to \"resolved\". Note: All checks verified successfully",
+        "sender": "system",
         "timestamp": "12:02 AM"
+      },
+      {
+        "id": "sys-1788806412326",
+        "name": "System",
+        "text": "Ticket status updated to \"Resolved by Station Master\". Note: Resolved via Admin Console",
+        "sender": "system",
+        "timestamp": "06:40 PM"
       }
     ],
-    "assistant_id": null,
-    "assistant_name": null,
-    "assistant_phone": null,
-    "resolution_notes": "All checks verified successfully",
-    "created_at": "2026-09-07T18:32:41.166Z",
-    "updated_at": "2026-09-07T18:32:41.189Z",
-    "createdAt": "2026-09-07T18:32:41.166Z",
-    "updatedAt": "2026-09-07T18:32:41.189Z"
+    "resolution_notes": "Resolved via Admin Console",
+    "created_at": "2026-09-07T18:40:12.624658+00:00",
+    "updated_at": "2026-09-07T18:40:12.435+00:00",
+    "createdAt": "2026-09-07T18:40:12.624658+00:00",
+    "updatedAt": "2026-09-07T18:40:12.435+00:00"
   },
   {
     "id": "OC-42901",

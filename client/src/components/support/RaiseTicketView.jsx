@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { 
   ArrowLeft, X, FileText, CheckCircle2, 
-  ChevronRight, ArrowRight, Train, HelpCircle, Shield
+  ChevronRight, ArrowRight, Train, HelpCircle, Shield,
+  MessageSquare
 } from 'lucide-react';
 import { createTicket } from '../../utils/supportStore';
 
-export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings = [] }) {
-  const [issueType, setIssueType] = useState('Booking');
+export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings = [], initialCategory }) {
+  const [issueType, setIssueType] = useState(initialCategory || 'Booking');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedTripId, setSelectedTripId] = useState(activeTrip?.id || activeTrip?.trainNo || 'active');
+  const [selectedTripId, setSelectedTripId] = useState(activeTrip?.id || activeTrip?.trainNo || 'none');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedTicket, setSubmittedTicket] = useState(null);
 

@@ -16,7 +16,7 @@ import {
   Users, Check, X, ExternalLink, Printer, Key, Briefcase, Calendar, Info, Layers,
   Compass, ArrowUpRight, CheckSquare, Power, ToggleLeft, ToggleRight,
   ShieldCheck, FileText, Activity, DollarSign, ShieldAlert, AlertOctagon, RotateCcw,
-  Headphones, LifeBuoy
+  Headphones, LifeBuoy, Plus, MessageSquare
 } from 'lucide-react';
 
 /* ============================================================
@@ -1084,6 +1084,22 @@ export default function AdminDashboard() {
   const [ticketPriorityFilter, setTicketPriorityFilter] = useState('ALL');
   const [ticketUpdatingId, setTicketUpdatingId] = useState(null);
   const [selectedDeskTicketId, setSelectedDeskTicketId] = useState(null);
+  const [isRaiseTicketModalOpen, setIsRaiseTicketModalOpen] = useState(false);
+  const [adminCreatingTicket, setAdminCreatingTicket] = useState(false);
+  const [adminNewTicket, setAdminNewTicket] = useState({
+    station: 'KZJ',
+    type: 'passenger',
+    passengerName: '',
+    passengerPhone: '',
+    passengerEmail: '',
+    assistant_name: '',
+    assistant_phone: '',
+    category: 'Booking',
+    priority: 'normal',
+    subject: '',
+    description: '',
+    pnr: ''
+  });
 
   useEffect(() => {
     const updateCount = () => {
@@ -1456,6 +1472,52 @@ export default function AdminDashboard() {
       toast.error('Failed to update ticket status');
     } finally {
       setTicketUpdatingId(null);
+    }
+  };
+
+  // Create / Raise Support Ticket directly from Admin Console
+  const handleAdminCreateTicket = async (e) => {
+    e?.preventDefault();
+    if (!adminNewTicket.subject?.trim() || !adminNewTicket.description?.trim()) {
+      toast.error('Subject and description are required');
+      return;
+    }
+    setAdminCreatingTicket(true);
+    try {
+      const payload = {
+        ...adminNewTicket,
+        status: adminNewTicket.type === 'passenger' ? 'open' : 'Dispatched to Station Supervisor',
+        created_at: new Date().toISOString()
+      };
+      const res = await axios.post('/admin/support-tickets', payload);
+      const created = res.data;
+      setSupportTickets((prev) => [created, ...prev]);
+      setSelectedDeskTicketId(created.id);
+      toast.success(`Ticket #${created.id} created successfully!`);
+      setIsRaiseTicketModalOpen(false);
+      setAdminNewTicket({
+        station: 'KZJ',
+        type: 'passenger',
+        passengerName: '',
+        passengerPhone: '',
+        passengerEmail: '',
+        assistant_name: '',
+        assistant_phone: '',
+        category: 'Booking',
+        priority: 'normal',
+        subject: '',
+        description: '',
+        pnr: ''
+      });
+      // Scroll to inbox
+      setTimeout(() => {
+        document.getElementById('station-desk-inbox')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } catch (err) {
+      console.error('Admin create ticket error:', err);
+      toast.error('Failed to create support ticket');
+    } finally {
+      setAdminCreatingTicket(false);
     }
   };
 
@@ -3539,6 +3601,17 @@ export default function AdminDashboard() {
                   Real-time ticket management, station supervisor dispatch, and passenger assistance support.
                 </p>
               </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsRaiseTicketModalOpen(true)}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Raise Support Ticket</span>
+                </button>
+              </div>
             </div>
 
             {/* Quick Metrics Bar */}
@@ -3746,6 +3819,191 @@ export default function AdminDashboard() {
             <div id="station-desk-inbox" className="pt-2">
               <SupportInbox initialTickets={supportTickets} selectedTicketIdProp={selectedDeskTicketId} />
             </div>
+
+            {/* ── MODAL: RAISE / DISPATCH SUPPORT TICKET (ADMIN) ──────── */}
+            {isRaiseTicketModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-5 font-sans">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                        <LifeBuoy className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-zinc-900 dark:text-white font-mono">
+                          Raise Support Ticket
+                        </h3>
+                        <p className="text-[11px] text-zinc-500 font-mono">
+                          Dispatch assistance or file station supervisor request
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsRaiseTicketModalOpen(false)}
+                      className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleAdminCreateTicket} className="space-y-4 text-xs font-mono">
+                    {/* Station & Channel Type */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Station Hub
+                        </label>
+                        <select
+                          value={adminNewTicket.station}
+                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, station: e.target.value })}
+                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                        >
+                          {STATIONS.map((st) => (
+                            <option key={st.code} value={st.code}>{st.code} - {st.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Requester Channel
+                        </label>
+                        <select
+                          value={adminNewTicket.type}
+                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, type: e.target.value })}
+                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                        >
+                          <option value="passenger">Passenger Support</option>
+                          <option value="assistant">Sahayak Operational</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Requester Name & Phone */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          {adminNewTicket.type === 'passenger' ? 'Passenger Name' : 'Sahayak Name'}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder={adminNewTicket.type === 'passenger' ? 'e.g. Rahul Sharma' : 'e.g. Ramesh Kumar'}
+                          value={adminNewTicket.type === 'passenger' ? adminNewTicket.passengerName : adminNewTicket.assistant_name}
+                          onChange={(e) => setAdminNewTicket({
+                            ...adminNewTicket,
+                            [adminNewTicket.type === 'passenger' ? 'passengerName' : 'assistant_name']: e.target.value
+                          })}
+                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Phone Number
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="+91 98765 43210"
+                          value={adminNewTicket.type === 'passenger' ? adminNewTicket.passengerPhone : adminNewTicket.assistant_phone}
+                          onChange={(e) => setAdminNewTicket({
+                            ...adminNewTicket,
+                            [adminNewTicket.type === 'passenger' ? 'passengerPhone' : 'assistant_phone']: e.target.value
+                          })}
+                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Category & Priority */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Category
+                        </label>
+                        <select
+                          value={adminNewTicket.category}
+                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, category: e.target.value })}
+                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                        >
+                          <option value="Booking">Booking Concern</option>
+                          <option value="Assistant">Assistant / Sahayak</option>
+                          <option value="Luggage">Luggage Dispute</option>
+                          <option value="Payment">Payment / Tariff</option>
+                          <option value="Refund">Refund Assistance</option>
+                          <option value="Station Operational">Station Operational</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Priority
+                        </label>
+                        <select
+                          value={adminNewTicket.priority}
+                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, priority: e.target.value })}
+                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="high">High Priority</option>
+                          <option value="urgent">Urgent / Immediate</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Subject */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                        Subject
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Brief summary of the issue"
+                        value={adminNewTicket.subject}
+                        onChange={(e) => setAdminNewTicket({ ...adminNewTicket, subject: e.target.value })}
+                        className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                        Detailed Description
+                      </label>
+                      <textarea
+                        rows={3}
+                        required
+                        placeholder="Detailed explanation of the issue or supervisor dispatch request..."
+                        value={adminNewTicket.description}
+                        onChange={(e) => setAdminNewTicket({ ...adminNewTicket, description: e.target.value })}
+                        className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700 resize-none font-sans"
+                      />
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="pt-2 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsRaiseTicketModalOpen(false)}
+                        className="px-4 py-2 rounded-xl text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-bold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={adminCreatingTicket || !adminNewTicket.subject.trim() || !adminNewTicket.description.trim()}
+                        className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{adminCreatingTicket ? 'Raising Ticket...' : 'Create Ticket'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
