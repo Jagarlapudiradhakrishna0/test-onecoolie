@@ -231,9 +231,31 @@ const normalizeTrain = (raw, stationCode) => {
     ? String(raw.platform).trim()
     : '1';
 
+  // Current time in IST (Asia/Kolkata)
+  const istStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+  const istNow = new Date(istStr);
+  const currentMinutes = istNow.getHours() * 60 + istNow.getMinutes();
+
+  let diffMinutes = 9999;
+  const timeForDiff = expectedArrival || scheduledArrival || expectedDeparture || scheduledDeparture;
+  if (timeForDiff && typeof timeForDiff === 'string' && timeForDiff.includes(':')) {
+    const [th, tm] = timeForDiff.split(':').map(Number);
+    if (!isNaN(th) && !isNaN(tm)) {
+      diffMinutes = (th * 60 + tm) - currentMinutes;
+      if (diffMinutes < -720) diffMinutes += 1440;
+      if (diffMinutes > 720) diffMinutes -= 1440;
+    }
+  }
+
   let status = determineTrainStatus({ ...raw, delayMinutes });
-  if (raw.status === 'delayed' || delayMinutes > 5) {
-    status = delayMinutes > 0 ? `Delayed ${delayMinutes}m` : 'Delayed';
+  if (diffMinutes === 9999) {
+    status = 'Schedule Notice';
+  } else if (delayMinutes > 5) {
+    status = `Delayed ${delayMinutes}m`;
+  } else if (diffMinutes <= 2 && diffMinutes >= -20) {
+    status = 'At Station';
+  } else if (diffMinutes > 2 && diffMinutes <= 20) {
+    status = `Approaching (${diffMinutes}m)`;
   } else if (raw.status === 'on_time' || delayMinutes <= 5) {
     status = 'On Time';
   }
@@ -253,6 +275,7 @@ const normalizeTrain = (raw, stationCode) => {
     scheduledDeparture: scheduledDeparture ? String(scheduledDeparture).slice(0, 5) : null,
     expectedDeparture: expectedDeparture ? String(expectedDeparture).slice(0, 5) : null,
     delayMinutes,
+    diffMinutes,
     platform,
     status,
     isLive: hasLiveTelemetry,
@@ -327,14 +350,14 @@ const generateLiveStationBoardForCurrentTime = (stationCode, hours = 4) => {
     if (diffMinutes < -720) diffMinutes += 1440;
     if (diffMinutes > 720) diffMinutes -= 1440;
 
-    // Active live window: from 15 minutes ago (at station/boarding) up to `hours` in future
-    if (diffMinutes >= -15 && diffMinutes <= hours * 60) {
+    // Active live window: from 30 minutes ago (at station/clearing) up to `hours` in future
+    if (diffMinutes >= -30 && diffMinutes <= hours * 60) {
       let status = 'On Time';
       let delayMinutes = 0;
 
-      if (diffMinutes <= 2 && diffMinutes >= -15) {
+      if (diffMinutes <= 2 && diffMinutes >= -20) {
         status = 'At Station';
-      } else if (diffMinutes <= 20) {
+      } else if (diffMinutes > 2 && diffMinutes <= 20) {
         status = `Approaching (${diffMinutes}m)`;
       } else {
         status = 'On Time';
@@ -514,19 +537,37 @@ const fetchLiveStationBoard = async (stationCode, hours = 4) => {
     // Auto-update trains database from API feed
     autoUpdateTrainDatabase(normalizedTrains, code);
 
-    const arrivals = normalizedTrains.filter((t) => t.type === 'arrival' || t.type === 'both');
-    const departures = normalizedTrains.filter((t) => t.type === 'departure' || t.type === 'both');
+    // Filter to active upcoming window (trains arrived recently or arriving within `hours`)
+    let activeTrains = normalizedTrains.filter((t) => {
+      return t.diffMinutes >= -30 && t.diffMinutes <= hours * 60;
+    });
+
+    // Supplement with authentic station timetable if API returns fewer than 10 trains in this window
+    const timetableBoard = generateLiveStationBoardForCurrentTime(code, hours);
+    if (timetableBoard?.allTrains) {
+      timetableBoard.allTrains.forEach((tt) => {
+        if (!activeTrains.some((at) => at.trainNumber === tt.trainNumber)) {
+          activeTrains.push(tt);
+        }
+      });
+    }
+
+    // Sort strictly chronologically by expected arrival / diffMinutes ascending
+    activeTrains.sort((a, b) => a.diffMinutes - b.diffMinutes);
+
+    const arrivals = activeTrains.filter((t) => t.type === 'arrival' || t.type === 'both');
+    const departures = activeTrains.filter((t) => t.type === 'departure' || t.type === 'both');
 
     const result = {
       stationCode: code,
       stationName: SUPPORTED_STATIONS[code],
       lastUpdated: getFormattedIstTime(),
-      totalTrains: normalizedTrains.length,
+      totalTrains: activeTrains.length,
       arrivalsCount: arrivals.length,
       departuresCount: departures.length,
       arrivals,
       departures,
-      allTrains: normalizedTrains,
+      allTrains: activeTrains,
       isCached: false
     };
 

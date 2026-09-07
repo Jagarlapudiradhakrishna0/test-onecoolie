@@ -34,7 +34,7 @@
   },
   {
     "train_no": "20834",
-    "train_name": "Secunderabad - Visakhapatnam Vande Bharat Express",
+    "train_name": "VANDE BHARAT EX",
     "train_type": "VANDE BHARAT",
     "from": {
       "code": "SC",
@@ -67,7 +67,7 @@
   },
   {
     "train_no": "20707",
-    "train_name": "Secunderabad - Visakhapatnam Vande Bharat Express",
+    "train_name": "VSKP VANDEBHARAT",
     "train_type": "VANDE BHARAT",
     "from": {
       "code": "SC",
@@ -199,7 +199,7 @@
   },
   {
     "train_no": "12714",
-    "train_name": "Satavahana SF Express",
+    "train_name": "SATAVAHANA SF",
     "train_type": "SUPERFAST",
     "from": {
       "code": "SC",
@@ -488,7 +488,7 @@
   },
   {
     "train_no": "17011",
-    "train_name": "HYB–SKZR Intercity Express",
+    "train_name": "HYB SKZR EXP",
     "train_type": "INTERCITY",
     "from": {
       "code": "HYB",
@@ -596,7 +596,7 @@
   },
   {
     "train_no": "12656",
-    "train_name": "Navjeevan SF Express",
+    "train_name": "NAVJEEVAN SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "ADI",
@@ -625,7 +625,7 @@
   },
   {
     "train_no": "12655",
-    "train_name": "Navjeevan SF Express",
+    "train_name": "NAVJEEVAN EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "MAS",
@@ -654,7 +654,7 @@
   },
   {
     "train_no": "12615",
-    "train_name": "Grand Trunk Express",
+    "train_name": "GRAND TRUNK EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "MAS",
@@ -683,7 +683,7 @@
   },
   {
     "train_no": "12616",
-    "train_name": "Grand Trunk Express",
+    "train_name": "GRAND TRUNK EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "NDLS",
@@ -733,7 +733,7 @@
   },
   {
     "train_no": "12712",
-    "train_name": "Pinakini SF Express",
+    "train_name": "PINAKINI SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "MAS",
@@ -776,6 +776,10 @@
       {
         "code": "SC",
         "name": "Secunderabad Jn"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_arrival": "15:30",
@@ -812,7 +816,7 @@
   },
   {
     "train_no": "12795",
-    "train_name": "Vijayawada - Lingampalli Intercity SF",
+    "train_name": "LPI INTERCITY",
     "train_type": "SUPERFAST",
     "from": {
       "code": "BZA",
@@ -837,7 +841,7 @@
   },
   {
     "train_no": "12796",
-    "train_name": "Lingampalli - Vijayawada Intercity SF",
+    "train_name": "BZA INTERCITY",
     "train_type": "SUPERFAST",
     "from": {
       "code": "LPI",
@@ -912,7 +916,7 @@
   },
   {
     "train_no": "12861",
-    "train_name": "VSKP–Nizamuddin Link SF",
+    "train_name": "VSKP MBNR SF",
     "train_type": "SUPERFAST",
     "from": {
       "code": "VSKP",
@@ -992,6 +996,10 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_arrival": "23:25",
@@ -1021,6 +1029,10 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_arrival": "21:15",
@@ -1099,7 +1111,7 @@
   },
   {
     "train_no": "12839",
-    "train_name": "Howrah - Chennai Mail",
+    "train_name": "CHENNAI MAIL",
     "train_type": "MAIL EXPRESS",
     "from": {
       "code": "HWH",
@@ -1120,7 +1132,7 @@
   },
   {
     "train_no": "12295",
-    "train_name": "Sanghamitra SF Express",
+    "train_name": "SANGHAMITRA EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "SMVB",
@@ -1145,7 +1157,7 @@
   },
   {
     "train_no": "12296",
-    "train_name": "Sanghamitra SF Express",
+    "train_name": "SANGHA MITRA EX",
     "train_type": "SUPERFAST",
     "from": {
       "code": "DNR",
@@ -1195,7 +1207,7 @@
   },
   {
     "train_no": "12622",
-    "train_name": "Tamil Nadu Express",
+    "train_name": "TAMILNADU SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "NDLS",
@@ -1245,7 +1257,7 @@
   },
   {
     "train_no": "12626",
-    "train_name": "Kerala Express",
+    "train_name": "KERALA SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "NDLS",
@@ -1270,7 +1282,7 @@
   },
   {
     "train_no": "12763",
-    "train_name": "Padmavati Express",
+    "train_name": "PADMAVATI SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "TPTY",
@@ -1292,6 +1304,10 @@
       {
         "code": "SC",
         "name": "Secunderabad Jn"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_arrival": "01:10",
@@ -1328,7 +1344,7 @@
   },
   {
     "train_no": "12733",
-    "train_name": "Narayanadri Express",
+    "train_name": "NARAYANADRI SF",
     "train_type": "SUPERFAST",
     "from": {
       "code": "TPTY",
@@ -1411,7 +1427,7 @@
   },
   {
     "train_no": "17202",
-    "train_name": "Golconda Express",
+    "train_name": "GOLCONDA EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "SC",
@@ -1907,7 +1923,7 @@
   },
   {
     "train_no": "11019",
-    "train_name": "Konark Express",
+    "train_name": "KONARK EXPRESS",
     "train_type": "EXPRESS",
     "from": {
       "code": "CSTM",
@@ -1925,6 +1941,10 @@
       {
         "code": "BBS",
         "name": "BHUBANESWAR"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "15:10",
@@ -16761,7 +16781,7 @@
   },
   {
     "train_no": "12246",
-    "train_name": "YESVANTPUR - HOWRAH AC Duronto Exp",
+    "train_name": "DURONTO EXPRESS",
     "train_type": "EXPRESS",
     "from": {
       "code": "YPR",
@@ -16779,6 +16799,10 @@
       {
         "code": "HWH",
         "name": "HOWRAH JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "11:15",
@@ -20406,7 +20430,7 @@
   },
   {
     "train_no": "12540",
-    "train_name": "LUCKNOW - YESVANTPUR SF Exp",
+    "train_name": "LKO YPR EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "LKO",
@@ -20424,6 +20448,10 @@
       {
         "code": "YPR",
         "name": "YESVANTPUR JN"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_departure": "20:00",
@@ -20730,7 +20758,7 @@
   },
   {
     "train_no": "12510",
-    "train_name": "GUWAHATI - BENGALURU (Kaziranga) SF Express",
+    "train_name": "GHY SMVB EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "GHY",
@@ -20748,6 +20776,10 @@
       {
         "code": "SBC",
         "name": "BANGALORE CITY JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "06:30",
@@ -21648,7 +21680,7 @@
   },
   {
     "train_no": "12592",
-    "train_name": "YESVANTPUR - GORAKHPUR SF Exp",
+    "train_name": "GORAKHPUR EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "YPR",
@@ -21666,6 +21698,10 @@
       {
         "code": "GKP",
         "name": "GORAKHPUR JN"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "16:50",
@@ -23920,7 +23956,7 @@
   },
   {
     "train_no": "12704",
-    "train_name": "Falaknuma Express",
+    "train_name": "FALAKNUMA SF EX",
     "train_type": "SUPERFAST",
     "from": {
       "code": "SC",
@@ -23938,6 +23974,10 @@
       {
         "code": "HWH",
         "name": "HOWRAH JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "16:00",
@@ -24023,6 +24063,10 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_departure": "22:30",
@@ -24167,7 +24211,7 @@
   },
   {
     "train_no": "12669",
-    "train_name": "CHENNAI CENTRAL - CHHAPRA Ganga Kaveri Exp",
+    "train_name": "GANGAKAVERI EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "MAS",
@@ -24185,6 +24229,14 @@
       {
         "code": "CPR",
         "name": "CHHAPRA"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "17:35",
@@ -24707,7 +24759,7 @@
   },
   {
     "train_no": "12740",
-    "train_name": "Secunderabad-Visakhapatnam Garib Rath",
+    "train_name": "GARIBRATH EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "SC",
@@ -24725,6 +24777,10 @@
       {
         "code": "VSKP",
         "name": "VISHAKAPATNAM"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_departure": "20:15",
@@ -24864,6 +24920,14 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "12:25",
@@ -25224,7 +25288,7 @@
   },
   {
     "train_no": "12717",
-    "train_name": "Ratnachal SF Express",
+    "train_name": "RATNANCHAL SF EX",
     "train_type": "SUPERFAST",
     "from": {
       "code": "VSKP",
@@ -25521,7 +25585,7 @@
   },
   {
     "train_no": "12793",
-    "train_name": "Chennai Egmore Madurai BI-Weekly Superfast Express",
+    "train_name": "RAYALASEEMA SF",
     "train_type": "SUPERFAST",
     "from": {
       "code": "MS",
@@ -25539,6 +25603,10 @@
       {
         "code": "MDU",
         "name": "MADURAI JN"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "22:45",
@@ -28981,7 +29049,7 @@
   },
   {
     "train_no": "12968",
-    "train_name": "Jaipur-Chennai SF Express",
+    "train_name": "JP CHENNAI SF",
     "train_type": "SUPERFAST",
     "from": {
       "code": "JP",
@@ -28999,6 +29067,10 @@
       {
         "code": "MAS",
         "name": "CHENNAI CENTRAL"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_departure": "19:40",
@@ -43214,7 +43286,7 @@
   },
   {
     "train_no": "16032",
-    "train_name": "Andaman Express",
+    "train_name": "ANDAMAN EXPRESS",
     "train_type": "EXPRESS",
     "from": {
       "code": "JAT",
@@ -43232,6 +43304,10 @@
       {
         "code": "MAS",
         "name": "CHENNAI CENTRAL"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "23:45",
@@ -46805,7 +46881,7 @@
   },
   {
     "train_no": "17015",
-    "train_name": "Visakha Express",
+    "train_name": "VISAKHA EXPRESS",
     "train_type": "EXPRESS",
     "from": {
       "code": "BBS",
@@ -46823,6 +46899,10 @@
       {
         "code": "SC",
         "name": "SECUNDERABAD JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "08:35",
@@ -47893,7 +47973,7 @@
   },
   {
     "train_no": "17209",
-    "train_name": "BANGALORE - KAKINADA TOWN Seshadri Exp",
+    "train_name": "SESHADRI EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "SBC",
@@ -47911,6 +47991,10 @@
       {
         "code": "CCT",
         "name": "KAKINADA TOWN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "13:20",
@@ -47920,7 +48004,7 @@
   },
   {
     "train_no": "17210",
-    "train_name": "KAKINADA TOWN -BANGALORE Seshadri Exp",
+    "train_name": "SESHADRI EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "CCT",
@@ -47938,6 +48022,10 @@
       {
         "code": "SBC",
         "name": "BANGALORE CITY JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "17:35",
@@ -48572,7 +48660,7 @@
   },
   {
     "train_no": "17211",
-    "train_name": "Machilipatnam Yeshvantapur Express",
+    "train_name": "KONDAVEEDU EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "MTM",
@@ -48590,6 +48678,10 @@
       {
         "code": "YPR",
         "name": "YESVANTPUR JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "15:15",
@@ -48626,7 +48718,7 @@
   },
   {
     "train_no": "17225",
-    "train_name": "Amaravati Express",
+    "train_name": "AMARAVATHI EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "BZA",
@@ -48761,7 +48853,7 @@
   },
   {
     "train_no": "17255",
-    "train_name": "Narasapur Hyderabad Express",
+    "train_name": "NS LPI  EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "NS",
@@ -48779,6 +48871,14 @@
       {
         "code": "HYB",
         "name": "HYDERABAD DECCAN"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "18:55",
@@ -49139,7 +49239,7 @@
   },
   {
     "train_no": "17480",
-    "train_name": "Tirupati-Puri Express",
+    "train_name": "TPTY PURI EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "TPTY",
@@ -49157,6 +49257,10 @@
       {
         "code": "PURI",
         "name": "PURI"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "10:35",
@@ -51677,7 +51781,7 @@
   },
   {
     "train_no": "18463",
-    "train_name": "Prasanti Express",
+    "train_name": "PRASHANTHI EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "BBS",
@@ -51695,6 +51799,10 @@
       {
         "code": "SBC",
         "name": "BANGALORE CITY JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "05:45",
@@ -65636,7 +65744,7 @@
   },
   {
     "train_no": "47150",
-    "train_name": "Falaknuma Lingampalli MMTS",
+    "train_name": "SC-LPI",
     "train_type": "EXPRESS",
     "from": {
       "code": "FM",
@@ -65654,6 +65762,10 @@
       {
         "code": "LPI",
         "name": "LINGAMPALLI"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "05:40",
@@ -65663,7 +65775,7 @@
   },
   {
     "train_no": "47151",
-    "train_name": "Falaknuma Lingampalli MMTS",
+    "train_name": "UR-LPI",
     "train_type": "EXPRESS",
     "from": {
       "code": "FM",
@@ -65681,6 +65793,10 @@
       {
         "code": "LPI",
         "name": "LINGAMPALLI"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "06:25",
@@ -65879,7 +65995,7 @@
   },
   {
     "train_no": "47159",
-    "train_name": "Lingampalli Falaknuma MMTS",
+    "train_name": "TLPR-UR",
     "train_type": "EXPRESS",
     "from": {
       "code": "LPI",
@@ -65897,6 +66013,10 @@
       {
         "code": "FM",
         "name": "KACHEGUDA FALAKNUMA"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "21:00",
@@ -66122,7 +66242,7 @@
   },
   {
     "train_no": "47170",
-    "train_name": "Falaknuma Lingampalli MMTS",
+    "train_name": "FM-LPI",
     "train_type": "EXPRESS",
     "from": {
       "code": "FM",
@@ -66140,6 +66260,10 @@
       {
         "code": "LPI",
         "name": "LINGAMPALLI"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "21:30",
@@ -66851,7 +66975,7 @@
   },
   {
     "train_no": "47192",
-    "train_name": "Lingampalli Falaknuma MMTS",
+    "train_name": "LPI-FM",
     "train_type": "EXPRESS",
     "from": {
       "code": "LPI",
@@ -66869,6 +66993,10 @@
       {
         "code": "FM",
         "name": "KACHEGUDA FALAKNUMA"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "20:10",
@@ -66878,7 +67006,7 @@
   },
   {
     "train_no": "47195",
-    "train_name": "Lingampalli Secunderabad MMTS",
+    "train_name": "LPI-SC",
     "train_type": "EXPRESS",
     "from": {
       "code": "LPI",
@@ -67148,7 +67276,7 @@
   },
   {
     "train_no": "47206",
-    "train_name": "HYB Falaknuma Local",
+    "train_name": "SC-HYB",
     "train_type": "EXPRESS",
     "from": {
       "code": "HYB",
@@ -67166,6 +67294,10 @@
       {
         "code": "FM",
         "name": "KACHEGUDA FALAKNUMA"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "05:40",
@@ -67310,7 +67442,7 @@
   },
   {
     "train_no": "47218",
-    "train_name": "Falaknuma - Lingampalli MMTS",
+    "train_name": "FM-RCPT",
     "train_type": "EXPRESS",
     "from": {
       "code": "FM",
@@ -67328,6 +67460,10 @@
       {
         "code": "LPI",
         "name": "LINGAMPALLI"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "17:55",
@@ -67337,7 +67473,7 @@
   },
   {
     "train_no": "47220",
-    "train_name": "Falaknuma - Lingampalli MMTS",
+    "train_name": "FM-LPI",
     "train_type": "EXPRESS",
     "from": {
       "code": "FM",
@@ -67355,6 +67491,10 @@
       {
         "code": "LPI",
         "name": "LINGAMPALLI"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "21:05",
@@ -67553,7 +67693,7 @@
   },
   {
     "train_no": "47193",
-    "train_name": "Lingampalli Falaknuma MMTS",
+    "train_name": "LPI-SC",
     "train_type": "EXPRESS",
     "from": {
       "code": "LPI",
@@ -67571,6 +67711,10 @@
       {
         "code": "FM",
         "name": "KACHEGUDA FALAKNUMA"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "20:30",
@@ -67580,7 +67724,7 @@
   },
   {
     "train_no": "47194",
-    "train_name": "Lingampalli Falaknuma MMTS",
+    "train_name": "LPI-UR",
     "train_type": "EXPRESS",
     "from": {
       "code": "LPI",
@@ -67598,6 +67742,10 @@
       {
         "code": "FM",
         "name": "KACHEGUDA FALAKNUMA"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "21:45",
@@ -67661,7 +67809,7 @@
   },
   {
     "train_no": "47213",
-    "train_name": "Lingampalli Falaknuma MMTS",
+    "train_name": "LPI-UR",
     "train_type": "EXPRESS",
     "from": {
       "code": "LPI",
@@ -67679,6 +67827,10 @@
       {
         "code": "FM",
         "name": "KACHEGUDA FALAKNUMA"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_departure": "06:55",
@@ -111806,7 +111958,7 @@
   },
   {
     "train_no": "57202",
-    "train_name": "Tenali Repalle Passenger",
+    "train_name": "GNT-BZA",
     "train_type": "PASSENGER",
     "from": {
       "code": "TEL",
@@ -111824,6 +111976,10 @@
       {
         "code": "RAL",
         "name": "Repalle"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "00:15",
@@ -128514,6 +128670,14 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "21:00",
@@ -128550,7 +128714,7 @@
   },
   {
     "train_no": "12736",
-    "train_name": "YESVANTPUR - SECUNDERABAD Garib Rath Exp",
+    "train_name": "SC GARIB RATH",
     "train_type": "EXPRESS",
     "from": {
       "code": "YPR",
@@ -128577,7 +128741,7 @@
   },
   {
     "train_no": "12835",
-    "train_name": "HATIA - YESVANTPUR SF Exp",
+    "train_name": "HTE SMVB EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "HTE",
@@ -128595,6 +128759,10 @@
       {
         "code": "YPR",
         "name": "YESVANTPUR JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "18:20",
@@ -128658,7 +128826,7 @@
   },
   {
     "train_no": "12890",
-    "train_name": "YESVANTPUR - TATANAGAR SF Exp",
+    "train_name": "SMVB TATA EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "YPR",
@@ -128676,6 +128844,10 @@
       {
         "code": "TATA",
         "name": "TATANAGAR JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "None",
@@ -128766,7 +128938,7 @@
   },
   {
     "train_no": "13351",
-    "train_name": "DHANBAD - ALAPPUZHA Exp",
+    "train_name": "DHN ALAPPUZHA EX",
     "train_type": "EXPRESS",
     "from": {
       "code": "DHN",
@@ -128784,6 +128956,10 @@
       {
         "code": "ALLP",
         "name": "ALLEPPEY"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "10:50",
@@ -132168,7 +132344,7 @@
   },
   {
     "train_no": "17016",
-    "train_name": "Visakha Express",
+    "train_name": "VISAKHA EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "SC",
@@ -132186,6 +132362,10 @@
       {
         "code": "BBS",
         "name": "BHUBANESWAR"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "17:00",
@@ -135705,7 +135885,7 @@
   },
   {
     "train_no": "12852",
-    "train_name": "Chennai-Bilaspur Express",
+    "train_name": "MAS BSP SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "MAS",
@@ -135723,6 +135903,10 @@
       {
         "code": "BSP",
         "name": "BILASPUR JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "21:10",
@@ -135948,7 +136132,7 @@
   },
   {
     "train_no": "12863",
-    "train_name": "HOWRAH - YESVANTPUR SF Exp",
+    "train_name": "HWH SMVB EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "HWH",
@@ -135966,6 +136150,10 @@
       {
         "code": "YPR",
         "name": "YESVANTPUR JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "20:35",
@@ -136002,7 +136190,7 @@
   },
   {
     "train_no": "12864",
-    "train_name": "YESVANTPUR - HOWRAH SF Exp",
+    "train_name": "SMVB HOWRAH EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "YPR",
@@ -136020,6 +136208,10 @@
       {
         "code": "HWH",
         "name": "HOWRAH JN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "19:35",
@@ -136137,7 +136329,7 @@
   },
   {
     "train_no": "12867",
-    "train_name": "Howrah-Puducherry Express",
+    "train_name": "HWH PDY SUF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "HWH",
@@ -136155,6 +136347,10 @@
       {
         "code": "PDY",
         "name": "Puducherry"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "23:30",
@@ -137163,7 +137359,7 @@
   },
   {
     "train_no": "17031",
-    "train_name": "Mumbai CST-Hyderabad Express",
+    "train_name": "CHZ AGTL EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "CSTM",
@@ -137181,6 +137377,10 @@
       {
         "code": "HYB",
         "name": "HYDERABAD DECCAN"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_departure": "12:45",
@@ -141011,6 +141211,10 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_arrival": "19:49",
@@ -141095,10 +141299,14 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
       }
     ],
     "scheduled_arrival": "23:55",
-    "scheduled_departure": null
+    "scheduled_departure": "23:20"
   },
   {
     "train_no": "03253",
@@ -141137,6 +141345,14 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_arrival": "01:14",
@@ -141179,6 +141395,14 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
       }
     ],
     "scheduled_arrival": "01:39",
@@ -141200,9 +141424,1432 @@
       {
         "code": "KZJ",
         "name": "Kazipet Junction"
+      },
+      {
+        "code": "WL",
+        "name": "Warangal"
+      },
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
       }
     ],
     "scheduled_arrival": "01:49",
     "scheduled_departure": "01:50"
+  },
+  {
+    "train_no": "22365",
+    "train_name": "DNR SMVB EXP",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "DANAPUR",
+      "name": "DANAPUR"
+    },
+    "to": {
+      "code": "SMVT BENGALURU",
+      "name": "SMVT BENGALURU"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      },
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "19:44",
+    "scheduled_departure": "19:45"
+  },
+  {
+    "train_no": "20708",
+    "train_name": "VANDE BHARAT EXP",
+    "train_type": "SHATABDI",
+    "from": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "to": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "21:14",
+    "scheduled_departure": "21:15"
+  },
+  {
+    "train_no": "12776",
+    "train_name": "COCANADA SF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "LINGAMPALLI",
+      "name": "LINGAMPALLI"
+    },
+    "to": {
+      "code": "KAKINADA TOWN",
+      "name": "KAKINADA TOWN"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "21:38",
+    "scheduled_departure": "21:40"
+  },
+  {
+    "train_no": "17045",
+    "train_name": "CHZ AKP EXPRESS",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "CHARLAPALLI",
+      "name": "CHARLAPALLI"
+    },
+    "to": {
+      "code": "ANAKAPALLE",
+      "name": "ANAKAPALLE"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "21:58",
+    "scheduled_departure": "22:00"
+  },
+  {
+    "train_no": "20482",
+    "train_name": "JU SF HUMSAFAR",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "TIRUCHCHIRAPPALLI JN",
+      "name": "TIRUCHCHIRAPPALLI JN"
+    },
+    "to": {
+      "code": "JODHPUR JN",
+      "name": "JODHPUR JN"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "23:08",
+    "scheduled_departure": "23:10"
+  },
+  {
+    "train_no": "01926",
+    "train_name": "MDU CNB SPECIAL",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "MADURAI JN",
+      "name": "MADURAI JN"
+    },
+    "to": {
+      "code": "KANPUR CENTRAL",
+      "name": "KANPUR CENTRAL"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "23:25",
+    "scheduled_departure": "23:27"
+  },
+  {
+    "train_no": "17633",
+    "train_name": "NED TCNR EXP",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "NANDED",
+      "name": "NANDED"
+    },
+    "to": {
+      "code": "TIRUCHANUR",
+      "name": "TIRUCHANUR"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "23:48",
+    "scheduled_departure": "23:50"
+  },
+  {
+    "train_no": "22351",
+    "train_name": "SHC SMVB EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "SAHARSA JN",
+      "name": "SAHARSA JN"
+    },
+    "to": {
+      "code": "SMVT BENGALURU",
+      "name": "SMVT BENGALURU"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "00:08",
+    "scheduled_departure": "00:10"
+  },
+  {
+    "train_no": "22663",
+    "train_name": "MS JU SF EXPRESS",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "TAMBARAM",
+      "name": "TAMBARAM"
+    },
+    "to": {
+      "code": "JODHPUR JN",
+      "name": "JODHPUR JN"
+    },
+    "stops": [
+      {
+        "code": "WL",
+        "name": "Warangal"
+      }
+    ],
+    "scheduled_arrival": "01:08",
+    "scheduled_departure": "01:10"
+  },
+  {
+    "train_no": "47229",
+    "train_name": "SC-MED",
+    "train_type": "SUBURBAN",
+    "from": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "to": {
+      "code": "MEDCHAL",
+      "name": "MEDCHAL"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "22:00"
+  },
+  {
+    "train_no": "17663",
+    "train_name": "RC J EXPRESS",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "RAICHUR",
+      "name": "RAICHUR"
+    },
+    "to": {
+      "code": "JALNA",
+      "name": "JALNA"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "21:40",
+    "scheduled_departure": "22:00"
+  },
+  {
+    "train_no": "17289",
+    "train_name": "CCT MYS EXPRESS",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "KAKINADA TOWN",
+      "name": "KAKINADA TOWN"
+    },
+    "to": {
+      "code": "MYSORE JN",
+      "name": "MYSORE JN"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "22:22",
+    "scheduled_departure": "22:27"
+  },
+  {
+    "train_no": "12771",
+    "train_name": "SC R SF EXPRESS",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "to": {
+      "code": "RAIPUR JN",
+      "name": "RAIPUR JN"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "22:40"
+  },
+  {
+    "train_no": "20702",
+    "train_name": "SC VANDE BHARAT",
+    "train_type": "SHATABDI",
+    "from": {
+      "code": "TIRUPATI",
+      "name": "TIRUPATI"
+    },
+    "to": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "23:42",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "07076",
+    "train_name": "GKP HYB SPL",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "GORAKHPUR JN",
+      "name": "GORAKHPUR JN"
+    },
+    "to": {
+      "code": "HYDERABAD",
+      "name": "HYDERABAD"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "02:20",
+    "scheduled_departure": "02:21"
+  },
+  {
+    "train_no": "17080",
+    "train_name": "JP HYB EXP",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "JAIPUR JN",
+      "name": "JAIPUR JN"
+    },
+    "to": {
+      "code": "HYDERABAD",
+      "name": "HYDERABAD"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "03:35",
+    "scheduled_departure": "03:40"
+  },
+  {
+    "train_no": "12774",
+    "train_name": "SC SHM AC SF EX",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "to": {
+      "code": "SHALIMAR",
+      "name": "SHALIMAR"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "03:55"
+  },
+  {
+    "train_no": "12769",
+    "train_name": "SEVEN HILLS SF",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "TIRUPATI",
+      "name": "TIRUPATI"
+    },
+    "to": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "04:25",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "17664",
+    "train_name": "J RC EXPRESS",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "JALNA",
+      "name": "JALNA"
+    },
+    "to": {
+      "code": "RAICHUR",
+      "name": "RAICHUR"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "04:50",
+    "scheduled_departure": "04:55"
+  },
+  {
+    "train_no": "04133",
+    "train_name": "CNB SMVB SUM SPL",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "KANPUR CENTRAL",
+      "name": "KANPUR CENTRAL"
+    },
+    "to": {
+      "code": "SMVT BENGALURU",
+      "name": "SMVT BENGALURU"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "05:10",
+    "scheduled_departure": "05:11"
+  },
+  {
+    "train_no": "17254",
+    "train_name": "CPSN GNT EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "CHHATRAPATI SAMBHAJINAGAR",
+      "name": "CHHATRAPATI SAMBHAJINAGAR"
+    },
+    "to": {
+      "code": "GUNTUR JN",
+      "name": "GUNTUR JN"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "05:15",
+    "scheduled_departure": "05:20"
+  },
+  {
+    "train_no": "67785",
+    "train_name": "FM-WADI",
+    "train_type": "MEMU",
+    "from": {
+      "code": "FALAKNUMA",
+      "name": "FALAKNUMA"
+    },
+    "to": {
+      "code": "WADI JN",
+      "name": "WADI JN"
+    },
+    "stops": [
+      {
+        "code": "SC",
+        "name": "Secunderabad Junction"
+      }
+    ],
+    "scheduled_arrival": "05:48",
+    "scheduled_departure": "05:50"
+  },
+  {
+    "train_no": "67227",
+    "train_name": "BZA-MCLA PASSENGER",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "MACHERLA",
+      "name": "MACHERLA"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "16:15"
+  },
+  {
+    "train_no": "67225",
+    "train_name": "BZA-GDR PASSENGER MEMU",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "GUDUR JN",
+      "name": "GUDUR JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "16:55"
+  },
+  {
+    "train_no": "22876",
+    "train_name": "VSKP UDAY DD EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "GUNTUR JN",
+      "name": "GUNTUR JN"
+    },
+    "to": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "16:45",
+    "scheduled_departure": "16:55"
+  },
+  {
+    "train_no": "20678",
+    "train_name": "MAS VANDEBHARAT",
+    "train_type": "SHATABDI",
+    "from": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "to": {
+      "code": "PURATCHI THALAIVAR DR. MGR CTL CHENNAI",
+      "name": "PURATCHI THALAIVAR DR. MGR CTL CHENNAI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "16:50",
+    "scheduled_departure": "16:55"
+  },
+  {
+    "train_no": "17269",
+    "train_name": "BZA-NS",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "17:15"
+  },
+  {
+    "train_no": "67230",
+    "train_name": "GNT-BZA MEMU",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "GUNTUR JN",
+      "name": "GUNTUR JN"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "17:45",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "07222",
+    "train_name": "SRC CHZ SPL",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "SANTRAGACHI JN",
+      "name": "SANTRAGACHI JN"
+    },
+    "to": {
+      "code": "CHARLAPALLI",
+      "name": "CHARLAPALLI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "17:43",
+    "scheduled_departure": "17:48"
+  },
+  {
+    "train_no": "12744",
+    "train_name": "VIKRAMSIMHAPURI",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "GUDUR JN",
+      "name": "GUDUR JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "18:00"
+  },
+  {
+    "train_no": "67247",
+    "train_name": "NS-GNT",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "to": {
+      "code": "GUNTUR JN",
+      "name": "GUNTUR JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "18:03",
+    "scheduled_departure": "18:10"
+  },
+  {
+    "train_no": "17257",
+    "train_name": "COA PASS",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "KAKINADA PORT",
+      "name": "KAKINADA PORT"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "18:15"
+  },
+  {
+    "train_no": "67768",
+    "train_name": "BZA-DKJ MEMU",
+    "train_type": "MEMU",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "DORNAKAL JN",
+      "name": "DORNAKAL JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "18:20"
+  },
+  {
+    "train_no": "17281",
+    "train_name": "GNT NS EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "GUNTUR JN",
+      "name": "GUNTUR JN"
+    },
+    "to": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "18:35",
+    "scheduled_departure": "18:40"
+  },
+  {
+    "train_no": "02812",
+    "train_name": "YPR BBS SPL",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "YESVANTPUR JN",
+      "name": "YESVANTPUR JN"
+    },
+    "to": {
+      "code": "BHUBANESWAR",
+      "name": "BHUBANESWAR"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "18:46",
+    "scheduled_departure": "18:51"
+  },
+  {
+    "train_no": "17428",
+    "train_name": "NS TPTY EXPRESS",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "to": {
+      "code": "TIRUPATI",
+      "name": "TIRUPATI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "18:50",
+    "scheduled_departure": "19:00"
+  },
+  {
+    "train_no": "67276",
+    "train_name": "NS-BZA",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "19:05",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "67274",
+    "train_name": "OGL-BZA MEMU",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "ONGOLE",
+      "name": "ONGOLE"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "19:15",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "67216",
+    "train_name": "BDCR-BZA MEMU",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "BHADRACHALAM RD",
+      "name": "BHADRACHALAM RD"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "19:35",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "67202",
+    "train_name": "BZA-RJY MEMU",
+    "train_type": "MEMU",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "RAJAMUNDRY",
+      "name": "RAJAMUNDRY"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "19:45"
+  },
+  {
+    "train_no": "17250",
+    "train_name": "CCT TPTY EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "KAKINADA TOWN",
+      "name": "KAKINADA TOWN"
+    },
+    "to": {
+      "code": "TIRUPATI",
+      "name": "TIRUPATI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "19:45",
+    "scheduled_departure": "19:55"
+  },
+  {
+    "train_no": "22642",
+    "train_name": "SHM TVC SUF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "SHALIMAR",
+      "name": "SHALIMAR"
+    },
+    "to": {
+      "code": "THIRUVANANTHAPURAM CENTRAL",
+      "name": "THIRUVANANTHAPURAM CENTRAL"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "19:45",
+    "scheduled_departure": "19:55"
+  },
+  {
+    "train_no": "67256",
+    "train_name": "MTM-BZA MEMU",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "MACHILIPATNAM",
+      "name": "MACHILIPATNAM"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "20:05",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "22613",
+    "train_name": "RMM AYC SF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "RAMESWARAM",
+      "name": "RAMESWARAM"
+    },
+    "to": {
+      "code": "AYODHYA CANTT",
+      "name": "AYODHYA CANTT"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "20:00",
+    "scheduled_departure": "20:10"
+  },
+  {
+    "train_no": "67257",
+    "train_name": "BZA-NS",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "20:15"
+  },
+  {
+    "train_no": "17655",
+    "train_name": "COA PDY EXPRESS",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "KAKINADA PORT",
+      "name": "KAKINADA PORT"
+    },
+    "to": {
+      "code": "PONDICHERRY",
+      "name": "PONDICHERRY"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "20:05",
+    "scheduled_departure": "20:20"
+  },
+  {
+    "train_no": "17259",
+    "train_name": "NLR-BZAPASS",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "NELLORE",
+      "name": "NELLORE"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "20:35",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "16368",
+    "train_name": "KASHI TAMIL EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "BANARAS",
+      "name": "BANARAS"
+    },
+    "to": {
+      "code": "KANNIYAKUMARI",
+      "name": "KANNIYAKUMARI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "20:30",
+    "scheduled_departure": "20:40"
+  },
+  {
+    "train_no": "67267",
+    "train_name": "BZA-MTM MEMU",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "to": {
+      "code": "MACHILIPATNAM",
+      "name": "MACHILIPATNAM"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": null,
+    "scheduled_departure": "20:50"
+  },
+  {
+    "train_no": "18521",
+    "train_name": "TIRUMALA EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "to": {
+      "code": "GUNTAKAL JN",
+      "name": "GUNTAKAL JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "20:50",
+    "scheduled_departure": "21:00"
+  },
+  {
+    "train_no": "17247",
+    "train_name": "NS DMM EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "NARASAPUR",
+      "name": "NARASAPUR"
+    },
+    "to": {
+      "code": "DHARMAVARAM JN",
+      "name": "DHARMAVARAM JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "21:00",
+    "scheduled_departure": "21:10"
+  },
+  {
+    "train_no": "06509",
+    "train_name": "SBCDNR HUMSAFAR",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "KRANTIVIRA SANGOLLI RAYANNA (BENGALURU)",
+      "name": "KRANTIVIRA SANGOLLI RAYANNA (BENGALURU)"
+    },
+    "to": {
+      "code": "DANAPUR",
+      "name": "DANAPUR"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "21:10",
+    "scheduled_departure": "21:20"
+  },
+  {
+    "train_no": "17215",
+    "train_name": "MTM DMM EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "MACHILIPATNAM",
+      "name": "MACHILIPATNAM"
+    },
+    "to": {
+      "code": "DHARMAVARAM JN",
+      "name": "DHARMAVARAM JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "21:15",
+    "scheduled_departure": "21:25"
+  },
+  {
+    "train_no": "20806",
+    "train_name": "AP EXPRESS",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "NEW DELHI",
+      "name": "NEW DELHI"
+    },
+    "to": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "21:25",
+    "scheduled_departure": "21:40"
+  },
+  {
+    "train_no": "22503",
+    "train_name": "DBRG VIVEK EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "KANNIYAKUMARI",
+      "name": "KANNIYAKUMARI"
+    },
+    "to": {
+      "code": "DIBRUGARH",
+      "name": "DIBRUGARH"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "21:47",
+    "scheduled_departure": "21:52"
+  },
+  {
+    "train_no": "20604",
+    "train_name": "NJP AMRIT BHARAT",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "NAGERCOIL JN",
+      "name": "NAGERCOIL JN"
+    },
+    "to": {
+      "code": "NEW JALPAIGURI",
+      "name": "NEW JALPAIGURI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "21:50",
+    "scheduled_departure": "22:00"
+  },
+  {
+    "train_no": "67201",
+    "train_name": "RJY-BZA MEMU",
+    "train_type": "MEMU",
+    "from": {
+      "code": "RAJAMUNDRY",
+      "name": "RAJAMUNDRY"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "22:50",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "22504",
+    "train_name": "VIVEK EXPRESS",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "DIBRUGARH",
+      "name": "DIBRUGARH"
+    },
+    "to": {
+      "code": "KANNIYAKUMARI",
+      "name": "KANNIYAKUMARI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "23:04",
+    "scheduled_departure": "23:09"
+  },
+  {
+    "train_no": "22860",
+    "train_name": "MAS PURI SF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "PURATCHI THALAIVAR DR. MGR CTL CHENNAI",
+      "name": "PURATCHI THALAIVAR DR. MGR CTL CHENNAI"
+    },
+    "to": {
+      "code": "PURI",
+      "name": "PURI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "23:10",
+    "scheduled_departure": "23:20"
+  },
+  {
+    "train_no": "17243",
+    "train_name": "GNT RGDA EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "GUNTUR JN",
+      "name": "GUNTUR JN"
+    },
+    "to": {
+      "code": "RAYAGADA",
+      "name": "RAYAGADA"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:15",
+    "scheduled_departure": "00:20"
+  },
+  {
+    "train_no": "67282",
+    "train_name": "BVRM-BZA DMU",
+    "train_type": "ORDINARY",
+    "from": {
+      "code": "BHIMAVARAM JN",
+      "name": "BHIMAVARAM JN"
+    },
+    "to": {
+      "code": "VIJAYAWADA JN",
+      "name": "VIJAYAWADA JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:25",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "17440",
+    "train_name": "HUMSAFAR EXPRES",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "SRIKAKULAM ROAD",
+      "name": "SRIKAKULAM ROAD"
+    },
+    "to": {
+      "code": "TIRUPATI",
+      "name": "TIRUPATI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:20",
+    "scheduled_departure": "00:30"
+  },
+  {
+    "train_no": "22536",
+    "train_name": "BNRS RMM EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "BANARAS",
+      "name": "BANARAS"
+    },
+    "to": {
+      "code": "RAMESWARAM",
+      "name": "RAMESWARAM"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:20",
+    "scheduled_departure": "00:30"
+  },
+  {
+    "train_no": "17067",
+    "train_name": "CHZ BBSN EXP",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "CHARLAPALLI",
+      "name": "CHARLAPALLI"
+    },
+    "to": {
+      "code": "BHUBANESWAR NEW JN",
+      "name": "BHUBANESWAR NEW JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:35",
+    "scheduled_departure": "00:45"
+  },
+  {
+    "train_no": "08510",
+    "train_name": "VSKP TPTY SPL",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "to": {
+      "code": "TIRUPATI",
+      "name": "TIRUPATI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:40",
+    "scheduled_departure": "00:50"
+  },
+  {
+    "train_no": "17044",
+    "train_name": "AKP SC EXPRESS",
+    "train_type": "EXPRESS",
+    "from": {
+      "code": "ANAKAPALLE",
+      "name": "ANAKAPALLE"
+    },
+    "to": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:40",
+    "scheduled_departure": "00:50"
+  },
+  {
+    "train_no": "22869",
+    "train_name": "VSKP MAS S F",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "to": {
+      "code": "PURATCHI THALAIVAR DR. MGR CTL CHENNAI",
+      "name": "PURATCHI THALAIVAR DR. MGR CTL CHENNAI"
+    },
+    "stops": [
+      {
+        "code": "BZA",
+        "name": "Vijayawada Junction"
+      }
+    ],
+    "scheduled_arrival": "00:40",
+    "scheduled_departure": "00:50"
   }
 ]

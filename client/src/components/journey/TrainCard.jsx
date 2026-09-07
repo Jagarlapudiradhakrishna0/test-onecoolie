@@ -12,14 +12,12 @@ export default function TrainCard({
   onSelect,
   isSelected = false
 }) {
-  const timeStr =
-    train.expected_arrival ||
-    train.scheduled_arrival ||
-    train.expected_departure ||
-    train.scheduled_departure;
+  const schedTime = train.scheduled_arrival || train.scheduled_departure;
+  const expTime = train.expected_arrival || train.expected_departure || schedTime;
 
   // Real-time 4-hour window check
   const checkWithin4Hours = () => {
+    const timeStr = expTime || schedTime;
     if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
       return Boolean(train.is_live);
     }
@@ -34,17 +32,17 @@ export default function TrainCard({
       let diff = (hh * 60 + mm) - currentDayMinutes;
       if (diff < -720) diff += 1440;
       if (diff > 720) diff -= 1440;
-      return diff >= -10 && diff <= 240;
+      return diff >= -30 && diff <= 240;
     } catch {
       return Boolean(train.is_live);
     }
   };
 
   const isWithin4Hours = checkWithin4Hours();
-  const isLive = Boolean(train.is_live) && isWithin4Hours;
+  const isLive = Boolean(train.is_live) || isWithin4Hours;
   const delayMinutes = Number(train.delay_minutes) || 0;
-  const hasDelay = isLive && delayMinutes > 5;
-  const platform = train.platform || '1';
+  const hasDelay = delayMinutes > 5;
+  const platform = train.platform && train.platform !== 'null' && train.platform !== 'undefined' ? train.platform : '1';
 
   return (
     <div
@@ -89,7 +87,7 @@ export default function TrainCard({
                 }`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${hasDelay ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`} />
-                {hasDelay ? `Delayed ${delayMinutes} min` : (train.status && train.status !== 'Advance Schedule' ? train.status : 'On Time')}
+                {hasDelay ? `Delayed ${delayMinutes}m` : (train.status && train.status !== 'Advance Schedule' ? train.status : 'On Time')}
               </span>
             ) : (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-purple-50 text-purple-700 border-purple-200/90 inline-flex items-center gap-1">
@@ -118,27 +116,54 @@ export default function TrainCard({
         </div>
       </div>
 
-      {/* Right Column: Platform & Arrival Time */}
-      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-        <div className="text-left sm:text-right space-y-0.5">
+      {/* Right Column: Platform & Timings (Scheduled vs Expected like WIMT) */}
+      <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+        <div className="text-left sm:text-right space-y-1">
           <div className="flex items-center sm:justify-end gap-1.5">
             <span className="text-xs text-zinc-500 font-medium">Platform</span>
             <span
-              className={`w-6 h-6 rounded-md font-black font-mono text-xs inline-flex items-center justify-center border shadow-2xs ${
+              className={`px-2 py-0.5 rounded-md font-black font-mono text-xs inline-flex items-center justify-center border shadow-2xs ${
                 isWithin4Hours
-                  ? 'bg-blue-50 text-blue-600 border-blue-100'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
                   : 'bg-slate-100 text-zinc-600 border-slate-200'
               }`}
             >
               {platform}
             </span>
           </div>
-          <p className="text-[11px] text-zinc-400 font-medium">
-            {isWithin4Hours ? `Arriving ${station}` : `Timing at ${station}`}
-          </p>
-          <p className="text-sm sm:text-base font-black font-mono text-zinc-900">
-            {timeStr || '11:25 AM'}
-          </p>
+
+          {/* Timings: Shows Scheduled and Expected with Delay Badge */}
+          {hasDelay ? (
+            <div className="space-y-0.5">
+              <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-start sm:justify-end gap-1">
+                <span>Sched:</span>
+                <span className="line-through">{schedTime}</span>
+              </div>
+              <div className="flex items-center justify-start sm:justify-end gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500">Exp:</span>
+                <span className="text-sm sm:text-base font-black font-mono text-rose-600">
+                  {expTime}
+                </span>
+              </div>
+              <p className="text-[10px] font-bold text-rose-600 sm:text-right">
+                {delayMinutes}m late
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              <p className="text-[11px] text-zinc-400 font-medium">
+                {isWithin4Hours ? `Expected at ${station}` : `Timing at ${station}`}
+              </p>
+              <p className="text-sm sm:text-base font-black font-mono text-zinc-900">
+                {expTime || schedTime || '--:--'}
+              </p>
+              {isWithin4Hours && (
+                <p className="text-[10px] font-bold text-emerald-600 sm:text-right">
+                  Right Time
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="w-8 h-8 rounded-full bg-slate-50 text-zinc-400 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0 border border-slate-200 group-hover:border-blue-600">

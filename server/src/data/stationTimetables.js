@@ -20,8 +20,8 @@ const STATION_TIMETABLES = [
     to: { code: 'NDLS', name: 'New Delhi' },
     stations: {
       BZA: { arr: '00:05', dep: '00:15', platform: '1', type: 'both' },
-      WL:  { arr: '02:48', dep: '02:50', platform: '1', type: 'both' },
-      KZJ: { arr: '00:50', dep: '00:55', platform: '1', type: 'both' }
+      WL:  { arr: '02:28', dep: '02:30', platform: '1', type: 'both' },
+      KZJ: { arr: '02:40', dep: '02:42', platform: '1', type: 'both' }
     }
   },
   {
@@ -46,7 +46,7 @@ const STATION_TIMETABLES = [
     to: { code: 'NZM', name: 'Delhi Hazrat Nizamuddin' },
     stations: {
       SC:  { arr: '23:20', dep: '23:25', platform: '1', type: 'both' },
-      KZJ: { arr: '23:00', dep: '23:05', platform: '1', type: 'both' }
+      KZJ: { arr: '01:18', dep: '01:20', platform: '1', type: 'both' }
     }
   },
   {
@@ -56,8 +56,145 @@ const STATION_TIMETABLES = [
     from: { code: 'NZM', name: 'Delhi Hazrat Nizamuddin' },
     to: { code: 'HYB', name: 'Hyderabad Deccan' },
     stations: {
-      KZJ: { arr: '01:28', dep: '01:30', platform: '3', type: 'both' },
-      SC:  { arr: '03:10', dep: '03:15', platform: '5', type: 'both' }
+      KZJ: { arr: '00:18', dep: '00:20', platform: '3', type: 'both' },
+      SC:  { arr: '02:50', dep: '02:55', platform: '5', type: 'both' }
+    }
+  },
+
+  // ── MIDNIGHT & EARLY MORNING RUNS (Matching NTES & Where Is My Train) ──
+  {
+    train_no: '20810',
+    train_name: 'NED SBP SF EXP',
+    train_type: 'SUPERFAST',
+    from: { code: 'NED', name: 'Hazur Sahib Nanded' },
+    to: { code: 'SBP', name: 'Sambalpur' },
+    stations: {
+      SC:  { arr: '21:30', dep: '21:45', platform: '1', type: 'both' },
+      KZJ: { arr: '23:38', dep: '23:40', platform: '1', type: 'both' },
+      WL:  { arr: '23:53', dep: '23:55', platform: '1', type: 'both' }
+    }
+  },
+  {
+    train_no: '12750',
+    train_name: 'BIDR MTM SF EXP',
+    train_type: 'SUPERFAST',
+    from: { code: 'BIDR', name: 'Bidar' },
+    to: { code: 'MTM', name: 'Machilipatnam' },
+    stations: {
+      SC:  { arr: '22:15', dep: '22:20', platform: '2', type: 'both' },
+      KZJ: { arr: '00:15', dep: '00:20', platform: '2', type: 'both' },
+      WL:  { arr: '00:33', dep: '00:35', platform: '1', type: 'both' },
+      BZA: { arr: '04:00', dep: '04:15', platform: '3', type: 'both' }
+    }
+  },
+  {
+    train_no: '17050',
+    train_name: 'Secunderabad Machilipatnam Express Slip',
+    train_type: 'EXPRESS',
+    from: { code: 'SC', name: 'Secunderabad Junction' },
+    to: { code: 'MTM', name: 'Machilipatnam' },
+    stations: {
+      SC:  { arr: '22:45', dep: '22:45', platform: '3', type: 'departure' },
+      KZJ: { arr: '00:43', dep: '00:45', platform: '1', type: 'both' },
+      WL:  { arr: '00:58', dep: '01:00', platform: '1', type: 'both' },
+      BZA: { arr: '04:30', dep: '04:45', platform: '2', type: 'both' }
+    }
+  },
+  {
+    train_no: '12771',
+    train_name: 'Secunderabad - Raipur SF Express',
+    train_type: 'SUPERFAST',
+    from: { code: 'SC', name: 'Secunderabad Junction' },
+    to: { code: 'R', name: 'Raipur' },
+    stations: {
+      SC:  { arr: '22:40', dep: '22:40', platform: '1', type: 'departure' },
+      KZJ: { arr: '00:33', dep: '00:35', platform: '1', type: 'both' },
+      WL:  { arr: '00:48', dep: '00:50', platform: '1', type: 'both' }
+    }
+  },
+  {
+    train_no: '07076',
+    train_name: 'GKP-HYB Spl Express',
+    train_type: 'SPECIAL',
+    from: { code: 'GKP', name: 'Gorakhpur Junction' },
+    to: { code: 'HYB', name: 'Hyderabad Deccan' },
+    stations: {
+      KZJ: { arr: '12:58', dep: '13:00', platform: '1', type: 'both' },
+      SC:  { arr: '15:20', dep: '15:25', platform: '5', type: 'both' }
+    }
+  },
+  {
+    train_no: '03253',
+    train_name: 'PNBE CHZ SPL Express',
+    train_type: 'SPECIAL',
+    from: { code: 'PNBE', name: 'Patna Junction' },
+    to: { code: 'SC', name: 'Secunderabad Junction' },
+    stations: {
+      WL:  { arr: '00:10', dep: '00:12', platform: '1', type: 'both' },
+      KZJ: { arr: '00:26', dep: '00:28', platform: '1', type: 'both' },
+      SC:  { arr: '03:30', dep: '03:30', platform: '2', type: 'arrival' }
+    }
+  },
+  {
+    train_no: '12746',
+    train_name: 'MUGR SC SF EXP',
+    train_type: 'SUPERFAST',
+    from: { code: 'MUGR', name: 'Manuguru' },
+    to: { code: 'SC', name: 'Secunderabad Junction' },
+    stations: {
+      WL:  { arr: '00:58', dep: '01:00', platform: '2', type: 'both' },
+      KZJ: { arr: '01:14', dep: '01:15', platform: '3', type: 'both' },
+      SC:  { arr: '03:45', dep: '03:45', platform: '1', type: 'arrival' }
+    }
+  },
+  {
+    train_no: '04149',
+    train_name: 'PRYJ YPR SPL Express',
+    train_type: 'SPECIAL',
+    from: { code: 'PRYJ', name: 'Prayagraj Junction' },
+    to: { code: 'YPR', name: 'Yesvantpur Junction' },
+    stations: {
+      KZJ: { arr: '01:21', dep: '01:22', platform: '1', type: 'both' },
+      WL:  { arr: '01:38', dep: '01:40', platform: '1', type: 'both' },
+      SC:  { arr: '04:10', dep: '04:25', platform: '2', type: 'both' }
+    }
+  },
+  {
+    train_no: '12745',
+    train_name: 'SC MUGR SF EXP',
+    train_type: 'SUPERFAST',
+    from: { code: 'SC', name: 'Secunderabad Junction' },
+    to: { code: 'MUGR', name: 'Manuguru' },
+    stations: {
+      SC:  { arr: '23:45', dep: '23:45', platform: '3', type: 'departure' },
+      KZJ: { arr: '01:39', dep: '01:40', platform: '1', type: 'both' },
+      WL:  { arr: '01:53', dep: '01:55', platform: '1', type: 'both' }
+    }
+  },
+  {
+    train_no: '12788',
+    train_name: 'NSL NS SF EXP',
+    train_type: 'SUPERFAST',
+    from: { code: 'NSL', name: 'Nagarsol' },
+    to: { code: 'NS', name: 'Narasapur' },
+    stations: {
+      SC:  { arr: '23:25', dep: '23:40', platform: '2', type: 'both' },
+      KZJ: { arr: '01:48', dep: '01:50', platform: '1', type: 'both' },
+      WL:  { arr: '02:03', dep: '02:05', platform: '1', type: 'both' },
+      BZA: { arr: '05:35', dep: '05:50', platform: '4', type: 'both' }
+    }
+  },
+  {
+    train_no: '12749',
+    train_name: 'MTM BIDR SF EXP',
+    train_type: 'SUPERFAST',
+    from: { code: 'MTM', name: 'Machilipatnam' },
+    to: { code: 'BIDR', name: 'Bidar' },
+    stations: {
+      BZA: { arr: '22:30', dep: '22:45', platform: '1', type: 'both' },
+      WL:  { arr: '01:33', dep: '01:35', platform: '2', type: 'both' },
+      KZJ: { arr: '01:49', dep: '01:50', platform: '2', type: 'both' },
+      SC:  { arr: '04:00', dep: '04:10', platform: '4', type: 'both' }
     }
   },
 
@@ -124,9 +261,9 @@ const STATION_TIMETABLES = [
     to: { code: 'HYB', name: 'Hyderabad Deccan' },
     stations: {
       BZA: { arr: '23:30', dep: '23:45', platform: '1', type: 'both' },
-      WL:  { arr: '03:28', dep: '03:30', platform: '2', type: 'both' },
-      KZJ: { arr: '03:50', dep: '03:52', platform: '2', type: 'both' },
-      SC:  { arr: '05:45', dep: '05:50', platform: '6', type: 'both' }
+      WL:  { arr: '02:48', dep: '02:50', platform: '2', type: 'both' },
+      KZJ: { arr: '03:03', dep: '03:05', platform: '3', type: 'both' },
+      SC:  { arr: '05:10', dep: '05:15', platform: '6', type: 'both' }
     }
   },
   {
@@ -180,9 +317,9 @@ const STATION_TIMETABLES = [
     to: { code: 'LPI', name: 'Lingampalli' },
     stations: {
       BZA: { arr: '23:15', dep: '23:30', platform: '1', type: 'both' },
-      WL:  { arr: '03:18', dep: '03:20', platform: '2', type: 'both' },
-      KZJ: { arr: '03:38', dep: '03:40', platform: '2', type: 'both' },
-      SC:  { arr: '05:35', dep: '05:40', platform: '5', type: 'both' }
+      WL:  { arr: '02:03', dep: '02:05', platform: '2', type: 'both' },
+      KZJ: { arr: '02:18', dep: '02:20', platform: '3', type: 'both' },
+      SC:  { arr: '04:35', dep: '04:40', platform: '5', type: 'both' }
     }
   },
   {
@@ -376,9 +513,9 @@ const STATION_TIMETABLES = [
     to: { code: 'SC', name: 'Secunderabad Jn' },
     stations: {
       BZA: { arr: '23:45', dep: '23:55', platform: '1', type: 'both' },
-      WL:  { arr: '04:13', dep: '04:15', platform: '2', type: 'both' },
-      KZJ: { arr: '04:28', dep: '04:30', platform: '2', type: 'both' },
-      SC:  { arr: '05:40', dep: '05:40', platform: '4', type: 'arrival' }
+      WL:  { arr: '02:18', dep: '02:20', platform: '2', type: 'both' },
+      KZJ: { arr: '02:33', dep: '02:35', platform: '3', type: 'both' },
+      SC:  { arr: '04:40', dep: '04:40', platform: '4', type: 'arrival' }
     }
   },
   {

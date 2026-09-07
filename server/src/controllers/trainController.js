@@ -76,7 +76,7 @@ exports.searchTrains = async (req, res) => {
     .map((st) => {
       const [hh, mm] = (st.scheduled_arrival || st.scheduled_departure || '00:00').split(':').map(Number);
       let diffMinutes = (hh * 60 + mm) - currentDayMinutes;
-      if (diffMinutes < -15) diffMinutes += 1440;
+      if (diffMinutes < -30) diffMinutes += 1440;
 
       return {
         train_no: st.train_no,
