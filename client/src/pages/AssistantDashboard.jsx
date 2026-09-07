@@ -6,6 +6,7 @@ import {
   Briefcase,
   History,
   IndianRupee,
+  Wallet,
   User,
   LifeBuoy,
   Bell,
@@ -35,6 +36,7 @@ import {
   Radio,
   ExternalLink
 } from 'lucide-react';
+import AssistantWalletView from '../components/AssistantWalletView';
 import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import ProfileMenu from '../context/ProfileMenu';
@@ -793,6 +795,12 @@ export default function AssistantDashboard() {
       sub: t('earningsSub'),
       hasWave: false,
     },
+    wallet: {
+      title: 'Wallet & Earnings',
+      prefix: 'Financial Dashboard',
+      sub: 'Track your earnings and manage payouts.',
+      hasWave: false,
+    },
     profile: {
       title: t('assistantProfile'),
       prefix: t('dutyIdentity'),
@@ -964,6 +972,7 @@ export default function AssistantDashboard() {
               { id: 'jobs', label: activeJobs.length <= 1 ? t('myAssignedJob') : t('myJobs'), icon: Briefcase, badge: activeJobs.length },
               { id: 'history', label: t('tripHistory'), icon: History, badge: completedJobs.length },
               { id: 'earnings', label: t('earningsReviews'), icon: IndianRupee, badge: ratedJobs.length > 0 ? ratedJobs.length : null },
+              { id: 'wallet', label: 'Wallet', icon: Wallet, badge: null },
               { id: 'profile', label: t('profile'), icon: User, badge: null },
               { id: 'support', label: t('support'), icon: LifeBuoy, badge: null },
             ].map((item, idx) => {
@@ -1703,7 +1712,12 @@ export default function AssistantDashboard() {
             </div>
           )}
 
-          {/* TAB 5: PROFILE VIEW */}
+          {/* TAB 5: WALLET & EARNINGS */}
+          {tab === 'wallet' && (
+            <AssistantWalletView />
+          )}
+
+          {/* TAB 6: PROFILE VIEW */}
           {tab === 'profile' && (
             <div className="bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-2xl space-y-6 shadow-2xs">
               <div className="flex items-center gap-4">
