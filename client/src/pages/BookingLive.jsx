@@ -57,7 +57,7 @@ export default function BookingLive() {
   }, []);
 
   const activeBookings = (allBookings || []).filter((b) =>
-    ['pending', 'accepted', 'arrived', 'in_progress', 'allocated'].includes(b.status?.toLowerCase())
+    ['pending', 'accepted', 'arrived', 'arriving', 'reached', 'in_progress', 'in_service', 'allocated', 'assigned'].includes((b.booking_status || b.status || '').toLowerCase())
   );
 
   const [fetchError, setFetchError] = useState(null);
@@ -311,9 +311,11 @@ export default function BookingLive() {
           >
             <Briefcase className="w-3.5 h-3.5" />
             <span>My Trips</span>
-            <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-white text-black">
-              {activeBookings.length > 0 ? activeBookings.length : 1}
-            </span>
+            {activeBookings.length > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-white text-black">
+                {activeBookings.length}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -350,9 +352,11 @@ export default function BookingLive() {
             >
               <Briefcase className="w-4 h-4" />
               <span>My Trips</span>
-              <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-white text-black">
-                {activeBookings.length > 0 ? activeBookings.length : 1}
-              </span>
+              {activeBookings.length > 0 && (
+                <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-white text-black">
+                  {activeBookings.length}
+                </span>
+              )}
             </button>
           </div>
 

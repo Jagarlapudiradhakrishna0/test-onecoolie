@@ -96,7 +96,7 @@ const buildServiceDescription = (service, { coach, seat_number, berth_type, acti
  * in flat format or nested ({ journey, seat, services }) format.
  */
 const normalizeBookingPayload = (body) => {
-  const train_no = body.train_no || body.journey?.train_number || body.journey?.train_no || body.train_number;
+  const train_number = body.train_number || body.train_no || body.journey?.train_number || body.journey?.train_no;
   const train_name = body.train_name || body.journey?.train_name;
   const station_code = body.station_code || body.journey?.station_code;
   const journey_date = body.journey_date || body.journey?.journey_date;
@@ -113,7 +113,8 @@ const normalizeBookingPayload = (body) => {
   const payment_method = body.payment_method;
 
   return {
-    train_no,
+    train_number,
+    train_no: train_number,
     train_name,
     station_code,
     journey_date,
@@ -140,6 +141,7 @@ const normalizeBookingPayload = (body) => {
  */
 async function createBookingRecordInDB(supabase, userId, payload) {
   const {
+    train_number,
     train_no,
     train_name,
     station_code,
@@ -155,7 +157,8 @@ async function createBookingRecordInDB(supabase, userId, payload) {
     payment_method
   } = normalizeBookingPayload(payload);
 
-  if (!train_no) throw { status: 400, message: 'Train number is required.' };
+  const selectedTrainNumber = train_number || train_no;
+  if (!selectedTrainNumber) throw { status: 400, message: 'Train number is required.' };
   if (!train_name) throw { status: 400, message: 'Train name is required.' };
   if (!station_code) throw { status: 400, message: 'Station is required.' };
   if (!journey_date) throw { status: 400, message: 'Journey date is required.' };
@@ -194,7 +197,7 @@ async function createBookingRecordInDB(supabase, userId, payload) {
     booking_id: bookingId,
     passenger_id: userId,
     assistant_id: null,
-    train_number: String(train_no),
+    train_number: String(selectedTrainNumber),
     train_name: train_name,
     journey_date: journey_date,
     journey_time: journey_time,

@@ -12,11 +12,24 @@ import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import ToastProvider from './components/Toast';
 
-const socketUrl =
-  import.meta.env.VITE_SOCKET_URL ||
-  (import.meta.env.VITE_API_URL
-    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
-    : (import.meta.env.DEV ? 'http://localhost:5000' : 'https://onecoolie.onrender.com'));
+const socketUrl = (() => {
+  if (import.meta.env.DEV) {
+    const envSock = import.meta.env.VITE_SOCKET_URL;
+    if (envSock && (envSock.includes('localhost') || envSock.includes('127.0.0.1'))) {
+      return envSock;
+    }
+    return 'http://localhost:5000';
+  }
+  const prodSock = import.meta.env.VITE_SOCKET_URL;
+  if (prodSock && !prodSock.includes('localhost') && !prodSock.includes('127.0.0.1')) {
+    return prodSock;
+  }
+  const prodApi = import.meta.env.VITE_API_URL;
+  if (prodApi && !prodApi.includes('localhost') && !prodApi.includes('127.0.0.1') && !prodApi.startsWith('/')) {
+    return prodApi.replace(/\/api\/?$/, '');
+  }
+  return 'https://onecoolie.onrender.com';
+})();
 
 window.socket = io(socketUrl, {
   transports: ['websocket', 'polling'],

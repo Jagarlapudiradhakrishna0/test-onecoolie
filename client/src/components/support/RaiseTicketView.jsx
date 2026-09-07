@@ -59,8 +59,11 @@ export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings
         passengerPhone: user?.phone || '+91 98765 43210',
         passengerEmail: user?.email || 'passenger@onecoolie.com',
         trip: selectedTrip,
+        station: selectedTrip?.station_code || selectedTrip?.fromCode || 'KZJ',
+        pnr: selectedTrip?.pnr || 'N/A',
         priority: ['Payment', 'Assistant'].includes(issueType) ? 'high' : 'medium',
         issueType,
+        status: 'open',
         description: description.trim(),
         aiSummary: `${issueType}: ${description.trim()}`,
         initialMessages: [
@@ -95,7 +98,7 @@ export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings
               Ticket Raised Successfully
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto">
-              Your support request has been submitted. Our support team will review your request and get back to you shortly.
+              Your support request has been submitted to the Station Control Desk. A support executive is assigned to communicate with you.
             </p>
           </div>
 
@@ -132,7 +135,7 @@ export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings
             )}
 
             <div className="pt-2 border-t border-slate-200/70 text-[11px] text-slate-500">
-              Expected response: <strong className="text-slate-700">Within 15 minutes</strong>
+              Expected response: <strong className="text-slate-700">Immediate · Station Desk Online</strong>
             </div>
           </div>
 
@@ -140,10 +143,18 @@ export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <button
               type="button"
+              onClick={() => onNavigate('ticket_detail', { ticketId: submittedTicket.id })}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-full text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat with Support Now</span>
+            </button>
+            <button
+              type="button"
               onClick={() => onNavigate('tickets')}
               className="w-full sm:w-auto bg-black hover:bg-zinc-800 text-white font-bold px-6 py-3 rounded-full text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
             >
-              <span>View My Tickets</span>
+              <span>View All My Tickets</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
             <button

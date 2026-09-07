@@ -6,6 +6,7 @@ const {
   syncAllStationsToDatabase,
   SUPPORTED_STATIONS
 } = require('../services/railwayService');
+const { getStationTimetable, findTrainsInTimetable } = require('../data/stationTimetables');
 
 const TRAINS_FILE_PATH = path.join(__dirname, '..', 'data', 'trains.json');
 
@@ -30,11 +31,12 @@ const getTrainsDatabase = () => {
 exports.searchTrains = async (req, res) => {
   const { query = '', station } = req.query;
   const q = String(query).toLowerCase().trim();
+  const stationCode = station ? station.toUpperCase().trim() : null;
 
   let liveTrains = [];
   try {
-    if (station && SUPPORTED_STATIONS[station.toUpperCase()]) {
-      const board = await fetchLiveStationBoard(station.toUpperCase(), 4);
+    if (stationCode && SUPPORTED_STATIONS[stationCode]) {
+      const board = await fetchLiveStationBoard(stationCode, 4);
       if (board?.allTrains) {
         liveTrains = board.allTrains.map((t) => ({
           train_no: t.trainNumber,
@@ -42,7 +44,7 @@ exports.searchTrains = async (req, res) => {
           train_type: t.trainType,
           from: { code: t.origin, name: t.origin },
           to: { code: t.destination, name: t.destination },
-          stops: [{ code: station.toUpperCase(), name: SUPPORTED_STATIONS[station.toUpperCase()] }],
+          stops: [{ code: stationCode, name: SUPPORTED_STATIONS[stationCode] }],
           scheduled_arrival: t.scheduledArrival,
           expected_arrival: t.expectedArrival,
           scheduled_departure: t.scheduledDeparture,
@@ -51,7 +53,8 @@ exports.searchTrains = async (req, res) => {
           delay_minutes: t.delayMinutes,
           status: t.status,
           is_live: true,
-          is_advance_schedule: false
+          is_advance_schedule: false,
+          diffMinutes: t.diffMinutes
         }));
       }
     }
@@ -59,36 +62,50 @@ exports.searchTrains = async (req, res) => {
     // Live board fallback
   }
 
-  const allCatalog = getTrainsDatabase();
+  // Get authentic South Central Railway schedule for the station
+  const stationTimetable = stationCode ? getStationTimetable(stationCode) : [];
 
-  // Pre-booking catalogue for station
-  const stationCatalog = station
-    ? allCatalog.filter((t) => t.stops?.some((s) => s.code.toUpperCase() === station.toUpperCase()))
-    : allCatalog;
+  // Current time in IST
+  const str = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+  const now = new Date(str);
+  const currentDayMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const formatAdvanceCatalogTrain = (ct) => ({
-    ...ct,
-    expected_arrival: ct.scheduled_arrival || ct.expected_arrival || null,
-    expected_departure: ct.scheduled_departure || ct.expected_departure || null,
-    platform: ct.platform || '1',
-    delay_minutes: 0,
-    status: 'Advance Schedule',
-    is_live: false,
-    is_advance_schedule: true
-  });
+  // Convert station timetable into formatted advance catalog trains
+  const advanceFromTimetable = stationTimetable
+    .filter((st) => !liveTrains.some((lt) => lt.train_no === st.train_no))
+    .map((st) => {
+      const [hh, mm] = (st.scheduled_arrival || st.scheduled_departure || '00:00').split(':').map(Number);
+      let diffMinutes = (hh * 60 + mm) - currentDayMinutes;
+      if (diffMinutes < -15) diffMinutes += 1440;
 
-  // If no query string, return live running trains first, followed by advance schedule catalogue!
+      return {
+        train_no: st.train_no,
+        train_name: st.train_name,
+        train_type: st.train_type || 'EXPRESS',
+        from: st.from,
+        to: st.to,
+        stops: [{ code: stationCode, name: SUPPORTED_STATIONS[stationCode] }],
+        scheduled_arrival: st.scheduled_arrival,
+        expected_arrival: st.scheduled_arrival,
+        scheduled_departure: st.scheduled_departure,
+        expected_departure: st.scheduled_departure,
+        platform: st.platform || '1',
+        delay_minutes: 0,
+        status: 'Advance Schedule',
+        is_live: false,
+        is_advance_schedule: true,
+        diffMinutes
+      };
+    })
+    .sort((a, b) => a.diffMinutes - b.diffMinutes);
+
+  // If no search query, return live running trains first, followed by chronologically sorted schedule!
   if (!q) {
-    const combined = [
-      ...liveTrains,
-      ...stationCatalog
-        .filter((ct) => !liveTrains.some((lt) => lt.train_no === ct.train_no))
-        .map(formatAdvanceCatalogTrain)
-    ].slice(0, 35);
+    const combined = [...liveTrains, ...advanceFromTimetable].slice(0, 40);
     return res.json(combined);
   }
 
-  // Parse train number (e.g. 5 digits like 17012) or keywords
+  // Parse train number (e.g. 5 digits like 12721) or keywords
   const numberMatch = q.match(/\b\d{4,5}\b/);
   const searchNumber = numberMatch ? numberMatch[0] : null;
   const tokens = q.split(/[\s·•\-_–—]+/).filter((t) => t.length > 2);
@@ -122,17 +139,31 @@ exports.searchTrains = async (req, res) => {
   // Filter live trains matching query
   const liveMatches = liveTrains.filter(isMatch);
 
-  // Combine with catalog for advance schedule pre-booking
+  // Filter station timetable matching query
+  const timetableMatches = advanceFromTimetable
+    .filter((t) => !liveMatches.some((lt) => lt.train_no === t.train_no))
+    .filter(isMatch);
+
+  // Fallback to allCatalog for any other train across Indian Railways
+  const allCatalog = getTrainsDatabase();
   const catalogMatches = allCatalog
     .filter((t) =>
-      isMatch(t) ||
-      t.stops?.some((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+      !liveMatches.some((lt) => lt.train_no === t.train_no) &&
+      !timetableMatches.some((tt) => tt.train_no === t.train_no) &&
+      (isMatch(t) || t.stops?.some((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)))
     )
-    .filter((ct) => !liveMatches.some((lt) => lt.train_no === ct.train_no))
-    .map(formatAdvanceCatalogTrain);
+    .map((ct) => ({
+      ...ct,
+      expected_arrival: ct.scheduled_arrival || null,
+      expected_departure: ct.scheduled_departure || null,
+      platform: ct.platform || '1',
+      delay_minutes: 0,
+      status: 'Advance Schedule',
+      is_live: false,
+      is_advance_schedule: true
+    }));
 
-  const combined = [...liveMatches, ...catalogMatches].slice(0, 35);
-
+  const combined = [...liveMatches, ...timetableMatches, ...catalogMatches].slice(0, 40);
   res.json(combined);
 };
 
@@ -212,7 +243,10 @@ exports.updateTrainApiKey = (req, res) => {
     return res.status(400).json({ success: false, message: 'API key is required.' });
   }
   process.env.TRAIN_API_KEY = apiKey.trim();
-  if (apiHost) process.env.TRAIN_API_HOST = apiHost.trim();
+  if (apiHost) {
+    process.env.TRAIN_API_HOST = apiHost.trim();
+    process.env.TRAIN_API_BASE_URL = `https://${apiHost.trim()}`;
+  }
   return res.json({ success: true, message: 'Train API Key updated successfully.' });
 };
 

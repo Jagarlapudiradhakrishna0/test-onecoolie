@@ -8,6 +8,8 @@
  * - Local storage persistence with initial seeds directly matching reference design
  */
 
+import axios from '../api/axios';
+
 const STORAGE_KEY = 'onecoolie_passenger_tickets_real';
 const CHANNEL_NAME = 'onecoolie_support_sync';
 
@@ -386,23 +388,32 @@ export function createTicket({
   trip = null,
   aiSummary = '',
   initialMessages = [],
+  issueType = 'General',
+  description = '',
 }) {
   const tickets = getTickets();
   const nextNum = 10483 + Math.floor(Math.random() * 100);
   const ticketId = `OC-${nextNum}`;
 
+  const desc = description || subject || 'Passenger Assistance Query';
+
   const newTicket = {
     id: ticketId,
+    type: 'passenger',
     subject: subject || "Passenger Assistance Query",
+    category: issueType || 'Passenger Help',
+    issueType: issueType || 'General',
+    description: desc,
+    desc: desc,
     passengerName: passengerName || 'Passenger',
-      passengerPhone: passengerPhone || '',
-      passengerEmail: passengerEmail || '',
+    passengerPhone: passengerPhone || '',
+    passengerEmail: passengerEmail || '',
     status: 'in_progress', // immediately in_progress as bot escalated
     priority,
     isBotEscalated: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-      trip: trip || null,
+    trip: trip || null,
     aiSummary:
       aiSummary ||
       'Passenger requested human support assistance regarding an active booking. AI conversation transcript and trip telemetry attached.',
@@ -420,6 +431,12 @@ export function createTicket({
 
   const updated = [newTicket, ...tickets];
   saveTickets(updated);
+
+  // Synchronize authoritatively with backend server so it appears in Admin portal immediately
+  axios.post('/support/tickets', newTicket).catch((err) => {
+    console.warn('Backend ticket sync deferred:', err.message);
+  });
+
   return newTicket;
 }
 
@@ -450,6 +467,12 @@ export function addTicketMessage(ticketId, message) {
 
   tickets[index] = { ...ticket };
   saveTickets(tickets);
+
+  // Synchronize message to backend server
+  axios.post(`/support/tickets/${ticketId}/messages`, newMsg).catch((err) => {
+    console.warn('Backend message sync deferred:', err.message);
+  });
+
   return newMsg;
 }
 
@@ -483,8 +506,30 @@ export function updateTicketStatus(ticketId, newStatus) {
   });
 
   saveTickets(tickets);
+
+  // Synchronize status to backend server
+  axios.patch(`/support/tickets/${ticketId}/status`, { status: newStatus }).catch((err) => {
+    console.warn('Backend status sync deferred:', err.message);
+  });
+
   return tickets[index];
 }
+
+/**
+ * Fetch and synchronize tickets from backend server
+ */
+export async function fetchServerTickets() {
+  try {
+    const res = await axios.get('/support/tickets');
+    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+      saveTickets(res.data);
+      return res.data;
+    }
+  } catch (err) {
+    console.warn('Unable to fetch server tickets:', err.message);
+  }
+  return getTickets();
+};
 
 /**
  * Update ticket priority

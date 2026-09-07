@@ -3,6 +3,7 @@ import {
   ArrowLeft, Send, Paperclip, CheckCircle, Clock, 
   Train, Check, Headphones, User, CheckCircle2 
 } from 'lucide-react';
+import axios from '../../api/axios';
 import { getTicketById, addTicketMessage, updateTicketStatus, subscribeToSupportUpdates } from '../../utils/supportStore';
 
 export default function TicketDetailView({ onNavigate, ticketId, user }) {
@@ -10,15 +11,45 @@ export default function TicketDetailView({ onNavigate, ticketId, user }) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
 
-  const fetchTicket = () => {
+  const fetchTicket = async () => {
+    // 1. Check local store first for instant render
     const t = getTicketById(ticketId);
-    setTicket(t);
+    if (t) setTicket(t);
+
+    // 2. Fetch authoritative ticket from backend
+    try {
+      const res = await axios.get(`/support/tickets/${ticketId}`).catch(() => null);
+      if (res && res.data && res.data.id) {
+        setTicket(res.data);
+      }
+    } catch (err) {
+      console.warn('Backend fetch ticket error:', err);
+    }
   };
 
   useEffect(() => {
     fetchTicket();
     const unsubscribe = subscribeToSupportUpdates(fetchTicket);
-    return () => unsubscribe();
+    const interval = setInterval(fetchTicket, 3000); // 3-second rapid sync with Admin responses
+
+    // Real-time socket sync
+    const handleTicketMsg = (data) => {
+      if (data && String(data.ticketId).toLowerCase().replace('#', '') === String(ticketId).toLowerCase().replace('#', '')) {
+        fetchTicket();
+      }
+    };
+
+    if (window.socket) {
+      window.socket.on('ticket_message', handleTicketMsg);
+    }
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+      if (window.socket) {
+        window.socket.off('ticket_message', handleTicketMsg);
+      }
+    };
   }, [ticketId]);
 
   const scrollToBottom = () => {

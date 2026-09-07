@@ -1374,7 +1374,7 @@ export default function AssistantDashboard() {
                           {req.passenger?.name || t('passenger')}
                         </h3>
                         <p className="text-xs font-semibold text-slate-500 dark:text-zinc-400 mb-4">
-                          {t('train')} {req.train_no} · {req.train_name || 'Station Assistance'}
+                          {t('train')} {req.train_number || req.train_no} · {req.train_name || 'Station Assistance'}
                         </p>
 
                         {/* Journey Metadata */}
@@ -1465,7 +1465,7 @@ export default function AssistantDashboard() {
                       <div className="space-y-2 flex-1 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <span className="font-extrabold text-sm sm:text-base text-black dark:text-white">
-                            Train {job.train_no} · {job.train_name}
+                            Train {job.train_number || job.train_no} · {job.train_name}
                           </span>
                           <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-extrabold uppercase tracking-wide border border-emerald-200/60 dark:border-emerald-800/50">
                             {t('completed') || 'Completed'}
@@ -1655,7 +1655,7 @@ export default function AssistantDashboard() {
                             </div>
 
                             <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-zinc-500">
-                              <span>Train {job.train_no} · {job.train_name}</span>
+                              <span>Train {job.train_number || job.train_no} · {job.train_name}</span>
                               <span>•</span>
                               <span>{job.journey_date || 'Recent'}</span>
                             </div>

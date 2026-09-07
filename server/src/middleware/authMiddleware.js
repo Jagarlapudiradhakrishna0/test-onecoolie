@@ -31,4 +31,30 @@ const protect = (req, res, next) => {
   return res.status(401).json({ message: 'Not authorized, no token' });
 };
 
-module.exports = { protect };
+const optionalProtect = (req, res, next) => {
+  const authHeader =
+    req.headers.authorization ||
+    req.headers.Authorization ||
+    req.headers['x-access-token'] ||
+    req.headers['x-auth-token'];
+
+  if (authHeader && typeof authHeader === 'string') {
+    try {
+      let token = authHeader.trim();
+      if (/^Bearer\s+/i.test(token)) {
+        token = token.replace(/^Bearer\s+/i, '').trim();
+      }
+      token = token.replace(/^"(.*)"$/, '$1').trim();
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+      }
+    } catch (error) {
+      // Gracefully continue without authenticated user
+    }
+  }
+  return next();
+};
+
+module.exports = { protect, optionalProtect };

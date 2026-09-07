@@ -259,8 +259,8 @@ To eliminate third-party API costs while maintaining real-time accuracy, ONECOOL
    - Ingests all official Indian Railways schedules (Rajdhani, Shatabdi, Vande Bharat, Superfast, Express, Passenger).
    - Provides sub-10ms linear search and autocomplete for advance pre-booking with **zero API quota consumption**.
 2. **Tier 2 (Real-Time Upstream — RapidAPI IRCTC):**
-   - Queried via `https://irctc1.p.rapidapi.com/api/v3/getLiveStation` and `/getPNRStatus`.
-   - Resolves live platform numbers, GPS delay in minutes, and PNR confirmed coach/berth positions.
+   - Queried via `https://irctc-indian-railway-pnr-status.p.rapidapi.com/station/:code/trains` and `/getPNRStatus/:pnr` (with backward compatibility for `irctc1.p.rapidapi.com`).
+   - Resolves live platform numbers, delay in minutes, and PNR confirmed coach/berth positions.
 3. **Dynamic Clock Synchronization Engine (`railwayService.js`):**
    - Automatically computes time difference (`diffMinutes`) against current Indian Standard Time (IST).
    - **Purges departed trains:** If a train departed more than 10 minutes ago, it is automatically removed from live arrival suggestions.
@@ -346,8 +346,8 @@ OTP_EXPIRY_MINUTES=10
 
 # Indian Railway Telemetry Upstream (RapidAPI IRCTC)
 TRAIN_API_KEY=your-rapidapi-key
-TRAIN_API_HOST=irctc1.p.rapidapi.com
-TRAIN_API_BASE_URL=https://irctc1.p.rapidapi.com/api/v3
+TRAIN_API_HOST=irctc-indian-railway-pnr-status.p.rapidapi.com
+TRAIN_API_BASE_URL=https://irctc-indian-railway-pnr-status.p.rapidapi.com
 ```
 
 ---

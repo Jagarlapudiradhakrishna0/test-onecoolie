@@ -92,8 +92,8 @@ function formatBooking(booking, { includeOTP = false } = {}) {
   // Assistant relation
   const assistant = booking.assistant || null;
 
-  // Always expose BOTH train_no AND train_number so every frontend works
-  const trainNo = booking.train_no || booking.train_number || null;
+  // Always expose BOTH train_number AND train_no so every frontend works
+  const trainNo = booking.train_number || booking.train_no || null;
 
   // Build the canonical services object
   const services = parseServices(booking.services || booking.service || '');

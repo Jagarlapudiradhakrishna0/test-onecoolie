@@ -4,9 +4,20 @@ import axios from 'axios';
 // - If VITE_API_URL is explicitly set, use it across all environments.
 // - In development fallback: use '/api' to cleanly leverage Vite's reverse proxy to localhost:5000.
 // - In production fallback: use production cloud backend URL.
-const resolvedBaseUrl =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? '/api' : 'https://onecoolie.onrender.com/api');
+const resolvedBaseUrl = (() => {
+  if (import.meta.env.DEV) {
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl && (envUrl.startsWith('/') || envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+      return envUrl;
+    }
+    return '/api';
+  }
+  const prodUrl = import.meta.env.VITE_API_URL;
+  if (prodUrl && !prodUrl.includes('localhost') && !prodUrl.includes('127.0.0.1')) {
+    return prodUrl;
+  }
+  return 'https://onecoolie.onrender.com/api';
+})();
 
 const instance = axios.create({
   baseURL: resolvedBaseUrl,

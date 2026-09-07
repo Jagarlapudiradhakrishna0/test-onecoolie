@@ -232,7 +232,7 @@
   },
   {
     "train_no": "12727",
-    "train_name": "Godavari SF Express",
+    "train_name": "GODAVARI EXPRES",
     "train_type": "SUPERFAST",
     "from": {
       "code": "VSKP",
@@ -265,7 +265,7 @@
   },
   {
     "train_no": "12728",
-    "train_name": "Godavari SF Express",
+    "train_name": "GODAVARI SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "HYB",
@@ -331,7 +331,7 @@
   },
   {
     "train_no": "12760",
-    "train_name": "Charminar SF Express",
+    "train_name": "CHARMINAR SF EX",
     "train_type": "SUPERFAST",
     "from": {
       "code": "TBM",
@@ -754,7 +754,7 @@
   },
   {
     "train_no": "12705",
-    "train_name": "Guntur - Secunderabad Intercity SF",
+    "train_name": "SC INTERCITY SF",
     "train_type": "INTERCITY",
     "from": {
       "code": "GNT",
@@ -941,7 +941,7 @@
   },
   {
     "train_no": "12862",
-    "train_name": "Nizamuddin–VSKP Link SF",
+    "train_name": "MBNR VSKP SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "NZM",
@@ -970,7 +970,7 @@
   },
   {
     "train_no": "12737",
-    "train_name": "Gowthami SF Express",
+    "train_name": "GOUTAMI SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "COA",
@@ -988,6 +988,10 @@
       {
         "code": "SC",
         "name": "Secunderabad Jn"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_arrival": "23:25",
@@ -995,7 +999,7 @@
   },
   {
     "train_no": "12738",
-    "train_name": "Gowthami SF Express",
+    "train_name": "GOUTAMI SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "LPI",
@@ -1013,6 +1017,10 @@
       {
         "code": "BZA",
         "name": "Vijayawada Jn"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_arrival": "21:15",
@@ -1291,7 +1299,7 @@
   },
   {
     "train_no": "12764",
-    "train_name": "Padmavati Express",
+    "train_name": "PADMAVATHI SF",
     "train_type": "SUPERFAST",
     "from": {
       "code": "SC",
@@ -1436,7 +1444,7 @@
   },
   {
     "train_no": "17405",
-    "train_name": "Krishna Express",
+    "train_name": "KRISHNA EXPRESS",
     "train_type": "EXPRESS",
     "from": {
       "code": "TPTY",
@@ -1502,7 +1510,7 @@
   },
   {
     "train_no": "12721",
-    "train_name": "Dakshin Express",
+    "train_name": "DAKSHIN SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "HYB",
@@ -1531,7 +1539,7 @@
   },
   {
     "train_no": "12722",
-    "train_name": "Dakshin Express",
+    "train_name": "DAKSHIN EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "NZM",
@@ -14535,7 +14543,7 @@
   },
   {
     "train_no": "12252",
-    "train_name": "Wainganga express",
+    "train_name": "WAINGANGA EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "KRBA",
@@ -14553,6 +14561,10 @@
       {
         "code": "YPR",
         "name": "YESVANTPUR JN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "08:00",
@@ -22230,7 +22242,7 @@
   },
   {
     "train_no": "12590",
-    "train_name": "Secunderabad - Gorakhpur Express",
+    "train_name": "CHZ GKP SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "SC",
@@ -22248,6 +22260,10 @@
       {
         "code": "GKP",
         "name": "GORAKHPUR JN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "07:20",
@@ -23985,7 +24001,7 @@
   },
   {
     "train_no": "12710",
-    "train_name": "Simhapuri SF Express",
+    "train_name": "SIMHAPURI SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "SC",
@@ -24003,6 +24019,10 @@
       {
         "code": "GDR",
         "name": "GUDUR JN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "22:30",
@@ -24822,7 +24842,7 @@
   },
   {
     "train_no": "12750",
-    "train_name": "Mumbai LTT-Visakhapatnam SF Express",
+    "train_name": "BIDR MTM SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "LTT",
@@ -24840,6 +24860,10 @@
       {
         "code": "VSKP",
         "name": "VISHAKAPATNAM"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "12:25",
@@ -26361,7 +26385,7 @@
   },
   {
     "train_no": "12788",
-    "train_name": "Tirunelveli Bilaspur SF Express",
+    "train_name": "NSL NS SF EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "TEN",
@@ -26379,6 +26403,10 @@
       {
         "code": "BSP",
         "name": "BILASPUR JN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "01:00",
@@ -29142,7 +29170,7 @@
   },
   {
     "train_no": "12976",
-    "train_name": "Jaipur-Mysore SF Express",
+    "train_name": "JP MYSORE EXP",
     "train_type": "SUPERFAST",
     "from": {
       "code": "JP",
@@ -29160,6 +29188,10 @@
       {
         "code": "MYS",
         "name": "MYSORE JN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "19:40",
@@ -47583,7 +47615,7 @@
   },
   {
     "train_no": "17004",
-    "train_name": "Kolhapur-Hyderabad BiWeekly Express",
+    "train_name": "BPQ-KZJ RAMGIRI",
     "train_type": "EXPRESS",
     "from": {
       "code": "KOP",
@@ -47601,6 +47633,10 @@
       {
         "code": "HYB",
         "name": "HYDERABAD DECCAN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "07:30",
@@ -47610,7 +47646,7 @@
   },
   {
     "train_no": "17005",
-    "train_name": "HYDERABAD DECCAN - RAXAUL  Exp",
+    "train_name": "HYB RXL EXP",
     "train_type": "EXPRESS",
     "from": {
       "code": "HYB",
@@ -47628,6 +47664,10 @@
       {
         "code": "RXL",
         "name": "RAXAUL JN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "21:30",
@@ -48258,7 +48298,7 @@
   },
   {
     "train_no": "17035",
-    "train_name": "Telangana Express",
+    "train_name": "KZJ-BPQ",
     "train_type": "EXPRESS",
     "from": {
       "code": "SC",
@@ -48276,6 +48316,10 @@
       {
         "code": "SKZR",
         "name": "SIRPUR KAGAZNAGAR"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "08:20",
@@ -128448,7 +128492,7 @@
   },
   {
     "train_no": "12709",
-    "train_name": "Simhapuri SF Express",
+    "train_name": "SIMHAPURI SF EX",
     "train_type": "SUPERFAST",
     "from": {
       "code": "GDR",
@@ -128466,6 +128510,10 @@
       {
         "code": "SC",
         "name": "SECUNDERABAD JN"
+      },
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
       }
     ],
     "scheduled_departure": "21:00",
@@ -140946,5 +140994,215 @@
     "scheduled_arrival": "12:30",
     "zone": "?",
     "distance": 862
+  },
+  {
+    "train_no": "17659",
+    "train_name": "SC BDCR EXP",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "to": {
+      "code": "BHADRACHALAM RD",
+      "name": "BHADRACHALAM RD"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "19:49",
+    "scheduled_departure": "19:50"
+  },
+  {
+    "train_no": "67763",
+    "train_name": "SC-KZJ MEMU",
+    "train_type": "MEMU",
+    "from": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "to": {
+      "code": "KAZIPET JN",
+      "name": "KAZIPET JN"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "22:05",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "18520",
+    "train_name": "LTT VSKP EXPRESS",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "LOKMANYATILAK",
+      "name": "LOKMANYATILAK"
+    },
+    "to": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "22:39",
+    "scheduled_departure": "22:40"
+  },
+  {
+    "train_no": "20812",
+    "train_name": "NED VSKP SF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "NANDED",
+      "name": "NANDED"
+    },
+    "to": {
+      "code": "VISAKHAPATNAM",
+      "name": "VISAKHAPATNAM"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "23:38",
+    "scheduled_departure": "23:40"
+  },
+  {
+    "train_no": "67766",
+    "train_name": "DKJ-KZJ MEMU",
+    "train_type": "MEMU",
+    "from": {
+      "code": "DORNAKAL JN",
+      "name": "DORNAKAL JN"
+    },
+    "to": {
+      "code": "KAZIPET JN",
+      "name": "KAZIPET JN"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "23:55",
+    "scheduled_departure": null
+  },
+  {
+    "train_no": "03253",
+    "train_name": "PNBE CHZ SPL",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "PATNA JN",
+      "name": "PATNA JN"
+    },
+    "to": {
+      "code": "CHARLAPALLI",
+      "name": "CHARLAPALLI"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "00:26",
+    "scheduled_departure": "00:27"
+  },
+  {
+    "train_no": "12746",
+    "train_name": "MUGR SC SF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "MANUGURU",
+      "name": "MANUGURU"
+    },
+    "to": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "01:14",
+    "scheduled_departure": "01:15"
+  },
+  {
+    "train_no": "04149",
+    "train_name": "PRYJ YPR SPL",
+    "train_type": "MAIL_EXPRESS",
+    "from": {
+      "code": "PRAYAGRAJ JN",
+      "name": "PRAYAGRAJ JN"
+    },
+    "to": {
+      "code": "YESVANTPUR JN.",
+      "name": "YESVANTPUR JN."
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "01:21",
+    "scheduled_departure": "01:22"
+  },
+  {
+    "train_no": "12745",
+    "train_name": "SC MUGR SF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "SECUNDERABAD JN",
+      "name": "SECUNDERABAD JN"
+    },
+    "to": {
+      "code": "MANUGURU",
+      "name": "MANUGURU"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "01:39",
+    "scheduled_departure": "01:40"
+  },
+  {
+    "train_no": "12749",
+    "train_name": "MTM BIDR SF EXP",
+    "train_type": "SUPERFAST",
+    "from": {
+      "code": "MACHILIPATNAM",
+      "name": "MACHILIPATNAM"
+    },
+    "to": {
+      "code": "BIDAR",
+      "name": "BIDAR"
+    },
+    "stops": [
+      {
+        "code": "KZJ",
+        "name": "Kazipet Junction"
+      }
+    ],
+    "scheduled_arrival": "01:49",
+    "scheduled_departure": "01:50"
   }
 ]

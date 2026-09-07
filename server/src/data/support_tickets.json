@@ -1,5 +1,302 @@
 [
   {
+    "id": "OC-34670",
+    "type": "passenger",
+    "subject": "Deployed Verification Ticket",
+    "category": "Payment",
+    "issueType": "Payment",
+    "desc": "Testing deployed support ticket integration and Supabase sync",
+    "description": "Testing deployed support ticket integration and Supabase sync",
+    "priority": "urgent",
+    "status": "resolved",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passenger_id": null,
+    "passengerName": "Test Passenger",
+    "passengerPhone": "+91 98765 43210",
+    "passengerEmail": "passenger@onecoolie.com",
+    "trip": null,
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1788805961150",
+        "sender": "passenger",
+        "name": "Test Passenger",
+        "text": "Testing deployed support ticket integration and Supabase sync",
+        "timestamp": "12:02 AM"
+      },
+      {
+        "id": "msg-1788805961181",
+        "sender": "support",
+        "name": "Station Master",
+        "text": "Support desk response test",
+        "timestamp": "12:02 AM"
+      },
+      {
+        "id": "sys-1788805961189",
+        "sender": "system",
+        "name": "System",
+        "text": "Ticket status updated to \"resolved\". Note: All checks verified successfully",
+        "timestamp": "12:02 AM"
+      }
+    ],
+    "assistant_id": null,
+    "assistant_name": null,
+    "assistant_phone": null,
+    "resolution_notes": "All checks verified successfully",
+    "created_at": "2026-09-07T18:32:41.166Z",
+    "updated_at": "2026-09-07T18:32:41.189Z",
+    "createdAt": "2026-09-07T18:32:41.166Z",
+    "updatedAt": "2026-09-07T18:32:41.189Z"
+  },
+  {
+    "id": "OC-42901",
+    "type": "passenger",
+    "subject": "Emergency Wheelchair request from passenger portal",
+    "category": "wheelchair",
+    "issueType": "wheelchair",
+    "desc": "Emergency Wheelchair request from passenger portal",
+    "description": "Emergency Wheelchair request from passenger portal",
+    "priority": "normal",
+    "status": "Resolved by Station Master",
+    "station": "SC",
+    "pnr": "4521890321",
+    "passenger_id": null,
+    "passengerName": "Kavita Reddy",
+    "passengerPhone": "9848022338",
+    "passengerEmail": "passenger@onecoolie.com",
+    "trip": {
+      "trainNo": "12723",
+      "trainName": "TELANGANA EXP",
+      "coach": "S2",
+      "seat": "18",
+      "pnr": "4521890321"
+    },
+    "aiSummary": "",
+    "conversation": [
+      {
+        "sender": "passenger",
+        "text": "Elderly passenger needs wheelchair assistance at Secunderabad Platform 1.",
+        "timestamp": "11:45 PM"
+      },
+      {
+        "id": "msg-1788804918857",
+        "sender": "support",
+        "name": "Secunderabad Station Control Desk",
+        "text": "Hello Kavita, Sahayak Ramesh has been dispatched with a wheelchair to Coach S2 Platform 1.",
+        "timestamp": "11:45 PM"
+      },
+      {
+        "id": "msg-1788804918881",
+        "sender": "passenger",
+        "name": "Kavita Reddy",
+        "text": "Thank you so much! We are waiting near the door.",
+        "timestamp": "11:45 PM"
+      },
+      {
+        "id": "sys-1788804918889",
+        "sender": "system",
+        "name": "System",
+        "text": "Ticket status updated to \"Resolved by Station Master\". Note: Assistance rendered successfully.",
+        "timestamp": "11:45 PM"
+      }
+    ],
+    "assistant_id": null,
+    "assistant_name": null,
+    "assistant_phone": null,
+    "resolution_notes": "Assistance rendered successfully.",
+    "created_at": "2026-09-07T18:15:11.289Z",
+    "updated_at": "2026-09-07T18:15:18.889Z",
+    "createdAt": "2026-09-07T18:15:11.289Z",
+    "updatedAt": "2026-09-07T18:15:18.889Z"
+  },
+  {
+    "id": "OC-73984",
+    "type": "passenger",
+    "subject": "Wheelchair assistance requested at Platform 1",
+    "category": "wheelchair",
+    "issueType": "wheelchair",
+    "desc": "Wheelchair assistance requested at Platform 1",
+    "description": "Wheelchair assistance requested at Platform 1",
+    "priority": "normal",
+    "status": "resolved",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passenger_id": null,
+    "passengerName": "Ananya Sharma",
+    "passengerPhone": "9876543210",
+    "passengerEmail": "passenger@onecoolie.com",
+    "trip": {
+      "trainNo": "20833",
+      "trainName": "VANDE BHARAT EXP",
+      "coach": "C4",
+      "seat": "42"
+    },
+    "aiSummary": "",
+    "conversation": [
+      {
+        "sender": "passenger",
+        "text": "Please send assistant to Coach C4 near door.",
+        "timestamp": "11:30 PM"
+      },
+      {
+        "id": "msg-1788804223389",
+        "sender": "support",
+        "name": "Station Control Room",
+        "text": "A Sahayak has been assigned and is heading towards Coach C4.",
+        "timestamp": "11:33 PM"
+      },
+      {
+        "id": "sys-1788804223393",
+        "sender": "system",
+        "name": "System",
+        "text": "Ticket status updated to \"resolved\". Note: Sahayak assisted passenger with wheelchair successfully at Coach C4.",
+        "timestamp": "11:33 PM"
+      }
+    ],
+    "assistant_id": null,
+    "assistant_name": null,
+    "assistant_phone": null,
+    "resolution_notes": "Sahayak assisted passenger with wheelchair successfully at Coach C4.",
+    "created_at": "2026-09-07T18:03:43.373Z",
+    "updated_at": "2026-09-07T18:03:43.393Z",
+    "createdAt": "2026-09-07T18:03:43.373Z",
+    "updatedAt": "2026-09-07T18:03:43.393Z"
+  },
+  {
+    "id": "OC-47499",
+    "type": "passenger",
+    "subject": "Wheelchair assistance test",
+    "category": "wheelchair",
+    "issueType": "wheelchair",
+    "desc": "Wheelchair assistance test",
+    "description": "Wheelchair assistance test",
+    "priority": "normal",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passenger_id": null,
+    "passengerName": "Ananya Sharma",
+    "passengerPhone": "9876543210",
+    "passengerEmail": "passenger@onecoolie.com",
+    "trip": null,
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1788804125244",
+        "sender": "passenger",
+        "name": "Ananya Sharma",
+        "text": "Wheelchair assistance test",
+        "timestamp": "11:32 PM"
+      }
+    ],
+    "assistant_id": null,
+    "assistant_name": null,
+    "assistant_phone": null,
+    "resolution_notes": "",
+    "created_at": "2026-09-07T18:02:05.244Z",
+    "updated_at": "2026-09-07T18:02:05.244Z",
+    "createdAt": "2026-09-07T18:02:05.244Z",
+    "updatedAt": "2026-09-07T18:02:05.244Z"
+  },
+  {
+    "id": "OC-78965",
+    "type": "passenger",
+    "subject": "Wheelchair assistance requested at Platform 1",
+    "category": "wheelchair",
+    "issueType": "wheelchair",
+    "desc": "Wheelchair assistance requested at Platform 1",
+    "description": "Wheelchair assistance requested at Platform 1",
+    "priority": "normal",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passenger_id": null,
+    "passengerName": "Ananya Sharma",
+    "passengerPhone": "9876543210",
+    "passengerEmail": "passenger@onecoolie.com",
+    "trip": {
+      "trainNo": "20833",
+      "trainName": "VANDE BHARAT EXP",
+      "coach": "C4",
+      "seat": "42"
+    },
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1788804117567",
+        "sender": "passenger",
+        "name": "Ananya Sharma",
+        "text": "Wheelchair assistance requested at Platform 1",
+        "timestamp": "11:31 PM"
+      }
+    ],
+    "assistant_id": null,
+    "assistant_name": null,
+    "assistant_phone": null,
+    "resolution_notes": "",
+    "created_at": "2026-09-07T18:01:57.568Z",
+    "updated_at": "2026-09-07T18:01:57.568Z",
+    "createdAt": "2026-09-07T18:01:57.568Z",
+    "updatedAt": "2026-09-07T18:01:57.568Z"
+  },
+  {
+    "id": "OC-49156",
+    "type": "passenger",
+    "subject": "Luggage Porter Assistance Delay",
+    "category": "Passenger Help",
+    "issueType": "General",
+    "desc": "Assistant is not at Coach S4 door. Train departing in 15 mins.",
+    "description": "Assistant is not at Coach S4 door. Train departing in 15 mins.",
+    "priority": "urgent",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passenger_id": null,
+    "passengerName": "Karthik Rao",
+    "passengerPhone": "+91 98480 55667",
+    "passengerEmail": "passenger@onecoolie.com",
+    "trip": {
+      "trainNo": "12723",
+      "trainName": "Telangana Express",
+      "coach": "S4",
+      "seat": "32"
+    },
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1788803791774",
+        "sender": "passenger",
+        "name": "Karthik Rao",
+        "text": "Assistant is not at Coach S4 door. Train departing in 15 mins.",
+        "timestamp": "11:26 PM"
+      }
+    ],
+    "assistant_id": null,
+    "assistant_name": null,
+    "assistant_phone": null,
+    "resolution_notes": "",
+    "created_at": "2026-09-07T17:56:31.789Z",
+    "updated_at": "2026-09-07T17:56:31.789Z",
+    "createdAt": "2026-09-07T17:56:31.789Z",
+    "updatedAt": "2026-09-07T17:56:31.789Z"
+  },
+  {
+    "id": "KZJ-SUP-6909",
+    "assistant_id": "1ce44861-eb8d-46c4-8976-81972c7a2313",
+    "assistant_name": "On-Duty Assistant",
+    "assistant_phone": "N/A",
+    "station": "KZJ",
+    "category": "Luggage Dispute",
+    "pnr": "N/A",
+    "desc": "Test ticket from node script",
+    "priority": "normal",
+    "status": "Dispatched to Station Supervisor",
+    "resolution_notes": "",
+    "created_at": "2026-09-07T17:54:19.741Z",
+    "updated_at": "2026-09-07T17:54:19.741Z"
+  },
+  {
     "id": "KZJ-SUP-9102",
     "assistant_id": "sample-assistant-id",
     "assistant_name": "Sai Coolie",

@@ -94,7 +94,7 @@ exports.getPaymentRecoveryList = async (req, res) => {
 
     const { data: stuckPayments, error } = await client
       .from('payments')
-      .select('*, booking:booking_id(id, booking_id, train_no, journey_date, status, passenger:passenger_id(id, name, email, phone))')
+      .select('*, booking:booking_id(id, booking_id, train_number, journey_date, booking_status, passenger:passenger_id(id, name, email, phone))')
       .eq('status', 'pending')
       .neq('payment_method', 'cash')
       .lte('created_at', cutoffTime)
@@ -146,7 +146,7 @@ exports.getRefundMonitoringList = async (req, res) => {
     const client = getClient(req);
     const { data: allRefunds, error } = await client
       .from('refunds')
-      .select('*, booking:booking_id(id, booking_id, status, passenger:passenger_id(name, email, phone)), payment:payment_id(id, amount, payment_method)')
+      .select('*, booking:booking_id(id, booking_id, booking_status, passenger:passenger_id(name, email, phone)), payment:payment_id(id, amount, payment_method)')
       .order('created_at', { ascending: false });
 
     if (error) {

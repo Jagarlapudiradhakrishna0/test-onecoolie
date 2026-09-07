@@ -47,13 +47,15 @@ import {
   CreditCard,
   LayoutGrid,
   Edit,
-  Lock,
   MoreVertical,
   Headphones,
   Copy,
   Home,
 } from 'lucide-react';
 import TrainSearch from '../components/TrainSearch';
+import StationSelectionCard from '../components/journey/StationSelectionCard';
+import SelectedTrainCard from '../components/journey/SelectedTrainCard';
+import JourneyProgressSidebar from '../components/journey/JourneyProgressSidebar';
 import PaymentModal from '../components/PaymentModal';
 import ProfileMenu from '../context/ProfileMenu';
 import PassengerNotifications from '../components/PassengerNotifications';
@@ -132,7 +134,7 @@ const SERVICE_META = [
   },
 ];
 
-const ACTIVE_STATUSES = ['pending', 'accepted', 'arriving', 'in_service'];
+const ACTIVE_STATUSES = ['pending', 'accepted', 'arriving', 'reached', 'in_service', 'assigned'];
 
 const DEFAULT_SAMPLE_TRIPS = [
   {
@@ -368,7 +370,98 @@ export default function PassengerDashboard() {
 
   const [journeyDate, setJourneyDate] = useState(() => todayStr);
   const [journeyTime, setJourneyTime] = useState('');
-  const [station, setStation] = useState('KZJ');
+  const [station, setStation] = useState(() => searchParams.get('station') || '');
+  const [stationChangeMessage, setStationChangeMessage] = useState(null);
+
+  // Intelligent station change handler: validates selectedTrain availability at new station
+  const handleStationChange = useCallback(async (newStationCode) => {
+    setStationChangeMessage(null);
+    setStation(newStationCode);
+
+    if (selectedTrain) {
+      try {
+        const { data } = await axios.get('/trains/search', {
+          params: {
+            query: selectedTrain.train_no,
+            station: newStationCode
+          }
+        });
+
+        const matchingTrain = Array.isArray(data)
+          ? data.find((t) => String(t.train_no) === String(selectedTrain.train_no))
+          : null;
+
+        const newStationName =
+          STATIONS.find((s) => s.code === newStationCode)?.name || newStationCode;
+
+        if (matchingTrain) {
+          // Train stops at new station! Update platform & station arrival timings
+          setSelectedTrain({
+            ...selectedTrain,
+            platform: matchingTrain.platform || '1',
+            expected_arrival: matchingTrain.expected_arrival,
+            expected_departure: matchingTrain.expected_departure,
+            scheduled_arrival: matchingTrain.scheduled_arrival,
+            scheduled_departure: matchingTrain.scheduled_departure,
+            delay_minutes: matchingTrain.delay_minutes,
+            status: matchingTrain.status,
+            is_live: matchingTrain.is_live
+          });
+
+          const newTime =
+            matchingTrain.expected_arrival ||
+            matchingTrain.scheduled_arrival ||
+            matchingTrain.expected_departure ||
+            matchingTrain.scheduled_departure;
+          if (newTime) setJourneyTime(newTime);
+
+          setStationChangeMessage({
+            type: 'success',
+            text: `Your selected train (${selectedTrain.train_no} · ${selectedTrain.train_name}) is available at ${newStationName}.`,
+            onDismiss: () => setStationChangeMessage(null)
+          });
+          toast.success(`Selected train is available at ${newStationName}`);
+        } else {
+          // Train does NOT stop at new station
+          const trainNo = selectedTrain.train_no;
+          const trainName = selectedTrain.train_name;
+
+          setSelectedTrain(null);
+          setJourneyTime('');
+          setBookingStep(1);
+
+          setStationChangeMessage({
+            type: 'warning',
+            text: `Your previous train (${trainNo} · ${trainName}) is not available at ${newStationName}. Please choose another train.`,
+            onDismiss: () => setStationChangeMessage(null)
+          });
+          toast(`Please choose a train available at ${newStationName}`, {
+            icon: '🚆'
+          });
+        }
+      } catch (err) {
+        console.error('Error validating train at new station:', err);
+        setSelectedTrain(null);
+        setJourneyTime('');
+        setBookingStep(1);
+      }
+    }
+  }, [selectedTrain]);
+
+  // Clean Change Train handler
+  const handleChangeTrain = useCallback(() => {
+    setSelectedTrain(null);
+    setJourneyTime('');
+    setStationChangeMessage(null);
+    if (bookingStep > 1) setBookingStep(1);
+
+    setTimeout(() => {
+      const el = document.getElementById('train-selection-container');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 50);
+  }, [bookingStep]);
 
   // Coach, seat, and mission type
   const [coach, setCoach] = useState('');
@@ -646,7 +739,7 @@ export default function PassengerDashboard() {
 
   const isCoachValid = coachValidation.isValid;
   const isSeatValid = seatValidation.isValid;
-  const isStep1Valid = Boolean(selectedTrain && journeyDate);
+  const isStep1Valid = Boolean(station && selectedTrain && journeyDate);
   const isStep2Valid = Boolean(isCoachValid && isSeatValid);
   const isStep3Valid = calculateTotal() > 0;
 
@@ -656,8 +749,16 @@ export default function PassengerDashboard() {
       return;
     }
     if (targetStep === 2) {
-      if (!isStep1Valid) {
-        toast.error('Please select your train and journey date to continue.');
+      if (!station) {
+        toast.error('Please select your boarding station to continue.');
+        return;
+      }
+      if (!selectedTrain) {
+        toast.error('Please select your train to continue.');
+        return;
+      }
+      if (!journeyDate) {
+        toast.error('Please select your journey date to continue.');
         return;
       }
       setBookingStep(2);
@@ -731,11 +832,17 @@ export default function PassengerDashboard() {
   }, [fetchBookings, tab]);
 
   const active = useMemo(() => {
-    return bookings.filter((b) => ACTIVE_STATUSES.includes(b.booking_status));
+    return bookings.filter((b) => {
+      const s = (b.booking_status || b.status || '').toLowerCase();
+      return ACTIVE_STATUSES.includes(s);
+    });
   }, [bookings]);
 
   const history = useMemo(() => {
-    return bookings.filter((b) => !ACTIVE_STATUSES.includes(b.booking_status));
+    return bookings.filter((b) => {
+      const s = (b.booking_status || b.status || '').toLowerCase();
+      return !ACTIVE_STATUSES.includes(s);
+    });
   }, [bookings]);
 
   const allDisplayBookings = (() => {
@@ -765,6 +872,8 @@ export default function PassengerDashboard() {
   const completedList = allDisplayBookings.filter((b) =>
     b.booking_status?.toLowerCase() === 'completed' || (!ACTIVE_STATUSES.includes(b.booking_status?.toLowerCase()) && !isOngoingTrip(b))
   );
+
+  const activeTripsCount = bookings.length === 0 ? 0 : (ongoingList.length + upcomingList.length);
 
   const activeTripData = useMemo(() => {
     if (!bookings || bookings.length === 0) {
@@ -918,8 +1027,9 @@ export default function PassengerDashboard() {
       let data = preConfirmedBooking;
       if (!data) {
         const res = await axios.post('/bookings', {
-          train_no: selectedTrain.train_no,
-          train_name: selectedTrain.train_name,
+          train_number: selectedTrain?.train_number || selectedTrain?.train_no,
+          train_no: selectedTrain?.train_no || selectedTrain?.train_number,
+          train_name: selectedTrain?.train_name,
           station_code: station,
           journey_date: journeyDate,
           journey_time: journeyTime,
@@ -1022,12 +1132,14 @@ export default function PassengerDashboard() {
           >
             <Briefcase className="w-3.5 h-3.5" />
             <span>My Trips</span>
-            <span
-              className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
-                }`}
-            >
-              {active.length > 0 ? active.length : 3}
-            </span>
+            {activeTripsCount > 0 && (
+              <span
+                className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
+                  }`}
+              >
+                {activeTripsCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -1084,12 +1196,14 @@ export default function PassengerDashboard() {
             >
               <Briefcase className="w-4 h-4" />
               <span>My Trips</span>
-              <span
-                className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
-                  }`}
-              >
-                {active.length > 0 ? active.length : 3}
-              </span>
+              {activeTripsCount > 0 && (
+                <span
+                  className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
+                    }`}
+                >
+                  {activeTripsCount}
+                </span>
+              )}
             </button>
 
             <button
@@ -1418,75 +1532,31 @@ export default function PassengerDashboard() {
                     {/* SUB-MODE B: Manual Station & Train Search */}
                     {bookingMode === 'train' && (
                       <div className="space-y-6 animate-fade-in min-w-0 w-full">
-                        <div>
-                          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2.5 flex items-center justify-between">
-                            <span className="flex items-center gap-1.5">
-                              <Building2 className="w-3.5 h-3.5 text-zinc-700" />
-                              <span>Station Hub</span>
-                            </span>
-                            {selectedTrain && (
-                              <span className="text-[10px] font-bold text-zinc-500 flex items-center gap-1">
-                                <Lock className="w-3 h-3 text-zinc-400" />
-                                <span>Station locked to selected train</span>
-                              </span>
-                            )}
-                          </label>
+                        <StationSelectionCard
+                          station={station}
+                          onStationChange={handleStationChange}
+                          inlineMessage={stationChangeMessage}
+                        />
 
-                          {selectedTrain ? (
-                            <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-100/90 border border-slate-200 flex items-center justify-between shadow-2xs">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center font-mono font-black text-xs text-black shrink-0 shadow-2xs">
-                                  {station}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="font-extrabold text-xs sm:text-sm text-zinc-900 truncate">
-                                    {STATIONS.find((st) => st.code === station)?.name || station}
-                                  </p>
-                                  <p className="text-[11px] text-zinc-500 font-medium">
-                                    Boarding Station Hub · Locked for Train {selectedTrain.train_no}
-                                  </p>
-                                </div>
-                              </div>
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-200 text-zinc-600 flex items-center gap-1 shrink-0">
-                                <Lock className="w-3 h-3 text-zinc-500" />
-                                <span>Static</span>
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 min-w-0 w-full">
-                              {STATIONS.map((st) => (
-                                <button
-                                  key={st.code}
-                                  type="button"
-                                  onClick={() => setStation(st.code)}
-                                  className={`p-2.5 sm:p-3.5 rounded-2xl border text-left transition-all cursor-pointer min-w-0 w-full ${station === st.code
-                                    ? 'border-black bg-slate-50 ring-2 ring-black/10'
-                                    : 'border-slate-200 hover:border-slate-300'
-                                    }`}
-                                >
-                                  <div className="flex items-center justify-between mb-0.5 min-w-0">
-                                    <p className="font-bold text-xs font-mono text-black">
-                                      {st.code}
-                                    </p>
-                                    <Building2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                                  </div>
-                                  <p className="font-semibold text-[11px] sm:text-xs text-zinc-900 truncate">
-                                    {st.name}
-                                  </p>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
+                        {selectedTrain ? (
+                          <SelectedTrainCard
+                            selectedTrain={selectedTrain}
+                            station={station}
+                            onChangeTrain={handleChangeTrain}
+                          />
+                        ) : (
                           <TrainSearch
                             station={station}
                             selectedTrain={selectedTrain}
                             onSelect={(train) => {
+                              setStationChangeMessage(null);
                               setSelectedTrain(train);
                               if (train) {
-                                const time = train.expected_arrival || train.scheduled_arrival || train.expected_departure || train.scheduled_departure;
+                                const time =
+                                  train.expected_arrival ||
+                                  train.scheduled_arrival ||
+                                  train.expected_departure ||
+                                  train.scheduled_departure;
                                 if (time) setJourneyTime(time);
                                 if (!journeyDate) {
                                   setJourneyDate(new Date().toISOString().split('T')[0]);
@@ -1494,39 +1564,7 @@ export default function PassengerDashboard() {
                               }
                             }}
                           />
-                          {selectedTrain && (
-                            <div className="mt-3 p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fade-in shadow-2xs">
-                              <div className="space-y-0.5 min-w-0">
-                                <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                  <span className="font-mono font-black text-blue-600 text-sm flex items-center gap-1.5 shrink-0">
-                                    <Train className="w-4 h-4 text-blue-600 inline" /> {selectedTrain.train_no}
-                                  </span>
-                                  <span className="font-bold text-sm text-zinc-900 truncate">
-                                    · {selectedTrain.train_name}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-zinc-500 font-medium truncate">
-                                  {selectedTrain.from?.name || 'Origin'} → {selectedTrain.to?.name || 'Destination'}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                                <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-full border border-emerald-200 flex items-center gap-1.5">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Selected
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedTrain(null)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 text-[11px] font-bold transition-all cursor-pointer shadow-2xs group"
-                                  title="Remove train and select another train"
-                                  aria-label="Remove train and select another train"
-                                >
-                                  <X className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
-                                  <span>Select Another Train</span>
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
                     )}
 
@@ -2292,209 +2330,27 @@ export default function PassengerDashboard() {
               </div>
 
 
-              {/* ── RIGHT SIDEBAR: BOOKING SUMMARY (HIDDEN ON MOBILE, VISIBLE ON DESKTOP) ── */}
-              <aside className="hidden lg:block lg:col-span-4 sticky top-20 space-y-5 w-full max-w-full min-w-0">
-                <div className="bg-white rounded-3xl sm:rounded-[28px] border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-5 sm:p-6 space-y-5 w-full max-w-full min-w-0 overflow-hidden">
-
-                  {/* Header with Status Pill */}
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-4 min-w-0">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight text-zinc-900">
-                        Booking Summary
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">Your journey at a glance</p>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100/90 border border-slate-200/60 text-[11px] font-medium text-slate-500 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                      <span>Not Booked Yet</span>
-                    </span>
-                  </div>
-
-                  {/* Station Route Timeline */}
-                  <div className="space-y-4 relative pl-5 border-l-2 border-dashed border-blue-200 py-1 my-2">
-                    <div className="relative">
-                      <span className="absolute -left-[27px] top-0.5 w-4 h-4 rounded-full bg-blue-600 ring-4 ring-white flex items-center justify-center text-white shadow-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                      </span>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-black text-sm text-zinc-900 tracking-tight">{station}</p>
-                          <p className="text-[11px] text-slate-400 font-medium">
-                            {STATIONS.find((s) => s.code === station)?.name || station}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-mono font-bold text-xs text-zinc-900">{journeyDate || 'Date TBD'}</p>
-                          <p className="font-mono text-[11px] text-slate-400">{journeyTime || '--:--'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="relative pt-1">
-                      <span className="absolute -left-[27px] top-1.5 w-4 h-4 rounded-full bg-blue-600 ring-4 ring-white flex items-center justify-center text-white shadow-xs">
-                        <MapPin className="w-2.5 h-2.5 text-white" />
-                      </span>
-                      <div>
-                        <p className="font-black text-sm text-zinc-900 tracking-tight">
-                          {selectedTrain?.to?.code || (selectedTrain?.to?.name ? selectedTrain.to.name.slice(0, 10).toUpperCase() : '--')}
-                        </p>
-                        <p className="text-[11px] text-slate-400 font-medium">
-                          {selectedTrain?.to?.name || 'Select Train'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Soft Blue Train Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (bookingStep !== 1) setBookingStep(1);
-                    }}
-                    className="w-full text-left p-3 rounded-2xl bg-blue-50/80 border border-blue-100 flex items-center justify-between gap-2 text-xs transition-colors hover:bg-blue-50 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <Train className="w-4 h-4" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="font-bold text-zinc-900 truncate">
-                          {selectedTrain ? `${selectedTrain.train_no} - ${selectedTrain.train_name}` : 'Select Train'}
-                        </p>
-                        <p className="text-[10px] text-slate-400 truncate">
-                          {selectedTrain ? `Platform ${selectedTrain.platform || '1'}` : 'Click to select or search train'}
-                        </p>
-                      </div>
-                    </div>
-                    {selectedTrain ? (
-                      <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider shrink-0 border border-blue-200/60">
-                        SELECTED ✓
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-full bg-white text-slate-500 border border-slate-200 text-[10px] font-bold uppercase tracking-wider shrink-0 shadow-2xs">
-                        NOT SELECTED →
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Details List with soft blue circular icons */}
-                  <div className="space-y-3 text-xs text-zinc-600 border-b border-slate-100 pb-4">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/50">
-                        <Armchair className="w-4 h-4" />
-                      </span>
-                      <div>
-                        <span className="font-bold text-zinc-900">
-                          {coach || seatNumber ? `Coach ${coach || '--'} · Seat ${seatNumber || '--'}` : 'Coach & Seat Not Entered'}
-                        </span>
-                        <p className="text-[11px] text-slate-400">
-                          {coach || seatNumber ? `${berthType} Berth` : 'Enter in Step 2'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/50">
-                        <Luggage className="w-4 h-4" />
-                      </span>
-                      <div>
-                        <span className="font-bold text-zinc-900">
-                          {actionType === 'collect_from_seat' ? 'De-boarding: Collect from Seat' : 'Boarding: Load to Seat'}
-                        </span>
-                        <p className="text-[11px] text-slate-400">
-                          {actionType === 'collect_from_seat' ? 'Meeting coach door upon arrival' : 'Meeting station gate / concourse'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/50">
-                        <Calendar className="w-4 h-4" />
-                      </span>
-                      <div>
-                        <span className="font-bold text-zinc-900 font-mono">
-                          {journeyDate ? `${journeyDate} ${journeyTime ? '· ' + journeyTime : ''}` : 'Select Journey Date'}
-                        </span>
-                        <p className="text-[11px] text-slate-400">Scheduled Assistant Arrival</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Service Charges Breakdown Accordion */}
-                  <div className="space-y-2.5 text-xs">
-                    <div className="flex items-center justify-between font-bold text-zinc-900">
-                      <span>Service Charges</span>
-                      <ChevronUp className="w-4 h-4 text-zinc-500" />
-                    </div>
-
-                    {SERVICE_META.filter((s) => s.key === 'luggage' ? getLuggageTotalCount() > 0 : s.qty ? services[s.key] > 0 : services[s.key]).length === 0 ? (
-                      <div className="py-2 text-zinc-400 text-center italic text-[11px]">
-                        No assistance services selected yet
-                      </div>
-                    ) : (
-                      SERVICE_META.filter((s) => s.key === 'luggage' ? getLuggageTotalCount() > 0 : s.qty ? services[s.key] > 0 : services[s.key]).map((s) => (
-                        <div key={s.key} className="flex justify-between text-zinc-600">
-                          <span>
-                            {s.label}{' '}
-                            {s.key === 'luggage'
-                              ? `(${getLuggageSummaryLabel()})`
-                              : s.qty && services[s.key] > 1
-                                ? `(${services[s.key]}x)`
-                                : ''}
-                          </span>
-                          <span className="font-mono font-bold text-zinc-900">
-                            ₹{s.key === 'luggage' ? getLuggageTotalCost() : s.qty ? s.price * services[s.key] : s.price}
-                          </span>
-                        </div>
-                      ))
-                    )}
-
-                    <div className="flex justify-between text-zinc-600 pt-1 border-t border-slate-100">
-                      <span>GST (Included)</span>
-                      <span className="font-mono font-bold text-zinc-900">₹0</span>
-                    </div>
-                  </div>
-
-                  {/* Total Payable Soft Blue Highlight Box */}
-                  <div className="p-4 rounded-2xl bg-[#EFF6FF] border border-blue-100/80 text-blue-600 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-600 block">Total Payable</span>
-                      <span className="text-[10px] text-slate-400 font-medium">All platform taxes included</span>
-                    </div>
-                    <span className="text-3xl font-black font-mono tracking-tight text-blue-600">₹{calculateTotal()}</span>
-                  </div>
-
-                  {/* Security Row with Razorpay & Premium UPI/Mastercard Icons */}
-                  <div className="pt-2 flex items-center justify-between text-xs text-zinc-500 border-t border-slate-100/80">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="text-[11px] font-medium text-slate-500 truncate">
-                        Secured Payments with <strong className="font-extrabold text-[#0C2340]">Razorpay</strong>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Premium UPI Icon Badge */}
-                      <div className="h-6 px-2 rounded-md bg-white border border-slate-200/90 shadow-2xs flex items-center gap-1 shrink-0 hover:border-slate-300 transition-colors" title="UPI">
-                        <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
-                          <path d="M14.5 4L7.5 20h3.5l7-16h-3.5z" fill="#097939" />
-                          <path d="M10.5 4L3.5 20h3.5l7-16h-3.5z" fill="#ED752E" />
-                        </svg>
-                        <span className="text-[10px] font-black italic tracking-tighter text-[#2E3192] leading-none font-sans">UPI</span>
-                      </div>
-
-                      {/* Premium Mastercard Icon Badge */}
-                      <div className="h-6 px-2 rounded-md bg-white border border-slate-200/90 shadow-2xs flex items-center justify-center shrink-0 hover:border-slate-300 transition-colors" title="Mastercard">
-                        <svg className="w-5 h-3.5" viewBox="0 0 36 22" fill="none">
-                          <circle cx="11" cy="11" r="9" fill="#EB001B" />
-                          <circle cx="25" cy="11" r="9" fill="#F79E1B" />
-                          <path d="M18 4.25a9 9 0 0 1 0 13.5 9 9 0 0 1 0-13.5z" fill="#FF5F00" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </aside>
+              {/* ── RIGHT SIDEBAR: JOURNEY PROGRESS & SUMMARY (DESKTOP) ── */}
+              <div className="hidden lg:block lg:col-span-4 sticky top-20 w-full max-w-full min-w-0">
+                <JourneyProgressSidebar
+                  station={station}
+                  selectedTrain={selectedTrain}
+                  journeyDate={journeyDate}
+                  journeyTime={journeyTime}
+                  coach={coach}
+                  seatNumber={seatNumber}
+                  berthType={berthType}
+                  actionType={actionType}
+                  bookingStep={bookingStep}
+                  onStepClick={(step) => handleNextStep(step)}
+                  services={services}
+                  calculateTotal={calculateTotal}
+                  getLuggageTotalCount={getLuggageTotalCount}
+                  getLuggageSummaryLabel={getLuggageSummaryLabel}
+                  getLuggageTotalCost={getLuggageTotalCost}
+                  serviceMeta={SERVICE_META}
+                />
+              </div>
 
             </div>
 

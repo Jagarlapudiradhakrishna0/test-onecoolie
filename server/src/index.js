@@ -40,6 +40,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const assistantPayoutRoutes = require('./routes/assistantPayoutRoutes');
 const assistantWalletRoutes = require('./routes/assistantWalletRoutes');
+const supportRoutes = require('./routes/supportRoutes');
 
 // Database Client
 const supabase = require('./config/db');
@@ -47,6 +48,7 @@ const supabase = require('./config/db');
 // Controllers
 const serviceController = require('./controllers/serviceController');
 const payoutController = require('./controllers/payoutController');
+const supportController = require('./controllers/supportController');
 
 const app = express();
 const server = http.createServer(app);
@@ -93,6 +95,10 @@ const corsOriginHandler = (origin, callback) => {
   }
   // Allow Vercel production and preview deployment origins
   if (/^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin)) {
+    return callback(null, true);
+  }
+  // Allow Render production and preview deployment origins
+  if (/^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/.test(origin)) {
     return callback(null, true);
   }
   return callback(new Error(`Origin ${origin} not allowed by CORS policy`));
@@ -178,6 +184,7 @@ serviceController.setIO(io);
 payoutController.setIO(io);
 incidentController.setIO(io);
 financialMonitoringService.setIO(io);
+supportController.setIO(io);
 
 // --------------------------------------------------
 // OPERATIONAL PROBES & HEALTH CHECKS
@@ -239,6 +246,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/assistant-wallet', assistantWalletRoutes);
 app.use('/api/assistant-payouts', assistantPayoutRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/support-tickets', supportRoutes);
 
 // --------------------------------------------------
 // 404 HANDLER

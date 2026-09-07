@@ -7,20 +7,43 @@ import {
 import oneCoolieLogo from '../../assets/onecoolie-logo.png';
 import { getTickets, subscribeToSupportUpdates } from '../../utils/supportStore';
 
+import axios from '../../api/axios';
+
 export default function TicketTracking({ onNavigate, user }) {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [filter, setFilter] = useState('all');
 
-  const fetchUserTickets = () => {
+  const fetchUserTickets = async () => {
+    // 1. Local tickets first
     const all = getTickets();
     setTickets(all);
+
+    // 2. Fetch authoritative from backend
+    try {
+      const res = await axios.get('/support/tickets').catch(() => null);
+      if (res && Array.isArray(res.data) && res.data.length > 0) {
+        // Merge server and local unique by id
+        const mergedMap = new Map();
+        res.data.forEach((t) => mergedMap.set(t.id, t));
+        all.forEach((t) => {
+          if (!mergedMap.has(t.id)) mergedMap.set(t.id, t);
+        });
+        setTickets(Array.from(mergedMap.values()));
+      }
+    } catch (e) {
+      console.warn('Backend ticket fetch in tracking deferred:', e);
+    }
   };
 
   useEffect(() => {
     fetchUserTickets();
     const unsubscribe = subscribeToSupportUpdates(fetchUserTickets);
-    return () => unsubscribe();
+    const interval = setInterval(fetchUserTickets, 4000);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   const filteredTickets = tickets.filter(t => {

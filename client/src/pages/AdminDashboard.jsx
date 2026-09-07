@@ -1083,6 +1083,7 @@ export default function AdminDashboard() {
   const [ticketStatusFilter, setTicketStatusFilter] = useState('ALL');
   const [ticketPriorityFilter, setTicketPriorityFilter] = useState('ALL');
   const [ticketUpdatingId, setTicketUpdatingId] = useState(null);
+  const [selectedDeskTicketId, setSelectedDeskTicketId] = useState(null);
 
   useEffect(() => {
     const updateCount = () => {
@@ -1163,7 +1164,7 @@ export default function AdminDashboard() {
         axios.get('/admin/incidents/stats').catch(() => ({ data: {} })),
         axios.get('/admin/finance/health').catch(() => ({ data: { health: null } })),
         axios.get('/admin/finance/payment-recovery').catch(() => ({ data: { stuck_payments: [] } })),
-        axios.get('/admin/support-tickets').catch(() => ({ data: [] })),
+        axios.get('/admin/support-tickets').catch(() => axios.get('/support/tickets')).catch(() => ({ data: [] })),
       ]);
 
       setStats(sRes.data || {});
@@ -1177,7 +1178,8 @@ export default function AdminDashboard() {
       setIncidentStats(incStatRes.data || { total: 0, open: 0, investigating: 0, critical: 0, warning: 0 });
       setFinancialHealth(healthRes.data?.health || null);
       setPaymentRecoveryList(recovRes.data?.stuck_payments || []);
-      setSupportTickets(tRes.data || []);
+      const ticketArray = Array.isArray(tRes.data) ? tRes.data : (tRes.data?.tickets || []);
+      setSupportTickets(ticketArray);
       setLastSynced(new Date());
 
       // If inspecting a booking, sync it with newest data
@@ -1672,15 +1674,29 @@ export default function AdminDashboard() {
   const filteredSupportTickets = useMemo(() => {
     return supportTickets.filter((t) => {
       if (ticketStationFilter !== 'ALL' && t.station !== ticketStationFilter) return false;
-      if (ticketStatusFilter !== 'ALL' && t.status !== ticketStatusFilter) return false;
-      if (ticketPriorityFilter !== 'ALL' && t.priority !== ticketPriorityFilter) return false;
+      if (ticketStatusFilter !== 'ALL') {
+        const s = (t.status || '').toLowerCase();
+        const f = ticketStatusFilter.toLowerCase();
+        if (f === 'resolved' && !['resolved', 'closed', 'resolved by station master'].includes(s)) return false;
+        if (f === 'in progress' && s !== 'in_progress' && s !== 'in progress') return false;
+        if (f === 'dispatched' && s !== 'dispatched to station supervisor' && s !== 'open') return false;
+      }
+      if (ticketPriorityFilter !== 'ALL') {
+        const p = (t.priority || '').toLowerCase();
+        const fp = ticketPriorityFilter.toLowerCase();
+        if (fp === 'urgent' && p !== 'urgent' && p !== 'high') return false;
+        if (fp === 'normal' && p !== 'normal' && p !== 'medium' && p !== 'low') return false;
+      }
       if (ticketSearch) {
         const q = ticketSearch.toLowerCase();
         const matches =
           (t.id && t.id.toLowerCase().includes(q)) ||
           (t.pnr && t.pnr.toLowerCase().includes(q)) ||
           (t.assistant_name && t.assistant_name.toLowerCase().includes(q)) ||
+          (t.passengerName && t.passengerName.toLowerCase().includes(q)) ||
+          (t.subject && t.subject.toLowerCase().includes(q)) ||
           (t.desc && t.desc.toLowerCase().includes(q)) ||
+          (t.description && t.description.toLowerCase().includes(q)) ||
           (t.category && t.category.toLowerCase().includes(q));
         if (!matches) return false;
       }
@@ -1689,7 +1705,9 @@ export default function AdminDashboard() {
   }, [supportTickets, ticketStationFilter, ticketStatusFilter, ticketPriorityFilter, ticketSearch]);
 
   const pendingTicketsCount = useMemo(() => {
-    return supportTickets.filter((t) => t.status === 'Dispatched to Station Supervisor').length;
+    return supportTickets.filter((t) =>
+      ['dispatched to station supervisor', 'open', 'in_progress', 'bot_escalated'].includes((t.status || '').toLowerCase())
+    ).length;
   }, [supportTickets]);
 
   return (
@@ -3523,18 +3541,42 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-zinc-400">Total Desk Tickets</span>
+                <p className="text-xl font-black text-black dark:text-white mt-0.5">{supportTickets.length}</p>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-amber-500">Active / Pending</span>
+                <p className="text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{pendingTicketsCount}</p>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-blue-500">Passenger Inquiries</span>
+                <p className="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">
+                  {supportTickets.filter((t) => t.type === 'passenger' || Boolean(t.passengerName)).length}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-emerald-500">Sahayak Operational</span>
+                <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  {supportTickets.filter((t) => t.type === 'assistant' || (!t.type && !t.passengerName)).length}
+                </p>
+              </div>
+            </div>
+
             {/* Operational Tickets Management Panel from Assistants */}
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
                   <h4 className="font-bold text-sm text-black dark:text-white font-mono uppercase">
-                    Platform Assistant Operational Tickets ({filteredSupportTickets.length})
+                    Station Desk & Support Tickets Ledger ({filteredSupportTickets.length})
                   </h4>
                 </div>
                 {pendingTicketsCount > 0 && (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
-                    {pendingTicketsCount} Awaiting Station Supervisor
+                    {pendingTicketsCount} Action Required
                   </span>
                 )}
               </div>
@@ -3545,7 +3587,7 @@ export default function AdminDashboard() {
                   <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Search tickets, PNR, assistant..."
+                    placeholder="Search tickets, PNR, user, issue..."
                     value={ticketSearch}
                     onChange={(e) => setTicketSearch(e.target.value)}
                     className="input-base text-xs pl-8 py-1.5 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
@@ -3583,7 +3625,7 @@ export default function AdminDashboard() {
                 >
                   <option value="ALL">All Priorities</option>
                   <option value="normal">Normal</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="urgent">Urgent / High</option>
                 </select>
               </div>
 
@@ -3592,7 +3634,9 @@ export default function AdminDashboard() {
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400 font-mono">
+                      <th className="pb-2">Channel</th>
                       <th className="pb-2">Ticket ID</th>
+                      <th className="pb-2">Requester</th>
                       <th className="pb-2">Station</th>
                       <th className="pb-2">Category</th>
                       <th className="pb-2">PNR</th>
@@ -3605,60 +3649,93 @@ export default function AdminDashboard() {
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-mono">
                     {filteredSupportTickets.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-6 text-center text-zinc-400 font-mono">
-                          No operational tickets match filter criteria.
+                        <td colSpan={10} className="py-6 text-center text-zinc-400 font-mono">
+                          No support desk tickets match filter criteria.
                         </td>
                       </tr>
                     ) : (
-                      filteredSupportTickets.map((t) => (
-                        <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                          <td className="py-2.5 font-bold text-blue-600 dark:text-blue-400 font-mono">
-                            #{t.id}
-                          </td>
-                          <td className="py-2.5 font-bold">
-                            {t.station}
-                          </td>
-                          <td className="py-2.5 font-sans">
-                            {t.category}
-                          </td>
-                          <td className="py-2.5 text-zinc-500 font-mono">
-                            {t.pnr || '—'}
-                          </td>
-                          <td className="py-2.5 text-zinc-600 dark:text-zinc-300 max-w-xs truncate font-sans">
-                            {t.desc}
-                          </td>
-                          <td className="py-2.5">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                t.priority === 'urgent'
-                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
-                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
-                              }`}
-                            >
-                              {t.priority}
-                            </span>
-                          </td>
-                          <td className="py-2.5">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                              {t.status}
-                            </span>
-                          </td>
-                          <td className="py-2.5 text-right font-sans">
-                            {t.status !== 'Resolved by Station Master' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateTicketStatus(t.id, 'Resolved by Station Master', 'Resolved via Admin Console')}
-                                disabled={ticketUpdatingId === t.id}
-                                className="py-1 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                      filteredSupportTickets.map((t) => {
+                        const isAssistant = t.type === 'assistant' || Boolean(t.assistant_name && !t.passengerName);
+                        const isResolved = ['resolved', 'closed', 'resolved by station master'].includes((t.status || '').toLowerCase());
+
+                        return (
+                          <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                            <td className="py-2.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                                isAssistant ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400'
+                              }`}>
+                                {isAssistant ? 'Sahayak' : 'Passenger'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 font-bold text-blue-600 dark:text-blue-400 font-mono">
+                              #{t.id}
+                            </td>
+                            <td className="py-2.5 font-sans font-bold text-slate-800 dark:text-zinc-200">
+                              {t.passengerName || t.assistant_name || 'Passenger'}
+                            </td>
+                            <td className="py-2.5 font-bold">
+                              {t.station || '—'}
+                            </td>
+                            <td className="py-2.5 font-sans">
+                              {t.subject || t.category || 'General'}
+                            </td>
+                            <td className="py-2.5 text-zinc-500 font-mono">
+                              {t.pnr || (t.trip?.pnr) || '—'}
+                            </td>
+                            <td className="py-2.5 text-zinc-600 dark:text-zinc-300 max-w-xs truncate font-sans">
+                              {t.description || t.desc}
+                            </td>
+                            <td className="py-2.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  t.priority === 'urgent' || t.priority === 'high'
+                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
+                                }`}
                               >
-                                {ticketUpdatingId === t.id ? 'Updating...' : 'Resolve'}
-                              </button>
-                            ) : (
-                              <span className="text-emerald-600 text-[10px] font-bold">✓ Resolved</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
+                                {t.priority}
+                              </span>
+                            </td>
+                            <td className="py-2.5">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                isResolved
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400'
+                                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                              }`}>
+                                {t.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-right font-sans">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDeskTicketId(t.id);
+                                    document.getElementById('station-desk-inbox')?.scrollIntoView({ behavior: 'smooth' });
+                                  }}
+                                  className="py-1 px-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                                  title="Chat with Requester in Support Desk"
+                                >
+                                  <MessageSquare className="w-3 h-3" />
+                                  <span>Chat</span>
+                                </button>
+                                {!isResolved ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateTicketStatus(t.id, 'Resolved by Station Master', 'Resolved via Admin Console')}
+                                    disabled={ticketUpdatingId === t.id}
+                                    className="py-1 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                                  >
+                                    {ticketUpdatingId === t.id ? 'Updating...' : 'Resolve'}
+                                  </button>
+                                ) : (
+                                  <span className="text-emerald-600 text-[10px] font-bold shrink-0">✓ Resolved</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -3666,8 +3743,8 @@ export default function AdminDashboard() {
             </div>
 
             {/* Passenger Live Support Chat Inbox */}
-            <div className="pt-2">
-              <SupportInbox />
+            <div id="station-desk-inbox" className="pt-2">
+              <SupportInbox initialTickets={supportTickets} selectedTicketIdProp={selectedDeskTicketId} />
             </div>
           </div>
         )}
