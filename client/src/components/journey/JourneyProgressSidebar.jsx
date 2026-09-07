@@ -1,13 +1,9 @@
 import React from 'react';
 import {
-  Check,
-  Circle,
   Train,
   MapPin,
   Armchair,
   Luggage,
-  Calendar,
-  ChevronUp,
   CreditCard
 } from 'lucide-react';
 import { STATIONS } from '../../utils/services';
@@ -40,155 +36,9 @@ export default function JourneyProgressSidebar({
     name: station === 'KZJ' ? 'Kazipet Jn' : station
   };
 
-  // Derive granular status for the 6 journey steps
-  // 1. Boarding Station: Always selected
-  // 2. Select Train: Complete when train is selected
-  // 3. Journey Date: Complete when train & date selected
-  // 4. Passenger Details: Complete when coach & seat valid or past step 2
-  // 5. Add Services: Active on step 3, complete on step 4
-  // 6. Review & Pay: Active on step 4
-  const isStationSelected = Boolean(station);
-  const isTrainSelected = Boolean(isStationSelected && selectedTrain);
-  const isDateSelected = Boolean(isTrainSelected && journeyDate);
-  const isSeatProvided = Boolean(coach.trim() && seatNumber.trim());
-  const isSeatCompleted = bookingStep > 2 || (bookingStep === 2 && isSeatProvided);
-  const isServicesCompleted = bookingStep > 3;
-
-  const progressSteps = [
-    {
-      id: 'station',
-      label: 'Boarding Station',
-      detail: isStationSelected ? currentStationObj.code : null,
-      state: isStationSelected ? 'completed' : 'current',
-      stepNum: 1
-    },
-    {
-      id: 'train',
-      label: 'Select Train',
-      detail: selectedTrain ? `${selectedTrain.train_no}` : null,
-      state: !isStationSelected ? 'future' : isTrainSelected ? 'completed' : 'current',
-      stepNum: 1
-    },
-    {
-      id: 'date',
-      label: 'Journey Date',
-      detail: isDateSelected ? journeyDate : null,
-      state: !isTrainSelected ? 'future' : isDateSelected ? 'completed' : 'current',
-      stepNum: 1
-    },
-    {
-      id: 'passenger',
-      label: 'Passenger Details',
-      detail: isSeatProvided ? `Coach ${coach} · Seat ${seatNumber}` : null,
-      state:
-        bookingStep === 2
-          ? 'current'
-          : isSeatCompleted
-          ? 'completed'
-          : 'future',
-      stepNum: 2
-    },
-    {
-      id: 'services',
-      label: 'Add Services',
-      detail: isServicesCompleted ? 'Assistance selected' : null,
-      state:
-        bookingStep === 3
-          ? 'current'
-          : isServicesCompleted
-          ? 'completed'
-          : 'future',
-      stepNum: 3
-    },
-    {
-      id: 'review',
-      label: 'Review & Pay',
-      detail: null,
-      state: bookingStep === 4 ? 'current' : 'future',
-      stepNum: 4
-    }
-  ];
-
   return (
     <aside className="space-y-4 w-full max-w-full min-w-0">
-      {/* ── CARD 1: JOURNEY PROGRESS STEPS ───────────────────────── */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5 space-y-4 w-full min-w-0">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div>
-            <h3 className="font-extrabold text-sm text-zinc-900 tracking-tight">
-              Journey Progress
-            </h3>
-            <p className="text-[11px] text-zinc-400">Live booking synchronization</p>
-          </div>
-          <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
-            Step {bookingStep} of 4
-          </span>
-        </div>
-
-        <div className="space-y-2.5">
-          {progressSteps.map((step) => {
-            const isDone = step.state === 'completed';
-            const isCurrent = step.state === 'current';
-
-            return (
-              <div
-                key={step.id}
-                onClick={() => {
-                  if (isDone && onStepClick && step.stepNum <= bookingStep) {
-                    onStepClick(step.stepNum);
-                  }
-                }}
-                className={`flex items-start gap-2.5 text-xs py-1 px-1.5 rounded-xl transition-all ${
-                  isDone && onStepClick ? 'cursor-pointer hover:bg-slate-50' : ''
-                }`}
-              >
-                {/* Step Circle Indicator */}
-                <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                    isDone
-                      ? 'bg-emerald-600 text-white'
-                      : isCurrent
-                      ? 'bg-blue-600 text-white ring-3 ring-blue-600/15'
-                      : 'border border-slate-200 text-slate-300 bg-white'
-                  }`}
-                >
-                  {isDone ? (
-                    <Check className="w-3 h-3 stroke-[2.5]" />
-                  ) : isCurrent ? (
-                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                  ) : (
-                    <Circle className="w-2.5 h-2.5 stroke-[1.5]" />
-                  )}
-                </div>
-
-                {/* Step Label & Optional Sub-Detail */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1 min-w-0">
-                    <p
-                      className={`font-bold truncate ${
-                        isCurrent
-                          ? 'text-blue-700 font-extrabold'
-                          : isDone
-                          ? 'text-zinc-900'
-                          : 'text-zinc-400 font-normal'
-                      }`}
-                    >
-                      {step.label}
-                    </p>
-                    {step.detail && (
-                      <span className="font-mono text-[10px] text-zinc-500 font-semibold truncate shrink-0 max-w-[110px]">
-                        {step.detail}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── CARD 2: JOURNEY SUMMARY AT-A-GLANCE ───────────────────── */}
+      {/* ── BOOKING SUMMARY AT-A-GLANCE ───────────────────────── */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5 space-y-4.5 w-full min-w-0 overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 min-w-0">
           <div>
