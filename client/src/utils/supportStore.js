@@ -450,11 +450,11 @@ export function addTicketMessage(ticketId, message) {
 
   const ticket = tickets[index];
   const newMsg = {
-    id: `msg-${Date.now()}`,
+    id: message.id || `msg-${Date.now()}`, // preserve original ID to prevent blink on sync
     sender: message.sender || 'passenger',
     name: message.name || (message.sender === 'support' ? 'Support Executive' : 'Passenger'),
     text: message.text,
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    timestamp: message.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 
   ticket.conversation = [...(ticket.conversation || []), newMsg];

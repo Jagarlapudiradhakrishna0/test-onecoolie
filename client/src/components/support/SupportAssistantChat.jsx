@@ -58,13 +58,19 @@ export default function SupportAssistantChat({
   }, [initialQuery, messages.length]);
 
   // Cross-tab real-time sync when escalated to a human ticket
+  // Only append genuinely NEW messages to avoid re-mounting all bubbles (blink/flash fix)
   useEffect(() => {
     let unsubscribe;
     if (escalationTicketId) {
       unsubscribe = subscribeToSupportUpdates(() => {
         const ticket = getTicketById(escalationTicketId);
         if (ticket && ticket.conversation) {
-          setMessages(ticket.conversation);
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const newMsgs = ticket.conversation.filter((m) => !existingIds.has(m.id));
+            if (newMsgs.length === 0) return prev; // nothing new — skip re-render entirely
+            return [...prev, ...newMsgs];
+          });
         }
       });
     }
