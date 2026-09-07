@@ -358,44 +358,28 @@ export default function AssistantWalletView() {
   return (
     <div className="space-y-6">
 
-      {/* ── PAGE HEADER ───────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <span className="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-zinc-500 uppercase block">
-            FINANCIAL DASHBOARD
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-black dark:text-white tracking-tight mt-0.5">
-            Wallet &amp; Earnings
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 font-medium mt-0.5">
-            Track your earnings and manage payouts.
-          </p>
-        </div>
+      {/* ── ACTION BAR ────────────────────────────────────────────── */}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={refreshAll}
+          disabled={walletLoading || earningsLoading || payoutsLoading}
+          className="w-9 h-9 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer disabled:opacity-40"
+          title="Refresh wallet data"
+        >
+          <RefreshCw size={16} className={(walletLoading || earningsLoading || payoutsLoading) ? 'animate-spin' : ''} />
+        </button>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Refresh button */}
-          <button
-            type="button"
-            onClick={refreshAll}
-            disabled={walletLoading || earningsLoading || payoutsLoading}
-            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer disabled:opacity-40"
-            title="Refresh wallet data"
-          >
-            <RefreshCw size={16} className={(walletLoading || earningsLoading || payoutsLoading) ? 'animate-spin' : ''} />
-          </button>
-
-          {/* Withdraw / Request Payout CTA */}
-          <button
-            type="button"
-            onClick={openPayoutModal}
-            disabled={walletLoading || !hasAvailableBalance}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2563EB] hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
-            title={hasAvailableBalance ? 'Request a payout withdrawal' : 'No available balance to withdraw'}
-          >
-            <ArrowDownToLine size={15} />
-            <span>Withdraw Money</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={openPayoutModal}
+          disabled={walletLoading || !hasAvailableBalance}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2563EB] hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
+          title={hasAvailableBalance ? 'Request a payout withdrawal' : 'No available balance to withdraw'}
+        >
+          <ArrowDownToLine size={15} />
+          <span>Withdraw Money</span>
+        </button>
       </div>
 
       {/* ── WALLET ERROR ──────────────────────────────────────── */}
