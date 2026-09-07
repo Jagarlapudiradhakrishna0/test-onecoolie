@@ -2331,6 +2331,7 @@ export default function AssistantDashboard() {
           { id: 'jobs', label: activeJobs.length <= 1 ? t('myAssignedJob') : t('myJobs'), icon: Briefcase },
           { id: 'history', label: t('tripHistory'), icon: History },
           { id: 'earnings', label: t('earningsReviews'), icon: IndianRupee },
+          { id: 'wallet', label: 'Wallet', icon: Wallet },
           { id: 'profile', label: t('profile'), icon: User },
         ].map((item, i) => {
           const IconComp = item.icon;
@@ -2340,11 +2341,11 @@ export default function AssistantDashboard() {
               key={`${item.id}-${i}`}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`flex flex-col items-center gap-1 p-1.5 rounded-xl text-[10px] font-bold transition-all ${isActive ? 'text-[#2563EB] dark:text-blue-400' : 'text-slate-400 dark:text-zinc-500'
+              className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-xl text-[9px] font-bold transition-all min-w-0 ${isActive ? 'text-[#2563EB] dark:text-blue-400' : 'text-slate-400 dark:text-zinc-500'
                 }`}
             >
-              <IconComp size={18} />
-              <span>{item.label}</span>
+              <IconComp size={16} />
+              <span className="truncate max-w-[46px] leading-tight text-center">{item.label}</span>
             </button>
           );
         })}
