@@ -524,6 +524,38 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
+  // FORGOT PASSWORD: REQUEST OTP
+  // Sends a password reset OTP to the given email.
+  // Always resolves (server returns generic response for security).
+  // ============================================================
+  const forgotPassword = async (email) => {
+    const { data } = await axios.post('/auth/forgot-password', { email });
+    return data; // { success, message }
+  };
+
+  // ============================================================
+  // FORGOT PASSWORD: VERIFY OTP
+  // Verifies the 6-digit reset OTP, returns a short-lived resetToken.
+  // ============================================================
+  const verifyResetOtp = async (email, otp) => {
+    const { data } = await axios.post('/auth/verify-reset-otp', { email, otp });
+    return data; // { success, message, resetToken }
+  };
+
+  // ============================================================
+  // FORGOT PASSWORD: RESET PASSWORD
+  // Uses the resetToken from verifyResetOtp to set a new password.
+  // ============================================================
+  const resetPassword = async (resetToken, newPassword, confirmPassword) => {
+    const { data } = await axios.post('/auth/reset-password', {
+      resetToken,
+      newPassword,
+      confirmPassword
+    });
+    return data; // { success, message }
+  };
+
+  // ============================================================
   // LOGOUT
   // ============================================================
   const logout = () => {
@@ -547,7 +579,11 @@ export const AuthProvider = ({ children }) => {
         checkEmail,
         sendOtp,
         verifyOtpLogin,
-        verifyOtpRegister
+        verifyOtpRegister,
+        // Forgot Password methods
+        forgotPassword,
+        verifyResetOtp,
+        resetPassword
       }}
     >
       {children}
@@ -560,4 +596,4 @@ export const AuthProvider = ({ children }) => {
 // ============================================================
 export const useAuth = () => {
   return useContext(AuthContext);
-};
+};

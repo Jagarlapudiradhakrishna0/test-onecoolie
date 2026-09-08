@@ -184,4 +184,181 @@ const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
   }
 };
 
-module.exports = { sendOtpEmail };
+/*
+|--------------------------------------------------------------------------
+| Password Reset Email Builder
+|--------------------------------------------------------------------------
+|
+| Branded HTML email for the Forgot Password OTP flow.
+| Intentionally distinct from the login/signup OTP template.
+|
+*/
+const buildPasswordResetHtml = (otp, expiryMinutes = 10) => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reset Your OneCoolie Password</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#000;padding:28px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td>
+                <div style="background:#2563EB;width:36px;height:36px;border-radius:10px;display:inline-block;text-align:center;line-height:36px;color:#fff;font-weight:700;font-size:14px;vertical-align:middle;">OC</div>
+                <span style="color:#fff;font-size:18px;font-weight:700;margin-left:10px;vertical-align:middle;">OneCoolie</span>
+              </td>
+              <td align="right"><span style="color:#71717a;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">Security</span></td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 32px 28px;">
+            <p style="margin:0 0 6px;color:#71717a;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Password Reset</p>
+            <h1 style="margin:0 0 16px;color:#09090b;font-size:22px;font-weight:700;">Reset your password</h1>
+            <p style="margin:0 0 24px;color:#52525b;font-size:14px;line-height:1.6;">
+              We received a request to reset your <strong>OneCoolie</strong> account password.<br />
+              Use the code below to continue. Valid for <strong>${expiryMinutes} minutes</strong>.
+            </p>
+            <div style="background:#f4f4f5;border-radius:12px;padding:28px;text-align:center;margin:0 0 24px;">
+              <span style="font-family:'Courier New',monospace;font-size:48px;font-weight:700;letter-spacing:14px;color:#09090b;">
+                ${otp}
+              </span>
+            </div>
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin:0 0 20px;">
+              <p style="margin:0;color:#dc2626;font-size:13px;line-height:1.5;">
+                <strong>🔒 Never share this code.</strong> OneCoolie staff will never ask for your OTP. If you did not request a password reset, please ignore this email — your account remains secure.
+              </p>
+            </div>
+            <p style="margin:0;color:#a1a1aa;font-size:12px;">This code expires in ${expiryMinutes} minutes.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#fafafa;border-top:1px solid #e4e4e7;padding:16px 32px;">
+            <p style="margin:0;color:#a1a1aa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">
+              OneCoolie Pilot Network · KZJ · WL · BZA · SC
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+/*
+|--------------------------------------------------------------------------
+| Send Password Reset OTP Email
+|--------------------------------------------------------------------------
+|
+| Sends a branded password reset OTP email using the same transport
+| cascade as sendOtpEmail (Brevo → Resend → Gmail SMTP).
+|
+| @param {string} to            - recipient email
+| @param {string} otp           - plaintext OTP (never stored server-side)
+| @param {number} expiryMinutes - OTP validity duration (default: 10)
+|
+*/
+const sendPasswordResetEmail = async (to, otp, expiryMinutes = 10) => {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`🔐 ONECOOLIE PASSWORD RESET EMAIL FOR: ${to}`);
+  console.log(`👉 RESET CODE: [ HIDDEN ] (Valid for ${expiryMinutes} mins)`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  const subject = `Reset Your OneCoolie Password`;
+  const html = buildPasswordResetHtml(otp, expiryMinutes);
+  const text = `OneCoolie Password Reset\n\nYour reset code: ${otp}\n\nExpires in ${expiryMinutes} minutes. Never share this code.\n\nIf you did not request this, ignore this email.\n\n— OneCoolie Team`;
+
+  // Option 1: Brevo HTTPS REST API
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          'accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: {
+            name: FROM_NAME,
+            email: process.env.BREVO_SENDER_EMAIL || process.env.GMAIL_USER || 'onecoolie.noreply@gmail.com',
+          },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+
+      const resJson = await response.json();
+      if (response.ok) {
+        console.log('BREVO PASSWORD RESET EMAIL SENT:', resJson);
+        return resJson;
+      } else {
+        console.error('BREVO API ERROR (password reset):', resJson);
+      }
+    } catch (err) {
+      console.error('BREVO DELIVERY ERROR (password reset):', err.message);
+    }
+  }
+
+  // Option 2: Resend HTTPS REST API
+  if (resendClient) {
+    try {
+      const { data, error } = await resendClient.emails.send({
+        from: process.env.RESEND_FROM || 'OneCoolie <onboarding@resend.dev>',
+        to: [to],
+        subject,
+        html,
+        text,
+      });
+
+      if (error) {
+        console.error('RESEND API NOTICE (password reset):', error.message || error);
+      } else {
+        console.log('RESEND PASSWORD RESET EMAIL SENT:', data);
+        return data;
+      }
+    } catch (err) {
+      console.error('RESEND DELIVERY ERROR (password reset):', err.message);
+    }
+  }
+
+  // Option 3: Gmail SMTP via Nodemailer
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      const transport = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        family: 4,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+        connectionTimeout: 10000,
+      });
+
+      const info = await transport.sendMail({
+        from: `"${FROM_NAME}" <${process.env.GMAIL_USER}>`,
+        to,
+        subject,
+        html,
+        text,
+      });
+
+      console.log('GMAIL SMTP PASSWORD RESET SENT:', { messageId: info?.messageId, to });
+      return info;
+    } catch (err) {
+      console.error('GMAIL SMTP DELIVERY ERROR (password reset):', err.message);
+      throw err;
+    }
+  }
+};
+
+module.exports = { sendOtpEmail, sendPasswordResetEmail };
+

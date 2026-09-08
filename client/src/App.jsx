@@ -22,6 +22,7 @@ const AssistantDashboard = lazy(() => import('./pages/AssistantDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const BookingLive = lazy(() => import('./pages/BookingLive'));
 const HelpSupportPage = lazy(() => import('./pages/HelpSupportPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 
 function ProtectedRoute({
   children,
@@ -234,6 +235,12 @@ export default function App() {
                   <AdminDashboard />
                 </ProtectedRoute>
               }
+            />
+
+            {/* Forgot Password — public, accessible without auth */}
+            <Route
+              path="/forgot-password"
+              element={<ForgotPasswordPage />}
             />
 
             {/* Unknown URL */}

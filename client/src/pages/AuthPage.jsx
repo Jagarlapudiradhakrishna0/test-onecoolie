@@ -838,19 +838,9 @@ export default function AuthPage({ role = 'passenger' }) {
                   <button
                     type="button"
                     onClick={() => {
-                      if (loginMethod === 'phone') {
-                        if (!loginPhone.trim()) {
-                          setError('Please enter your mobile number above to receive password reset instructions.');
-                        } else {
-                          setInfoMsg(`Password recovery instructions sent to +91 ${loginPhone}. Please check your phone.`);
-                        }
-                      } else {
-                        if (!loginEmail.trim()) {
-                          setError('Please enter your email above to receive password reset instructions.');
-                        } else {
-                          setInfoMsg(`Password recovery instructions sent to ${loginEmail}. Please check your inbox.`);
-                        }
-                      }
+                      // Navigate to Forgot Password page, pre-filling the email if entered
+                      const emailVal = loginMethod === 'email' ? loginEmail.trim() : '';
+                      navigate('/forgot-password', { state: { email: emailVal } });
                     }}
                     className="font-semibold text-[#1463FF] hover:underline cursor-pointer"
                   >

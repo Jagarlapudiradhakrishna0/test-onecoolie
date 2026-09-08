@@ -13,7 +13,10 @@ const {
   verifyOtpAndRegister,
   checkEmail,
   updatePhoneNumber,
-  getPhoneStatus
+  getPhoneStatus,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword
 } = require('../controllers/authController');
 
 /*
@@ -26,6 +29,9 @@ const {
 |
 | OTP verify: max 10 requests per 15 minutes per IP
 |   Secondary rate limit on top of per-OTP attempt tracking
+|
+| Forgot password: max 3 requests per 15 minutes per IP
+|   Prevents email flooding and account enumeration timing attacks
 |
 */
 
@@ -60,6 +66,17 @@ const checkEmailLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // 3 reset requests per 15 minutes per IP
+  message: {
+    message: 'Too many password reset requests. Please wait 15 minutes before trying again.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
+});
+
 /*
 |--------------------------------------------------------------------------
 | OTP Routes — Production Email Authentication
@@ -80,6 +97,21 @@ router.post('/otp/verify-register', otpVerifyLimiter, verifyOtpAndRegister);
 
 /*
 |--------------------------------------------------------------------------
+| Forgot Password Routes — Secure 3-Step Password Reset
+|--------------------------------------------------------------------------
+*/
+
+// Step 1: Request password reset OTP
+router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
+
+// Step 2: Verify OTP and receive short-lived reset token
+router.post('/verify-reset-otp', otpVerifyLimiter, verifyResetOtp);
+
+// Step 3: Reset password using the verified reset token
+router.post('/reset-password', resetPassword);
+
+/*
+|--------------------------------------------------------------------------
 | Legacy Password Routes — kept for admin portal & backward compatibility
 |--------------------------------------------------------------------------
 */
@@ -92,4 +124,4 @@ router.get('/seed', seedTestUsers);
 router.put('/update-phone', protect, updatePhoneNumber);
 router.get('/phone-status', protect, getPhoneStatus);
 
-module.exports = router;
+module.exports = router;

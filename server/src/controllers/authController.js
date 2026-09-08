@@ -2,7 +2,7 @@ const supabase = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { generateOtp, hashOtp, verifyOtp } = require('../utils/otpService');
-const { sendOtpEmail } = require('../utils/emailService');
+const { sendOtpEmail, sendPasswordResetEmail } = require('../utils/emailService');
 
 /*
 |--------------------------------------------------------------------------
@@ -1180,3 +1180,343 @@ exports.getPhoneStatus = async (req, res) => {
     return res.status(500).json({ message: 'Server error retrieving phone status.' });
   }
 };
+
+/*
+|--------------------------------------------------------------------------
+| FORGOT PASSWORD — REQUEST PASSWORD RESET OTP
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/forgot-password
+|
+| Body: { email }
+|
+| Security:
+|   - Always returns same generic response (anti-enumeration)
+|   - OTP value is never stored or logged in plaintext
+|   - Previous unused OTPs for this email are invalidated
+|   - 10-minute expiry enforced
+|   - Rate limiting handled at route level
+|
+*/
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Validate input
+    if (!email) {
+      return res.status(400).json({ message: 'Email address is required.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email address format.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Check whether account exists (silently — don't expose result)
+    const { data: existingUser, error: userError } = await supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (userError) {
+      console.error('FORGOT PASSWORD — USER LOOKUP ERROR:', userError);
+      // Still return generic success to prevent enumeration
+    }
+
+    // Only proceed with OTP if user actually exists
+    if (existingUser) {
+      const expiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
+      const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
+
+      // Invalidate all previous unused password reset records for this email
+      await supabase
+        .from('password_resets')
+        .update({ otp_used: true })
+        .eq('email', normalizedEmail)
+        .eq('otp_used', false);
+
+      // Generate and hash a cryptographically secure OTP
+      const otp = generateOtp();
+      const otpHash = await hashOtp(otp);
+
+      // Store hashed OTP in password_resets table
+      const { error: insertError } = await supabase
+        .from('password_resets')
+        .insert([{
+          email: normalizedEmail,
+          otp_hash: otpHash,
+          otp_expires_at: expiresAt.toISOString(),
+          otp_used: false,
+          otp_attempts: 0
+        }]);
+
+      if (insertError) {
+        console.error('FORGOT PASSWORD — INSERT ERROR:', insertError);
+        // Still return generic response
+      } else {
+        // Send email asynchronously so response is instant
+        sendPasswordResetEmail(normalizedEmail, otp, expiryMinutes).catch((err) => {
+          console.error('PASSWORD RESET EMAIL DELIVERY FAILED:', err.message);
+        });
+      }
+    }
+
+    // Always return the same response regardless of whether account exists
+    return res.status(200).json({
+      success: true,
+      message: 'If an account exists with this email, a password reset OTP has been sent.'
+    });
+
+  } catch (err) {
+    console.error('FORGOT PASSWORD — SERVER ERROR:', err.message);
+    return res.status(500).json({ message: 'Server error. Please try again.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| FORGOT PASSWORD — VERIFY RESET OTP
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/verify-reset-otp
+|
+| Body: { email, otp }
+|
+| Security:
+|   - OTP expiry enforced server-side
+|   - Max 5 attempts before OTP is invalidated
+|   - Returns a short-lived JWT reset token (15 minutes)
+|   - Reset token hash stored in DB for single-use enforcement
+|
+*/
+exports.verifyResetOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Email and OTP are required.' });
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ message: 'OTP must be exactly 6 digits.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Find the latest active (unused, unexpired) password reset record
+    const { data: resetRecords, error: lookupError } = await supabase
+      .from('password_resets')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .eq('otp_used', false)
+      .gt('otp_expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (lookupError) {
+      console.error('VERIFY RESET OTP — LOOKUP ERROR:', lookupError);
+      return res.status(500).json({ message: 'Server error verifying OTP.' });
+    }
+
+    if (!resetRecords || resetRecords.length === 0) {
+      return res.status(400).json({
+        message: 'OTP has expired or is invalid. Please request a new one.'
+      });
+    }
+
+    const record = resetRecords[0];
+
+    // Brute-force guard: max 5 attempts
+    if (record.otp_attempts >= 5) {
+      await supabase
+        .from('password_resets')
+        .update({ otp_used: true, updated_at: new Date().toISOString() })
+        .eq('id', record.id);
+
+      return res.status(429).json({
+        message: 'Too many incorrect attempts. Please request a new OTP.'
+      });
+    }
+
+    // Verify OTP against stored hash
+    const isValid = await verifyOtp(otp, record.otp_hash);
+
+    if (!isValid) {
+      const newAttempts = record.otp_attempts + 1;
+      await supabase
+        .from('password_resets')
+        .update({ otp_attempts: newAttempts, updated_at: new Date().toISOString() })
+        .eq('id', record.id);
+
+      const remaining = 5 - newAttempts;
+      return res.status(400).json({
+        message: remaining > 0
+          ? `Incorrect OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`
+          : 'Incorrect OTP. OTP has been invalidated. Please request a new one.',
+        attemptsRemaining: remaining
+      });
+    }
+
+    // OTP is valid — generate a short-lived reset token (15 minutes)
+    const resetToken = jwt.sign(
+      { email: normalizedEmail, purpose: 'password_reset' },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // Store a SHA-256 hash of the reset token in the DB (never the token itself)
+    const crypto = require('crypto');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+    await supabase
+      .from('password_resets')
+      .update({
+        otp_used: true,
+        reset_token_hash: resetTokenHash,
+        reset_token_expires_at: resetTokenExpires.toISOString(),
+        reset_token_used: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', record.id);
+
+    console.log('VERIFY RESET OTP SUCCESS:', { email: normalizedEmail });
+
+    return res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully.',
+      resetToken
+    });
+
+  } catch (err) {
+    console.error('VERIFY RESET OTP — SERVER ERROR:', err.message);
+    return res.status(500).json({ message: 'Server error during OTP verification.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| FORGOT PASSWORD — RESET PASSWORD
+|--------------------------------------------------------------------------
+|
+| POST /api/auth/reset-password
+|
+| Body: { resetToken, newPassword, confirmPassword }
+|
+| Security:
+|   - Validates JWT reset token (signature + expiry)
+|   - Validates token hash against DB record (single-use enforcement)
+|   - Passwords must match and meet minimum requirements
+|   - Hashes password using existing bcrypt system (cost factor 10)
+|   - Invalidates the reset token record immediately after use
+|
+*/
+exports.resetPassword = async (req, res) => {
+  try {
+    const { resetToken, newPassword, confirmPassword } = req.body;
+
+    if (!resetToken || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: 'Reset token, new password, and confirm password are required.' });
+    }
+
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match.' });
+    }
+
+    // Validate password strength
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters long.' });
+    }
+
+    if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ message: 'Password must contain at least one letter and one number.' });
+    }
+
+    // Verify JWT reset token
+    let decoded;
+    try {
+      decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+    } catch (jwtErr) {
+      return res.status(400).json({
+        message: jwtErr.name === 'TokenExpiredError'
+          ? 'Password reset session has expired. Please start over.'
+          : 'Invalid reset token. Please start the password reset process again.'
+      });
+    }
+
+    if (decoded.purpose !== 'password_reset') {
+      return res.status(400).json({ message: 'Invalid reset token.' });
+    }
+
+    const normalizedEmail = decoded.email;
+
+    // Hash the provided token to compare against stored hash
+    const crypto = require('crypto');
+    const providedTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    // Find the matching password_reset record
+    const { data: resetRecords, error: lookupError } = await supabase
+      .from('password_resets')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .eq('reset_token_hash', providedTokenHash)
+      .eq('reset_token_used', false)
+      .gt('reset_token_expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (lookupError) {
+      console.error('RESET PASSWORD — LOOKUP ERROR:', lookupError);
+      return res.status(500).json({ message: 'Server error. Please try again.' });
+    }
+
+    if (!resetRecords || resetRecords.length === 0) {
+      return res.status(400).json({
+        message: 'Reset session is invalid or has already been used. Please start the password reset process again.'
+      });
+    }
+
+    const record = resetRecords[0];
+
+    // Hash the new password using the same system as registration/login
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the user's password
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        password: hashedPassword,
+        updated_at: new Date().toISOString()
+      })
+      .eq('email', normalizedEmail);
+
+    if (updateError) {
+      console.error('RESET PASSWORD — UPDATE ERROR:', updateError);
+      return res.status(500).json({ message: 'Failed to update password. Please try again.' });
+    }
+
+    // Invalidate the reset record immediately
+    await supabase
+      .from('password_resets')
+      .update({
+        reset_token_used: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', record.id);
+
+    console.log('RESET PASSWORD SUCCESS:', { email: normalizedEmail });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. Please login with your new password.'
+    });
+
+  } catch (err) {
+    console.error('RESET PASSWORD — SERVER ERROR:', err.message);
+    return res.status(500).json({ message: 'Server error during password reset.' });
+  }
+};
