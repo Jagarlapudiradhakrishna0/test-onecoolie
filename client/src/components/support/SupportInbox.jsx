@@ -50,9 +50,23 @@ export default function SupportInbox({ initialTickets = null, selectedTicketIdPr
     fetchTickets();
     const unsubscribe = subscribeToSupportUpdates(fetchTickets);
     const interval = setInterval(fetchTickets, 5000); // 5-second live refresh for real-time responsiveness
+
+    // Socket.IO real-time listeners — fires when assistant raises a ticket or updates one
+    const handleSocketEvent = () => fetchTickets();
+    if (window.socket) {
+      window.socket.on('new_support_ticket', handleSocketEvent);
+      window.socket.on('ticket_status_updated', handleSocketEvent);
+      window.socket.on('ticket_message', handleSocketEvent);
+    }
+
     return () => {
       unsubscribe();
       clearInterval(interval);
+      if (window.socket) {
+        window.socket.off('new_support_ticket', handleSocketEvent);
+        window.socket.off('ticket_status_updated', handleSocketEvent);
+        window.socket.off('ticket_message', handleSocketEvent);
+      }
     };
   }, []);
 

@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import Brand from '../components/Brand';
 import LaunchCenter from '../components/LaunchCenter';
 import SupportInbox from '../components/support/SupportInbox';
-import { getTickets, subscribeToSupportUpdates } from '../utils/supportStore';
 import axios from '../api/axios';
 import toast, { Toaster } from 'react-hot-toast';
 import {
@@ -1101,18 +1100,17 @@ export default function AdminDashboard() {
     pnr: ''
   });
 
+  // supportTicketCount is now derived from the server-fetched supportTickets state
+  // (was previously using localStorage getTickets() which only contained passenger tickets
+  //  and never reflected assistant-raised operational tickets)
   useEffect(() => {
-    const updateCount = () => {
-      try {
-        const all = getTickets();
-        const open = all.filter(t => ['open', 'in_progress', 'bot_escalated'].includes(t.status)).length;
-        setSupportTicketCount(open);
-      } catch (e) {}
-    };
-    updateCount();
-    const unsub = subscribeToSupportUpdates(updateCount);
-    return () => unsub?.();
-  }, []);
+    const open = supportTickets.filter(t =>
+      ['open', 'in_progress', 'bot_escalated', 'dispatched to station supervisor'].includes(
+        (t.status || '').toLowerCase()
+      )
+    ).length;
+    setSupportTicketCount(open);
+  }, [supportTickets]);
 
   // Core Data States
   const [stats, setStats] = useState({
@@ -1225,6 +1223,11 @@ export default function AdminDashboard() {
       window.socket.on('new_booking', handleLiveEvent);
       window.socket.on('financial_incident_created', handleLiveEvent);
       window.socket.on('financial_incident_updated', handleLiveEvent);
+      // Support ticket real-time events — emitted by supportController when an
+      // assistant raises a ticket or a status/message update occurs
+      window.socket.on('new_support_ticket', handleLiveEvent);
+      window.socket.on('ticket_status_updated', handleLiveEvent);
+      window.socket.on('ticket_message', handleLiveEvent);
 
       return () => {
         clearInterval(interval);
@@ -1233,6 +1236,9 @@ export default function AdminDashboard() {
         window.socket.off('new_booking', handleLiveEvent);
         window.socket.off('financial_incident_created', handleLiveEvent);
         window.socket.off('financial_incident_updated', handleLiveEvent);
+        window.socket.off('new_support_ticket', handleLiveEvent);
+        window.socket.off('ticket_status_updated', handleLiveEvent);
+        window.socket.off('ticket_message', handleLiveEvent);
       };
     }
 
