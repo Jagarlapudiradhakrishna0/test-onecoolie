@@ -8,6 +8,7 @@
  */
 
 const defaultSupabase = require('../config/db');
+const { logAdminAction } = require('../services/adminAuditService');
 
 let io = null;
 
@@ -198,6 +199,20 @@ exports.investigateIncident = async (req, res) => {
 
     emitIncidentUpdate(updated);
 
+    await logAdminAction({
+      req,
+      action: 'financial_incident_investigating',
+      resource_type: 'incident',
+      resource_id: id,
+      result: 'success',
+      metadata: {
+        severity: updated.severity,
+        incident_type: updated.incident_type,
+        before: { status: 'open' },
+        after: { status: 'investigating' }
+      }
+    });
+
     res.json({
       success: true,
       message: 'Incident moved to investigating.',
@@ -248,6 +263,39 @@ exports.resolveIncident = async (req, res) => {
 
     emitIncidentUpdate(updated);
 
+    try {
+      await logAdminAction({
+        req,
+        action: 'financial_incident_resolved',
+        resource_type: 'incident',
+        resource_id: id,
+        result: 'success',
+        metadata: {
+          severity: updated.severity,
+          incident_type: updated.incident_type,
+          resolution_notes: resolution_notes.trim(),
+          before: { status: 'investigating' },
+          after: { status: 'resolved' }
+        }
+      });
+    } catch (auditErr) {
+      await client
+        .from('financial_incidents')
+        .update({
+          status: 'investigating',
+          resolved_at: null,
+          resolved_by: null,
+          resolution_notes: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      console.error('[CRITICAL AUDIT ROLLBACK] Financial incident resolution rolled back due to audit failure:', auditErr.message);
+      return res.status(500).json({
+        message: 'Security Policy Enforcement: Audit logging failed for high-risk incident resolution. Action was rolled back.'
+      });
+    }
+
     res.json({
       success: true,
       message: 'Financial incident resolved successfully.',
@@ -287,6 +335,19 @@ exports.ignoreIncident = async (req, res) => {
     }
 
     emitIncidentUpdate(updated);
+
+    await logAdminAction({
+      req,
+      action: 'financial_incident_ignored',
+      resource_type: 'incident',
+      resource_id: id,
+      result: 'success',
+      metadata: {
+        severity: updated.severity,
+        incident_type: updated.incident_type,
+        after: { status: 'ignored' }
+      }
+    });
 
     res.json({
       success: true,

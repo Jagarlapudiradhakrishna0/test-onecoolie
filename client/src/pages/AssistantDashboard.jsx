@@ -47,6 +47,7 @@ import oneCoolieLogo from '../assets/onecoolie-logo.png';
 import TrainLoader from '../components/TrainLoader';
 import { useLanguage } from '../context/LanguageContext';
 import { playOnDutySound, playNewBookingSound } from '../utils/audioAlerts';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 /* ============================================================
    ONECOOLIE ASSISTANT DASHBOARD — Premium Uber-Style Ops Interface
@@ -429,12 +430,12 @@ export default function AssistantDashboard() {
       // Guarantee start_otp has generous 7-day validity in Supabase
       try {
         const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-        fetch(`https://pzrttunhyfporcpcybax.supabase.co/rest/v1/bookings?id=eq.${requestId}`, {
+        fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${requestId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            apikey: 'sb_publishable_dXyQiI56vk_nQF_l8DiysQ_sCa4bPt4',
-            Authorization: 'Bearer sb_publishable_dXyQiI56vk_nQF_l8DiysQ_sCa4bPt4',
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
             Prefer: 'return=minimal'
           },
           body: JSON.stringify({ start_otp_expires_at: future })

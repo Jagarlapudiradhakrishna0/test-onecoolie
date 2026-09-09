@@ -542,8 +542,9 @@ exports.triggerSOS = async (req, res) => {
 
     const isPassenger = bookingRow.passenger_id === req.user.id;
     const isAssistant = bookingRow.assistant_id === req.user.id;
+    const isAdmin = req.user.role === 'admin';
 
-    if (!isPassenger && !isAssistant) {
+    if (!isPassenger && !isAssistant && !isAdmin) {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
@@ -598,12 +599,14 @@ exports.triggerSOS = async (req, res) => {
 // --------------------------------------------------
 // GET CHAT MESSAGES (GET /service/:booking_id/chat)
 // --------------------------------------------------
+// GET CHAT MESSAGES (GET /service/:booking_id/chat)
+// --------------------------------------------------
 exports.getChatMessages = async (req, res) => {
   try {
     const { booking_id } = req.params;
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking_id);
 
-    let query = supabase.from('bookings').select('id, booking_id, services');
+    let query = supabase.from('bookings').select('id, booking_id, services, passenger_id, assistant_id');
     if (isUUID) {
       query = query.eq('id', booking_id);
     } else {
@@ -613,6 +616,14 @@ exports.getChatMessages = async (req, res) => {
     const { data: booking, error } = await query.maybeSingle();
     if (error || !booking) {
       return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const isPassenger = booking.passenger_id === req.user?.id;
+    const isAssistant = booking.assistant_id && booking.assistant_id === req.user?.id;
+    const isAdmin = req.user?.role === 'admin';
+
+    if (!isPassenger && !isAssistant && !isAdmin) {
+      return res.status(403).json({ message: 'Not authorized to view chat messages for this booking.' });
     }
 
     const messages = (booking.services && Array.isArray(booking.services.chat_messages))
@@ -632,7 +643,7 @@ exports.getChatMessages = async (req, res) => {
 exports.sendChatMessage = async (req, res) => {
   try {
     const { booking_id } = req.params;
-    const { text, from, timestamp } = req.body;
+    const { text, timestamp } = req.body;
 
     if (!text || !text.trim()) {
       return res.status(400).json({ message: 'Message text is required.' });
@@ -640,7 +651,7 @@ exports.sendChatMessage = async (req, res) => {
 
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking_id);
 
-    let query = supabase.from('bookings').select('id, booking_id, services');
+    let query = supabase.from('bookings').select('id, booking_id, services, passenger_id, assistant_id');
     if (isUUID) {
       query = query.eq('id', booking_id);
     } else {
@@ -652,13 +663,24 @@ exports.sendChatMessage = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found.' });
     }
 
+    const isPassenger = booking.passenger_id === req.user?.id;
+    const isAssistant = booking.assistant_id && booking.assistant_id === req.user?.id;
+    const isAdmin = req.user?.role === 'admin';
+
+    if (!isPassenger && !isAssistant && !isAdmin) {
+      return res.status(403).json({ message: 'Not authorized to send chat messages for this booking.' });
+    }
+
+    // Determine sender identity authoritatively from verified token and booking relationship
+    const authorSender = isAdmin ? 'admin' : (isAssistant ? 'assistant' : 'passenger');
+
     const curServices = (booking.services && typeof booking.services === 'object') ? booking.services : {};
     const oldMsgs = Array.isArray(curServices.chat_messages) ? curServices.chat_messages : [];
 
     const newMessage = {
       bookingId: booking.id,
       bookingCode: booking.booking_id,
-      from: from || (req.user?.role === 'assistant' ? 'assistant' : 'passenger'),
+      from: authorSender,
       text: String(text).trim().slice(0, 1000),
       timestamp: timestamp || new Date().toISOString(),
     };

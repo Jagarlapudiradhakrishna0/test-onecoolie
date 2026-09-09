@@ -19,7 +19,14 @@ const REQUIRED_FINANCIAL_TABLES = [
   'assistant_payout_items',
   'financial_audit_logs',
   'financial_incidents',
-  'payment_webhook_events'
+  'payment_webhook_events',
+  'security_events',
+  'security_incidents',
+  'security_incident_events',
+  'security_response_actions',
+  'deployment_verifications',
+  'recovery_verifications',
+  'application_operational_events'
 ];
 
 /**

@@ -13,9 +13,29 @@ const FRESH_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
 // --------------------------------------------------
 // ASSISTANT AVAILABILITY (POST /assistants/availability)
 // --------------------------------------------------
+// ASSISTANT AVAILABILITY (POST /assistants/availability)
+// --------------------------------------------------
 
 exports.setAvailability = async (req, res) => {
   try {
+    if (req.user?.role !== 'assistant' && req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Only registered assistants can update availability.' });
+    }
+
+    const { data: userRow, error: userErr } = await supabase
+      .from('users')
+      .select('id, role, is_approved')
+      .eq('id', req.user.id)
+      .single();
+
+    if (userErr || !userRow) {
+      return res.status(401).json({ message: 'Session expired or user not found. Please log in again.' });
+    }
+
+    if (req.user.role === 'assistant' && !userRow.is_approved) {
+      return res.status(403).json({ message: 'Assistant account is pending approval or inactive.' });
+    }
+
     const { is_online, station_code } = req.body;
 
     const updates = { is_online: !!is_online };
@@ -25,11 +45,11 @@ exports.setAvailability = async (req, res) => {
       .from('users')
       .update(updates)
       .eq('id', req.user.id)
-      .select()
+      .select('id, name, email, role, station_code, is_online, is_approved')
       .single();
 
     if (error || !data) {
-      return res.status(401).json({ message: 'Session expired or user not found. Please log in again.' });
+      return res.status(400).json({ message: 'Unable to update availability.' });
     }
 
     res.json(data);
@@ -68,14 +88,22 @@ exports.getMe = async (req, res) => {
 
 exports.getAvailableBookings = async (req, res) => {
   try {
+    if (req.user?.role !== 'assistant' && req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Only registered assistants can view available bookings.' });
+    }
+
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('station_code, is_online')
+      .select('station_code, is_online, is_approved')
       .eq('id', req.user.id)
       .single();
 
     if (userError || !user) {
       return res.status(401).json({ message: 'Session expired. Please log in again.' });
+    }
+
+    if (req.user.role === 'assistant' && !user.is_approved) {
+      return res.status(403).json({ message: 'Assistant account is pending approval or inactive.' });
     }
 
     if (!user.is_online) {
@@ -121,6 +149,24 @@ exports.getAvailableBookings = async (req, res) => {
 
 exports.acceptBooking = async (req, res) => {
   try {
+    if (req.user?.role !== 'assistant') {
+      return res.status(403).json({ message: 'Only registered assistants can accept bookings.' });
+    }
+
+    const { data: assistantUser, error: assistantErr } = await supabase
+      .from('users')
+      .select('id, role, is_approved')
+      .eq('id', req.user.id)
+      .single();
+
+    if (assistantErr || !assistantUser) {
+      return res.status(401).json({ message: 'Session expired or user not found. Please log in again.' });
+    }
+
+    if (!assistantUser.is_approved) {
+      return res.status(403).json({ message: 'Assistant account is pending approval or inactive.' });
+    }
+
     const { booking_id } = req.params;
 
     // Generate a secure 6-digit OTP
@@ -231,6 +277,10 @@ exports.acceptBooking = async (req, res) => {
 
 exports.getMyJobs = async (req, res) => {
   try {
+    if (req.user?.role !== 'assistant' && req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Only assistants can view assigned jobs.' });
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .select('*, passenger:passenger_id(id, name, email, phone)')

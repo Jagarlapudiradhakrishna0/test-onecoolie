@@ -447,6 +447,7 @@ exports.updateTicketStatus = async (req, res) => {
       return res.status(404).json({ error: 'Support ticket not found.' });
     }
 
+    const previousStatus = tickets[index].status;
     if (status) {
       tickets[index].status = status;
     }
@@ -473,6 +474,26 @@ exports.updateTicketStatus = async (req, res) => {
 
     // Asynchronously sync status update to Supabase support_tickets table
     syncTicketToDB(tickets[index], req.user?.id);
+
+    if (req.user?.role === 'admin') {
+      try {
+        const { logAdminAction } = require('../services/adminAuditService');
+        await logAdminAction({
+          req,
+          action: 'support_ticket_status_updated',
+          resource_type: 'support_ticket',
+          resource_id: tickets[index].id,
+          result: 'success',
+          metadata: {
+            before: { status: previousStatus },
+            after: { status: tickets[index].status },
+            resolution_notes: notes || null
+          }
+        });
+      } catch (auditErr) {
+        console.warn('Audit logging notice in supportController:', auditErr.message);
+      }
+    }
 
     if (ioInstance) {
       try {

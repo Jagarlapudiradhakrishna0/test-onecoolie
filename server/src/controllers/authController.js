@@ -3,24 +3,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { generateOtp, hashOtp, verifyOtp } = require('../utils/otpService');
 const { sendOtpEmail, sendPasswordResetEmail } = require('../utils/emailService');
-
-/*
-|--------------------------------------------------------------------------
-| Generate JWT Token
-|--------------------------------------------------------------------------
-*/
-const generateToken = (id, role) => {
-  return jwt.sign(
-    {
-      id,
-      role
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: '30d'
-    }
-  );
-};
+const generateToken = require('../utils/generateToken');
+const { setRefreshTokenCookie, clearRefreshTokenCookie, COOKIE_NAME } = require('../utils/cookieHelper');
+const { isApprovedAdminEmail, normalizeEmail } = require('../config/adminAllowlist');
 
 /*
 |--------------------------------------------------------------------------
@@ -118,7 +103,7 @@ exports.sendOtp = async (req, res) => {
     const expiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`🔑 [OTP DISPATCH] Recipient: ${normalizedEmail} | OTP Code: ${otp} | Purpose: ${purpose}`);
+    console.log(`🔑 [OTP DISPATCH] Recipient: ${normalizedEmail} | OTP Code: [ REDACTED ] | Purpose: ${purpose}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     const { error: insertError } = await supabase
@@ -287,10 +272,18 @@ exports.verifyOtpAndLogin = async (req, res) => {
       });
     }
 
-    // Generate JWT
-    const token = generateToken(user.id, user.role);
+    // Phase 6.3: Create server-side session and short-lived access token + opaque refresh token
+    const sessionService = require('../services/sessionService');
+    const { session, accessToken, refreshToken } = await sessionService.createSession({
+      user,
+      req,
+      client: supabase
+    });
 
-    console.log('OTP LOGIN SUCCESS:', { id: user.id, email: user.email, role: user.role });
+    console.log('OTP LOGIN SUCCESS:', { id: user.id, email: user.email, role: user.role, sid: session.id });
+
+    // Set HttpOnly refresh token cookie (Phase 6.6)
+    setRefreshTokenCookie(res, refreshToken);
 
     return res.status(200).json({
       _id: user.id,
@@ -302,7 +295,10 @@ exports.verifyOtpAndLogin = async (req, res) => {
       station_code: user.station_code || null,
       is_approved: user.is_approved,
       kyc_status: user.kyc_status || null,
-      token
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      sessionId: session.id
     });
 
   } catch (err) {
@@ -491,10 +487,18 @@ exports.verifyOtpAndRegister = async (req, res) => {
       });
     }
 
-    // Passenger — issue token immediately
-    const token = generateToken(newUser.id, newUser.role);
+    // Passenger — create server-side session and issue tokens
+    const sessionService = require('../services/sessionService');
+    const { session, accessToken, refreshToken } = await sessionService.createSession({
+      user: newUser,
+      req,
+      client: supabase
+    });
 
-    console.log('OTP REGISTER SUCCESS:', { id: newUser.id, email: newUser.email, role: newUser.role });
+    console.log('OTP REGISTER SUCCESS:', { id: newUser.id, email: newUser.email, role: newUser.role, sid: session.id });
+
+    // Set HttpOnly refresh token cookie (Phase 6.6)
+    setRefreshTokenCookie(res, refreshToken);
 
     return res.status(201).json({
       _id: newUser.id,
@@ -506,7 +510,10 @@ exports.verifyOtpAndRegister = async (req, res) => {
       station_code: newUser.station_code || null,
       is_approved: newUser.is_approved,
       kyc_status: newUser.kyc_status || null,
-      token
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      sessionId: session.id
     });
 
   } catch (err) {
@@ -585,8 +592,14 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Validate role
-    const allowedRoles = ['passenger', 'assistant', 'admin'];
+    // Validate role — public registration cannot create admin accounts
+    if (role === 'admin') {
+      return res.status(403).json({
+        message: 'Admin registration is not allowed.'
+      });
+    }
+
+    const allowedRoles = ['passenger', 'assistant'];
 
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({
@@ -619,8 +632,7 @@ exports.register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const isApproved =
-      role === 'passenger' || role === 'admin';
+    const isApproved = role === 'passenger';
 
     // Format phone consistently
     let formattedPhone = null;
@@ -727,8 +739,38 @@ exports.login = async (req, res) => {
     let queryError = null;
 
     if (role === 'admin') {
-      const normalizedEmail = rawInput.toLowerCase();
-      // Check exact email first
+      const normalizedEmail = normalizeEmail(rawInput);
+
+      // Phase 6.9: Strict Two-Account Admin Allowlist Verification
+      if (!isApprovedAdminEmail(normalizedEmail)) {
+        try {
+          const { recordSecurityEvent } = require('../services/securityMonitoringService');
+          recordSecurityEvent({
+            eventType: 'admin_allowlist_denied',
+            severity: 'medium',
+            ip: req.ip,
+            userAgent: req.headers['user-agent'],
+            requestId: req.requestId,
+            metadata: { attemptedEmail: normalizedEmail }
+          }).catch(() => {});
+          const { logAdminAction } = require('../services/adminAuditService');
+          logAdminAction({
+            req,
+            action: 'admin_allowlist_denied',
+            resource_type: 'admin_auth',
+            resource_id: normalizedEmail,
+            result: 'failure',
+            metadata: { reason: 'Identity not in approved administrator allowlist' }
+          }).catch(() => {});
+        } catch (audErr) {}
+
+        return res.status(401).json({
+          success: false,
+          message: 'Administrator access is not authorized for this account.'
+        });
+      }
+
+      // Check exact email for approved admin
       const { data: exactAdmin, error: exactErr } = await supabase
         .from('users')
         .select('*')
@@ -739,21 +781,6 @@ exports.login = async (req, res) => {
         queryError = exactErr;
       } else if (exactAdmin) {
         user = exactAdmin;
-      } else {
-        // Fallback for recognized admin aliases if configured under alternate domain
-        const aliases = ['admin@onecoolie.com', 'admin@onecoolie.in', 'admin@railmitra.com']
-          .filter(e => e !== normalizedEmail);
-        const { data: aliasAdmins, error: aliasErr } = await supabase
-          .from('users')
-          .select('*')
-          .in('email', aliases)
-          .eq('role', 'admin');
-
-        if (aliasErr) {
-          queryError = aliasErr;
-        } else if (aliasAdmins && aliasAdmins.length > 0) {
-          user = aliasAdmins[0];
-        }
       }
     } else {
       if (rawInput.includes('@')) {
@@ -826,7 +853,175 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check password
+    // Phase 6.9: Server-Authoritative Database Identity & Status Check for Admins
+    if (user.role === 'admin') {
+      if (!isApprovedAdminEmail(user.email)) {
+        return res.status(401).json({
+          success: false,
+          message: 'Administrator access is not authorized for this account.'
+        });
+      }
+
+      if (user.is_approved === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'Administrator account has been disabled or suspended.'
+        });
+      }
+    }
+
+    // -------------------------------------------------------------
+    // PHASE 6.2: ADMIN ACCOUNT LOCKOUT & MFA CHALLENGE ENFORCEMENT
+    // -------------------------------------------------------------
+    if (user.role === 'admin') {
+      const now = new Date();
+      const maxAttempts = parseInt(process.env.ADMIN_MAX_LOGIN_ATTEMPTS || '5', 10);
+      const lockMinutes = parseInt(process.env.ADMIN_LOCKOUT_MINUTES || '30', 10);
+
+      // 1. Account Lockout Check: If locked_until > NOW(), reject without bcrypt verification
+      if (user.locked_until && new Date(user.locked_until) > now) {
+        const remainingMinutes = Math.ceil((new Date(user.locked_until) - now) / 60000);
+        console.warn(`[SECURITY] Rejected login attempt on locked admin account: ${user.email} (locked for ~${remainingMinutes} more mins)`);
+        return res.status(423).json({
+          message: 'Account is temporarily locked due to excessive failed attempts. Please try again later.',
+          lockedUntil: user.locked_until
+        });
+      }
+
+      // 2. Verify Password
+      const isMatch = await bcrypt.compare(password, user.password);
+
+      if (!isMatch) {
+        // Atomic failed attempts increment and conditional lockout
+        const currentFailed = (user.failed_login_attempts || 0) + 1;
+        const updates = { failed_login_attempts: currentFailed };
+        let lockedOut = false;
+
+        if (currentFailed >= maxAttempts) {
+          updates.locked_until = new Date(Date.now() + lockMinutes * 60000).toISOString();
+          lockedOut = true;
+          console.warn(`[SECURITY] Admin account ${user.email} locked until ${updates.locked_until} due to ${currentFailed} failed attempts.`);
+        }
+
+        await supabase
+          .from('users')
+          .update(updates)
+          .eq('id', user.id);
+
+        if (lockedOut) {
+          try {
+            const { recordSecurityEvent } = require('../services/securityMonitoringService');
+            recordSecurityEvent({
+              eventType: 'account_locked',
+              severity: 'high',
+              userId: user.id,
+              ip: req.ip,
+              userAgent: req.headers['user-agent'],
+              requestId: req.requestId,
+              metadata: { email: user.email, lockedUntil: updates.locked_until }
+            }).catch(() => {});
+          } catch (mErr) {}
+
+          return res.status(423).json({
+            message: 'Account is temporarily locked due to excessive failed attempts. Please try again later.',
+            lockedUntil: updates.locked_until
+          });
+        }
+
+        try {
+          const { recordSecurityEvent } = require('../services/securityMonitoringService');
+          recordSecurityEvent({
+            eventType: 'login_failed',
+            severity: 'low',
+            userId: user.id,
+            ip: req.ip,
+            userAgent: req.headers['user-agent'],
+            requestId: req.requestId,
+            metadata: { email: user.email, attempts: currentFailed }
+          }).catch(() => {});
+        } catch (mErr) {}
+
+        return res.status(401).json({
+          message: 'Invalid credentials.'
+        });
+      }
+
+      // 3. Password is valid: Reset failed attempts counter
+      if ((user.failed_login_attempts && user.failed_login_attempts > 0) || user.locked_until) {
+        await supabase
+          .from('users')
+          .update({
+            failed_login_attempts: 0,
+            locked_until: null
+          })
+          .eq('id', user.id);
+      }
+
+      // 4. Inspect Admin MFA Status
+      const mfaService = require('../services/mfaService');
+      const mfaStatus = await mfaService.getMfaStatus(user.id, supabase);
+
+      // Check authoritative admin role & permissions
+      const { resolveAdminRole } = require('../middleware/adminMiddleware');
+      const { getPermissionsForRole } = require('../config/rbac');
+      const adminRole = await resolveAdminRole(user.id);
+      const permissions = getPermissionsForRole(adminRole);
+
+      // 5. If MFA is Enrolled: Issue 5-minute MFA Challenge Token (DO NOT issue full access token)
+      if (mfaStatus.enrolled) {
+        const mfaChallengeToken = jwt.sign(
+          {
+            id: user.id,
+            role: 'admin',
+            scope: 'mfa_pending'
+          },
+          process.env.JWT_SECRET,
+          {
+            expiresIn: '5m',
+            issuer: 'onecoolie-api',
+            audience: 'onecoolie-admin'
+          }
+        );
+
+        console.log(`[MFA] Issued MFA login challenge for admin: ${user.email}`);
+
+        return res.status(200).json({
+          requiresMfa: true,
+          mfaEnrolled: true,
+          mfaToken: mfaChallengeToken,
+          message: 'Multi-Factor Authentication required. Enter 6-digit authenticator or recovery code.'
+        });
+      }
+
+      // 6. If MFA is NOT yet enrolled: Mandatory enrollment required for security
+      // Issue a setup-scoped token allowing the admin to set up MFA
+      const mfaSetupToken = jwt.sign(
+        {
+          id: user.id,
+          role: 'admin',
+          scope: 'mfa_setup_required'
+        },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: '15m',
+          issuer: 'onecoolie-api',
+          audience: 'onecoolie-admin'
+        }
+      );
+
+      console.log(`[MFA] Admin ${user.email} requires initial MFA enrollment.`);
+
+      return res.status(200).json({
+        requiresMfa: true,
+        mfaEnrolled: false,
+        mfaSetupToken,
+        message: 'Administrator MFA enrollment is mandatory. Please complete TOTP enrollment to proceed.'
+      });
+    }
+
+    // -------------------------------------------------------------
+    // STANDARD PASSENGER & ASSISTANT LOGIN (Unchanged)
+    // -------------------------------------------------------------
     const isMatch = await bcrypt.compare(
       password,
       user.password
@@ -848,10 +1043,16 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(
-      user.id,
-      user.role
-    );
+    // Phase 6.3: Create server-side session for passenger/assistant login
+    const sessionService = require('../services/sessionService');
+    const { session, accessToken, refreshToken } = await sessionService.createSession({
+      user,
+      req,
+      client: supabase
+    });
+
+    // Set HttpOnly refresh token cookie (Phase 6.6)
+    setRefreshTokenCookie(res, refreshToken);
 
     const responseUser = {
       _id: user.id,
@@ -863,13 +1064,17 @@ exports.login = async (req, res) => {
       station_code: user.station_code || null,
       is_approved: user.is_approved,
       kyc_status: user.kyc_status || null,
-      token
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      sessionId: session.id
     };
 
     console.log('LOGIN SUCCESS:', {
       id: responseUser.id,
       email: responseUser.email,
-      role: responseUser.role
+      role: responseUser.role,
+      sid: session.id
     });
 
     return res.status(200).json(responseUser);
@@ -883,139 +1088,6 @@ exports.login = async (req, res) => {
   }
 };
 
-/*
-|--------------------------------------------------------------------------
-| SEED TEST USERS
-|--------------------------------------------------------------------------
-*/
-exports.seedTestUsers = async (req, res) => {
-  try {
-    const salt = await bcrypt.genSalt(10);
-
-    const hashedPassword = await bcrypt.hash(
-      'password123',
-      salt
-    );
-
-    const usersToSeed = [
-      {
-        name: 'Admin User',
-        email: 'admin@onecoolie.com',
-        password: hashedPassword,
-        role: 'admin',
-        is_approved: true,
-        station_code: null
-      },
-      {
-        name: 'Kazipet Assistant',
-        email: 'assistant@onecoolie.com',
-        password: hashedPassword,
-        role: 'assistant',
-        is_approved: true,
-        station_code: 'KZJ'
-      },
-      {
-        name: 'Test Passenger',
-        email: 'passenger@onecoolie.com',
-        password: hashedPassword,
-        role: 'passenger',
-        is_approved: true,
-        station_code: null
-      }
-    ];
-
-    const createdUsers = [];
-
-    for (const user of usersToSeed) {
-
-      const {
-        data: existingUser,
-        error: findError
-      } = await supabase
-        .from('users')
-        .select('id, email, role')
-        .eq('email', user.email)
-        .maybeSingle();
-
-      if (findError) {
-        console.error(
-          'SEED CHECK ERROR:',
-          findError
-        );
-        continue;
-      }
-
-      if (existingUser) {
-
-        const {
-          data: updatedUser,
-          error: updateError
-        } = await supabase
-          .from('users')
-          .update({
-            role: user.role,
-            is_approved: user.is_approved,
-            station_code: user.station_code
-          })
-          .eq('id', existingUser.id)
-          .select()
-          .single();
-
-        if (updateError) {
-          console.error(
-            'SEED UPDATE ERROR:',
-            updateError
-          );
-        } else {
-          createdUsers.push({
-            id: updatedUser.id,
-            email: updatedUser.email,
-            role: updatedUser.role,
-            status: 'updated'
-          });
-        }
-
-      } else {
-
-        const {
-          data: newUser,
-          error: insertError
-        } = await supabase
-          .from('users')
-          .insert([user])
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error(
-            'SEED INSERT ERROR:',
-            insertError
-          );
-        } else {
-          createdUsers.push({
-            id: newUser.id,
-            email: newUser.email,
-            role: newUser.role,
-            status: 'created'
-          });
-        }
-      }
-    }
-
-    return res.status(200).json({
-      message:
-        'Seed complete. Password for all test accounts is password123.',
-      users: createdUsers
-    });
-
-  } catch (error) {
-    console.error('SEED SERVER ERROR:', error);
-
-    return res.status(500).json({
-      message: 'Unable to seed test users.'
-    });
-  }
-};
 
 /*
 |--------------------------------------------------------------------------
@@ -1360,11 +1432,11 @@ exports.verifyResetOtp = async (req, res) => {
       });
     }
 
-    // OTP is valid — generate a short-lived reset token (15 minutes)
+    // OTP is valid — generate a short-lived reset token (15 minutes) with pinned HS256
     const resetToken = jwt.sign(
       { email: normalizedEmail, purpose: 'password_reset' },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '15m', algorithm: 'HS256', issuer: 'onecoolie-api', audience: 'onecoolie-client' }
     );
 
     // Store a SHA-256 hash of the reset token in the DB (never the token itself)
@@ -1436,10 +1508,14 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Password must contain at least one letter and one number.' });
     }
 
-    // Verify JWT reset token
+    // Verify JWT reset token with algorithm pinning
     let decoded;
     try {
-      decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(resetToken, process.env.JWT_SECRET, {
+        algorithms: ['HS256'],
+        issuer: 'onecoolie-api',
+        audience: 'onecoolie-client'
+      });
     } catch (jwtErr) {
       return res.status(400).json({
         message: jwtErr.name === 'TokenExpiredError'
@@ -1485,18 +1561,28 @@ exports.resetPassword = async (req, res) => {
     // Hash the new password using the same system as registration/login
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update the user's password
-    const { error: updateError } = await supabase
+    // Update the user's password and last_password_change_at timestamp
+    const nowIso = new Date().toISOString();
+    const { data: updatedUser, error: updateError } = await supabase
       .from('users')
       .update({
         password: hashedPassword,
-        updated_at: new Date().toISOString()
+        last_password_change_at: nowIso,
+        updated_at: nowIso
       })
-      .eq('email', normalizedEmail);
+      .eq('email', normalizedEmail)
+      .select('id')
+      .single();
 
     if (updateError) {
       console.error('RESET PASSWORD — UPDATE ERROR:', updateError);
       return res.status(500).json({ message: 'Failed to update password. Please try again.' });
+    }
+
+    // Phase 6.3: Revoke all active sessions on password change
+    if (updatedUser?.id) {
+      const sessionService = require('../services/sessionService');
+      await sessionService.revokeAllUserSessions(updatedUser.id, 'password_changed', supabase);
     }
 
     // Invalidate the reset record immediately
@@ -1504,19 +1590,571 @@ exports.resetPassword = async (req, res) => {
       .from('password_resets')
       .update({
         reset_token_used: true,
-        updated_at: new Date().toISOString()
+        updated_at: nowIso
       })
       .eq('id', record.id);
 
-    console.log('RESET PASSWORD SUCCESS:', { email: normalizedEmail });
+    console.log('RESET PASSWORD SUCCESS:', { email: normalizedEmail, sessionsRevoked: true });
 
     return res.status(200).json({
       success: true,
-      message: 'Password reset successfully. Please login with your new password.'
+      message: 'Password reset successfully. All active sessions have been terminated. Please login with your new password.'
     });
 
   } catch (err) {
     console.error('RESET PASSWORD — SERVER ERROR:', err.message);
     return res.status(500).json({ message: 'Server error during password reset.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| PHASE 6.2: ADMIN MULTI-FACTOR AUTHENTICATION (TOTP) ENDPOINTS
+|--------------------------------------------------------------------------
+*/
+
+const mfaService = require('../services/mfaService');
+const { logAdminAction } = require('../services/adminAuditService');
+
+/**
+ * POST /api/auth/admin/mfa/setup
+ *
+ * Initializes TOTP enrollment for the authenticated admin.
+ * Requires valid admin session OR setup-scoped token (`mfa_setup_required`).
+ */
+exports.setupAdminMfa = async (req, res) => {
+  try {
+    // Resolve user context from authenticated session or setup token
+    let userId = req.user?.id;
+    let userEmail = req.user?.email;
+
+    if (!userId) {
+      // Check Authorization header for Bearer token or setup token
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      let rawBearer = null;
+      if (authHeader && typeof authHeader === 'string') {
+        rawBearer = authHeader.replace(/^Bearer\s+/i, '').replace(/^"(.*)"$/, '$1').trim();
+      }
+
+      const tokenCandidate = rawBearer || req.body?.mfaSetupToken || req.headers['x-mfa-setup-token'];
+
+      if (tokenCandidate) {
+        try {
+          const decoded = jwt.verify(tokenCandidate, process.env.JWT_SECRET, {
+            algorithms: ['HS256']
+          });
+          // Accept valid admin access token OR setup-scoped token
+          if (decoded.role === 'admin' && (decoded.scope === 'mfa_setup_required' || !decoded.scope)) {
+            userId = decoded.id;
+          }
+        } catch (tokErr) {
+          return res.status(401).json({ message: 'Invalid or expired authentication token.' });
+        }
+      }
+    }
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Admin authentication required.' });
+    }
+
+    // Authoritative user verification
+    const { data: user, error: uErr } = await supabase
+      .from('users')
+      .select('id, email, role, admin_role')
+      .eq('id', userId)
+      .single();
+
+    if (uErr || !user || user.role !== 'admin' || !isApprovedAdminEmail(user.email)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Administrator access is not authorized for this account.'
+      });
+    }
+
+    if (user.is_approved === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Administrator account has been disabled or suspended.'
+      });
+    }
+
+    userEmail = user.email;
+
+    const enrollment = await mfaService.createEnrollment({ id: user.id, email: userEmail }, supabase);
+
+    // Audit log enrollment initiation
+    try {
+      await logAdminAction({
+        req,
+        action: 'admin_mfa_enrollment_started',
+        resource_type: 'admin_mfa',
+        resource_id: user.id,
+        result: 'success',
+        metadata: { email: user.email }
+      });
+    } catch (audErr) {
+      // Non-high-risk action warning logged
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'MFA setup initialized. Scan the QR code with your authenticator app and submit a 6-digit code to complete enrollment.',
+      qrCode: enrollment.qr_code_data_url,
+      otpauthUrl: enrollment.otpauth_url
+    });
+
+  } catch (err) {
+    console.error('MFA SETUP ERROR:', err.message);
+    return res.status(400).json({ message: err.message || 'Failed to initialize MFA setup.' });
+  }
+};
+
+/**
+ * POST /api/auth/admin/mfa/verify-enrollment
+ *
+ * Verifies the first TOTP code and activates MFA.
+ * Returns plaintext recovery codes ONCE.
+ */
+exports.verifyAdminMfaEnrollment = async (req, res) => {
+  try {
+    let userId = req.user?.id;
+    const { code, mfaSetupToken } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ message: '6-digit TOTP verification code is required.' });
+    }
+
+    if (!userId && mfaSetupToken) {
+      try {
+        const decoded = jwt.verify(mfaSetupToken, process.env.JWT_SECRET, {
+          algorithms: ['HS256'],
+          issuer: 'onecoolie-api',
+          audience: 'onecoolie-admin'
+        });
+        if (decoded.scope === 'mfa_setup_required' && decoded.role === 'admin') {
+          userId = decoded.id;
+        }
+      } catch (tokErr) {
+        return res.status(401).json({ message: 'Invalid or expired MFA setup token.' });
+      }
+    }
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Admin authentication required.' });
+    }
+
+    const verification = await mfaService.verifyEnrollmentCode(userId, code, supabase);
+
+    if (!verification.success) {
+      return res.status(400).json({ message: verification.reason || 'MFA code verification failed.' });
+    }
+
+    // Audit log enrollment completion
+    try {
+      await logAdminAction({
+        req,
+        action: 'admin_mfa_enrolled',
+        resource_type: 'admin_mfa',
+        resource_id: userId,
+        result: 'success',
+        metadata: { recovery_codes_generated: verification.recoveryCodes.length }
+      });
+    } catch (audErr) {}
+
+    // Issue full administrative session & token upon successful first-time setup
+    const { data: adminUser } = await supabase.from('users').select('*').eq('id', userId).single();
+    if (!adminUser || adminUser.role !== 'admin' || !isApprovedAdminEmail(adminUser.email)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Administrator access is not authorized for this account.'
+      });
+    }
+    if (adminUser.is_approved === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Administrator account has been disabled or suspended.'
+      });
+    }
+    const sessionService = require('../services/sessionService');
+    const { session, accessToken, refreshToken } = await sessionService.createSession({
+      user: adminUser,
+      req,
+      client: supabase
+    });
+
+    // Set HttpOnly refresh token cookie (Phase 6.6)
+    setRefreshTokenCookie(res, refreshToken);
+
+    return res.status(200).json({
+      success: true,
+      message: 'MFA successfully enrolled and activated for your administrator account.',
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      sessionId: session?.id,
+      user: adminUser ? {
+        id: adminUser.id,
+        _id: adminUser.id,
+        name: adminUser.name,
+        email: adminUser.email,
+        role: adminUser.role,
+        admin_role: adminUser.admin_role
+      } : undefined,
+      recoveryCodes: verification.recoveryCodes,
+      notice: 'IMPORTANT: Save these recovery codes immediately in a secure location. They will NEVER be shown again.'
+    });
+
+  } catch (err) {
+    console.error('MFA VERIFY ENROLLMENT ERROR:', err.message);
+    return res.status(500).json({ message: err.message || 'Server error during MFA enrollment verification.' });
+  }
+};
+
+/**
+ * GET /api/auth/admin/mfa/status
+ *
+ * Returns current MFA enrollment status for the authenticated admin.
+ */
+exports.getAdminMfaStatus = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId || req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin privileges required.' });
+    }
+
+    const status = await mfaService.getMfaStatus(userId, supabase);
+
+    return res.status(200).json({
+      success: true,
+      enrolled: status.enrolled,
+      enrolledAt: status.enrolledAt
+    });
+  } catch (err) {
+    console.error('GET MFA STATUS ERROR:', err.message);
+    return res.status(500).json({ message: 'Failed to retrieve MFA status.' });
+  }
+};
+
+/**
+ * POST /api/auth/admin/mfa/verify-login
+ *
+ * Verifies the MFA challenge token with a TOTP or one-time recovery code.
+ * Upon success, issues the full administrative JWT access token.
+ */
+exports.verifyAdminMfaLogin = async (req, res) => {
+  try {
+    const { mfaToken, code } = req.body;
+
+    if (!mfaToken || !code) {
+      return res.status(400).json({ message: 'MFA challenge token and verification code are required.' });
+    }
+
+    // 1. Verify Challenge JWT
+    let decoded;
+    try {
+      decoded = jwt.verify(mfaToken, process.env.JWT_SECRET, {
+        algorithms: ['HS256'],
+        issuer: 'onecoolie-api',
+        audience: 'onecoolie-admin'
+      });
+    } catch (jwtErr) {
+      return res.status(401).json({
+        message: jwtErr.name === 'TokenExpiredError'
+          ? 'MFA login session has expired. Please sign in again.'
+          : 'Invalid MFA challenge token.'
+      });
+    }
+
+    // 2. Enforce scope and role
+    if (decoded.scope !== 'mfa_pending' || decoded.role !== 'admin') {
+      return res.status(401).json({ message: 'Invalid MFA challenge token scope.' });
+    }
+
+    const userId = decoded.id;
+
+    // 3. Confirm user still exists and is an admin
+    const { data: user, error: userErr } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (userErr || !user || user.role !== 'admin' || !isApprovedAdminEmail(user.email)) {
+      try {
+        const { logAdminAction } = require('../services/adminAuditService');
+        logAdminAction({
+          req,
+          action: 'admin_allowlist_denied',
+          resource_type: 'admin_mfa',
+          resource_id: userId,
+          result: 'failure',
+          metadata: { reason: 'Identity not in approved administrator allowlist' }
+        }).catch(() => {});
+      } catch (aErr) {}
+
+      return res.status(401).json({
+        success: false,
+        message: 'Administrator access is not authorized for this account.'
+      });
+    }
+
+    if (user.is_approved === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Administrator account has been disabled or suspended.'
+      });
+    }
+
+    // 4. Verify code (Supports TOTP 6-digit OR 9-char recovery code format XXXX-XXXX)
+    const cleanCode = String(code).trim();
+    let isSuccess = false;
+    let isRecoveryCode = false;
+
+    if (/^\d{6}$/.test(cleanCode)) {
+      // TOTP verification
+      const totpResult = await mfaService.verifyLoginCode(userId, cleanCode, supabase);
+      if (totpResult.valid) {
+        isSuccess = true;
+      }
+    } else {
+      // Recovery code verification
+      const recResult = await mfaService.verifyRecoveryCode(userId, cleanCode, supabase);
+      if (recResult.valid) {
+        isSuccess = true;
+        isRecoveryCode = true;
+      }
+    }
+
+    if (!isSuccess) {
+      // Record failed verification in audit
+      try {
+        await logAdminAction({
+          req,
+          action: 'admin_mfa_verification_failed',
+          resource_type: 'admin_mfa',
+          resource_id: userId,
+          result: 'failure',
+          metadata: { is_recovery_code: isRecoveryCode }
+        });
+      } catch (aErr) {}
+
+      return res.status(401).json({ message: 'Invalid authentication code. Please try again.' });
+    }
+
+    // 5. Update user telemetry (last_login_at)
+    await supabase
+      .from('users')
+      .update({
+        last_login_at: new Date().toISOString(),
+        failed_login_attempts: 0,
+        locked_until: null
+      })
+      .eq('id', userId);
+
+    // 6. Record successful verification audit event
+    try {
+      await logAdminAction({
+        req,
+        action: isRecoveryCode ? 'admin_recovery_code_used' : 'admin_mfa_verification_success',
+        resource_type: 'admin_mfa',
+        resource_id: userId,
+        result: 'success',
+        metadata: { used_recovery_code: isRecoveryCode }
+      });
+    } catch (aErr) {}
+
+    // 7. Resolve admin role & permissions
+    const { resolveAdminRole } = require('../middleware/adminMiddleware');
+    const { getPermissionsForRole } = require('../config/rbac');
+    const adminRole = await resolveAdminRole(user.id);
+    const permissions = getPermissionsForRole(adminRole);
+
+    // 8. Phase 6.3: Create server-side admin session (7-day absolute lifetime)
+    const sessionService = require('../services/sessionService');
+    const { session, accessToken, refreshToken } = await sessionService.createSession({
+      user,
+      req,
+      client: supabase
+    });
+
+    // Set HttpOnly refresh token cookie (Phase 6.6)
+    setRefreshTokenCookie(res, refreshToken);
+
+    return res.status(200).json({
+      _id: user.id,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone || null,
+      role: user.role,
+      admin_role: adminRole,
+      permissions,
+      station_code: user.station_code || null,
+      is_approved: user.is_approved,
+      kyc_status: user.kyc_status || null,
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      sessionId: session.id,
+      usedRecoveryCode: isRecoveryCode,
+      notice: isRecoveryCode ? 'You used an emergency recovery code to log in. Please regenerate recovery codes if you are running low.' : undefined
+    });
+
+  } catch (err) {
+    console.error('VERIFY MFA LOGIN ERROR:', err.message);
+    return res.status(500).json({ message: 'Server error verifying MFA login.' });
+  }
+};
+
+/**
+ * POST /api/auth/admin/mfa/regenerate-recovery-codes
+ *
+ * Generates a fresh set of 8 recovery codes for an enrolled admin.
+ * Requires active, fully authenticated admin session.
+ */
+exports.regenerateAdminRecoveryCodes = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId || req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin privileges required.' });
+    }
+
+    const result = await mfaService.regenerateRecoveryCodes(userId, supabase);
+
+    try {
+      await logAdminAction({
+        req,
+        action: 'admin_recovery_codes_regenerated',
+        resource_type: 'mfa_recovery_codes',
+        resource_id: userId,
+        result: 'success',
+        metadata: { total_regenerated: result.recoveryCodes.length }
+      });
+    } catch (aErr) {}
+
+    return res.status(200).json({
+      success: true,
+      message: 'New recovery codes generated successfully. Previous recovery codes are now invalidated.',
+      recoveryCodes: result.recoveryCodes
+    });
+
+  } catch (err) {
+    console.error('REGENERATE RECOVERY CODES ERROR:', err.message);
+    return res.status(400).json({ message: err.message || 'Failed to regenerate recovery codes.' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| PHASE 6.3: SESSION REFRESH, LOGOUT & ACTIVE SESSIONS ENDPOINTS
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * POST /api/auth/refresh
+ * Rotates the refresh token and issues a new access token + refresh token pair.
+ * Detects token reuse and revokes session families on theft.
+ */
+exports.refreshTokenHandler = async (req, res) => {
+  try {
+    const rawCookieToken = req.cookies ? req.cookies[COOKIE_NAME] : null;
+    const refreshToken = rawCookieToken || req.body?.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(400).json({ message: 'Refresh token is required.' });
+    }
+
+    const sessionService = require('../services/sessionService');
+    const result = await sessionService.rotateRefreshToken(refreshToken, req, supabase);
+
+    // Set rotated refresh token in secure HttpOnly cookie (Phase 6.6)
+    setRefreshTokenCookie(res, result.refreshToken);
+
+    return res.status(200).json({
+      success: true,
+      accessToken: result.accessToken,
+      token: result.accessToken,
+      refreshToken: result.refreshToken, // Retained for backward-compatible non-browser clients
+      user: result.user
+    });
+  } catch (err) {
+    const status = err.status || 401;
+    return res.status(status).json({ message: err.message || 'Failed to refresh token.' });
+  }
+};
+
+/**
+ * POST /api/auth/logout
+ * Terminates the authenticated user's current server-side session.
+ */
+exports.logoutHandler = async (req, res) => {
+  try {
+    const sessionId = req.sessionId;
+
+    if (sessionId) {
+      const sessionService = require('../services/sessionService');
+      await sessionService.revokeSession(sessionId, 'logout', supabase);
+    }
+
+    // Clear HttpOnly refresh token cookie
+    clearRefreshTokenCookie(res);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out successfully. Backend session invalidated.'
+    });
+  } catch (err) {
+    console.error('LOGOUT ERROR:', err);
+    return res.status(500).json({ message: 'Error during logout.' });
+  }
+};
+
+/**
+ * POST /api/auth/logout-all
+ * Revokes all active sessions across all devices for the authenticated user.
+ */
+exports.logoutAllHandler = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const sessionService = require('../services/sessionService');
+    const count = await sessionService.revokeAllUserSessions(userId, 'logout', supabase);
+
+    // Clear HttpOnly refresh token cookie
+    clearRefreshTokenCookie(res);
+
+    return res.status(200).json({
+      success: true,
+      message: `Logged out from all devices. ${count} session(s) terminated.`
+    });
+  } catch (err) {
+    console.error('LOGOUT ALL ERROR:', err);
+    return res.status(500).json({ message: 'Error during logout all.' });
+  }
+};
+
+/**
+ * GET /api/auth/sessions
+ * Returns the list of active/past sessions for the current authenticated user.
+ */
+exports.getMySessionsHandler = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const sessionService = require('../services/sessionService');
+    const sessions = await sessionService.getUserSessions(userId, req.sessionId, supabase);
+
+    return res.status(200).json({
+      success: true,
+      sessions
+    });
+  } catch (err) {
+    console.error('GET MY SESSIONS ERROR:', err);
+    return res.status(500).json({ message: 'Error retrieving sessions.' });
   }
 };

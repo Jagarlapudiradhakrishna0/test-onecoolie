@@ -11,6 +11,14 @@ node_modules/
 */.env.*
 !*/.env.example
 
+# Cryptographic Keys & Certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+
 # Production builds & cache
 dist/
 client/dist/

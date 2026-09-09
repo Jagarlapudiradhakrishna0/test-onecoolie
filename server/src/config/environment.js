@@ -37,11 +37,13 @@ const getRazorpayMode = () => {
 
 /**
  * Parses and returns the sanitized list of allowed CORS origins.
- * Trims whitespace and strips any trailing slashes.
+ * Trims whitespace, strips trailing slashes, and filters wildcards.
+ * Localhost origins are included ONLY in non-production environments.
  * @returns {string[]}
  */
 const getAllowedOrigins = () => {
   const origins = [];
+  const prod = isProduction();
 
   const rawOrigins = [
     process.env.ALLOWED_ORIGINS,
@@ -53,22 +55,46 @@ const getAllowedOrigins = () => {
     .map((s) => s.trim().replace(/\/+$/, ''))
     .filter(Boolean)
     .forEach((o) => {
+      // In production, reject wildcard '*' as it is forbidden with credentials: true
+      if (prod && o === '*') return;
       if (!origins.includes(o)) origins.push(o);
     });
 
-  // Include local development origins for developer and operator testing
-  const devDefaults = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000'
-  ];
-  for (const d of devDefaults) {
-    if (!origins.includes(d)) origins.push(d);
+  // Include local development origins ONLY in non-production environments
+  if (!prod) {
+    const devDefaults = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:3000'
+    ];
+    for (const d of devDefaults) {
+      if (!origins.includes(d)) origins.push(d);
+    }
   }
 
   return origins;
 };
+
+const INSECURE_PLACEHOLDERS = new Set([
+  'your-secure-random-32-byte-hex-string',
+  'your-jwt-secret-key',
+  'your-supabase-service-role-secret-key',
+  'your-supabase-publishable-key',
+  'your-live-razorpay-key-secret',
+  'your-live-webhook-hmac-secret',
+  'your-rapidapi-key',
+  'your-brevo-api-key',
+  'your-resend-api-key',
+  'your-mfa-encryption-key-hex',
+  'your-64-character-hex-mfa-encryption-key',
+  'your-mfa-encryption-key',
+  'secret',
+  'password',
+  'changeme',
+  '12345678',
+  'default-secret'
+]);
 
 /**
  * Validates the runtime environment according to deployment target.
@@ -100,8 +126,37 @@ function validateEnvironment(options = {}) {
     missing.push('SUPABASE_SECRET_KEY');
   }
 
-  // Production-specific requirements
+  // Production-specific requirements and placeholder rejection
   if (prod) {
+    if (process.env.JWT_SECRET && INSECURE_PLACEHOLDERS.has(process.env.JWT_SECRET.trim().toLowerCase())) {
+      errors.push('JWT_SECRET uses an insecure known placeholder value in production.');
+    }
+    if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length < 32) {
+      errors.push('JWT_SECRET must be at least 32 characters in production for cryptographic entropy.');
+    }
+    if (process.env.SUPABASE_SECRET_KEY && INSECURE_PLACEHOLDERS.has(process.env.SUPABASE_SECRET_KEY.trim().toLowerCase())) {
+      errors.push('SUPABASE_SECRET_KEY uses an insecure known placeholder value in production.');
+    }
+    if (process.env.RAZORPAY_KEY_SECRET && INSECURE_PLACEHOLDERS.has(process.env.RAZORPAY_KEY_SECRET.trim().toLowerCase())) {
+      errors.push('RAZORPAY_KEY_SECRET uses an insecure known placeholder value in production.');
+    }
+
+    // Production MFA Encryption Key Validation
+    if (!process.env.MFA_ENCRYPTION_KEY || process.env.MFA_ENCRYPTION_KEY.trim().length === 0) {
+      errors.push('MFA_ENCRYPTION_KEY is required in production for AES-256-GCM TOTP secret encryption.');
+      missing.push('MFA_ENCRYPTION_KEY');
+    } else {
+      const mfaKey = process.env.MFA_ENCRYPTION_KEY.trim();
+      const isHex64 = /^[0-9a-fA-F]{64}$/.test(mfaKey);
+      const isUtf8_32 = Buffer.from(mfaKey, 'utf8').length === 32;
+      if (!isHex64 && !isUtf8_32) {
+        errors.push('MFA_ENCRYPTION_KEY in production must be a 64-character hex string (32 bytes) or 32-byte key.');
+      }
+      if (INSECURE_PLACEHOLDERS.has(mfaKey.toLowerCase())) {
+        errors.push('MFA_ENCRYPTION_KEY uses an insecure known placeholder value in production.');
+      }
+    }
+
     const corsList = getAllowedOrigins();
     if (corsList.length === 0) {
       errors.push('Production environment requires at least one explicit origin in ALLOWED_ORIGINS, CORS_ORIGINS or CLIENT_URL.');
@@ -130,10 +185,10 @@ function validateEnvironment(options = {}) {
   const valid = errors.length === 0;
 
   if (!valid && exitOnFailure) {
-    console.error('\n❌ CRITICAL: Production environment configuration is invalid!');
+    console.error('\n❌ CRITICAL: Environment configuration is invalid!');
     errors.forEach((err) => console.error(`   • ${err}`));
-    console.error('\nServer startup aborted. Fix the missing environment variables above.\n');
-    throw new Error(`Production environment configuration invalid: ${errors.join('; ')}`);
+    console.error('\nServer startup aborted. Fix the missing or invalid environment variables above.\n');
+    throw new Error(`Environment configuration invalid: ${errors.join('; ')}`);
   }
 
   return {
@@ -159,8 +214,15 @@ function getEnvironmentDiagnostics() {
     is_production: prod,
     port: parseInt(process.env.PORT, 10) || 5000,
     has_jwt_secret: Boolean(process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length >= 16),
+    has_mfa_encryption_key: Boolean(process.env.MFA_ENCRYPTION_KEY && process.env.MFA_ENCRYPTION_KEY.trim().length > 0),
     has_supabase_url: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_URL.startsWith('http')),
     has_supabase_secret_key: Boolean(process.env.SUPABASE_SECRET_KEY && process.env.SUPABASE_SECRET_KEY.trim().length > 0),
+    cookie_auth: {
+      enabled: true,
+      secure: prod || process.env.COOKIE_SECURE === 'true',
+      same_site: process.env.COOKIE_SAME_SITE || (prod ? 'none' : 'lax'),
+      cookie_name: process.env.COOKIE_NAME || 'onecoolie_refresh'
+    },
     supabase: {
       has_url: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_URL.startsWith('http')),
       has_secret_key: Boolean(process.env.SUPABASE_SECRET_KEY && process.env.SUPABASE_SECRET_KEY.trim().length > 0),

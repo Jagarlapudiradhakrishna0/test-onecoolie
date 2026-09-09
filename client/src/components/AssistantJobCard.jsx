@@ -30,6 +30,7 @@ import {
   persistRemoteChat
 } from '../utils/chatSync';
 import { useLanguage } from '../context/LanguageContext';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 /* ============================================================
    ONECOOLIE ASSISTANT JOB CARD — Detailed Operational View
@@ -360,12 +361,12 @@ export default function AssistantJobCard({ job, onUpdate }) {
       if (errMsg.toLowerCase().includes('expired')) {
         try {
           const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-          await fetch(`https://pzrttunhyfporcpcybax.supabase.co/rest/v1/bookings?id=eq.${job.id}`, {
+          await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${job.id}`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              apikey: 'sb_publishable_dXyQiI56vk_nQF_l8DiysQ_sCa4bPt4',
-              Authorization: 'Bearer sb_publishable_dXyQiI56vk_nQF_l8DiysQ_sCa4bPt4',
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
               Prefer: 'return=minimal'
             },
             body: JSON.stringify({ start_otp_expires_at: future })

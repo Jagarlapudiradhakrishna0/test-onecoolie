@@ -63,7 +63,7 @@ const USERS_TO_SEED = [
 
 async function seedUsers() {
   console.log('--- SEEDING ONECOOLIE USERS (ADMIN, PASSENGER, ASSISTANT) ---');
-  console.log(`Target Password: ${SEED_PASSWORD}\n`);
+  console.log('Target Password: [ CONFIGURED SECURELY ]\n');
 
   const hashedPassword = await bcrypt.hash(SEED_PASSWORD, 10);
 

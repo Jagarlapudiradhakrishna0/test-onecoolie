@@ -1160,13 +1160,37 @@ export default function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
 
+  // Active Sessions States (Phase 6.4)
+  const [adminSessionsList, setAdminSessionsList] = useState([]);
+  const [adminSessionsSearch, setAdminSessionsSearch] = useState('');
+  const [revokingSessionId, setRevokingSessionId] = useState(null);
+
+  // Phase 6.7: Security Monitoring & Incident Command States
+  const [securityMetrics, setSecurityMetrics] = useState({
+    openIncidents: 0,
+    criticalIncidents: 0,
+    highSeverityIncidents: 0,
+    securityEvents24h: 0,
+    failedLogins24h: 0,
+    mfaFailures24h: 0,
+    refreshReuseEvents: 0,
+    activeContainments: 0
+  });
+  const [securityIncidentsList, setSecurityIncidentsList] = useState([]);
+  const [inspectingSecurityIncident, setInspectingSecurityIncident] = useState(null);
+  const [securityIncidentEvents, setSecurityIncidentEvents] = useState([]);
+  const [securityResponseActions, setSecurityResponseActions] = useState([]);
+  const [securityIncidentsFilter, setSecurityIncidentsFilter] = useState('ALL');
+  const [securitySeverityFilter, setSecuritySeverityFilter] = useState('ALL');
+  const [securitySearchQuery, setSecuritySearchQuery] = useState('');
+
   // --------------------------------------------------
   // DATA FETCHING
   // --------------------------------------------------
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const [sRes, pRes, bRes, aRes, uRes, sosRes, payRes, incRes, incStatRes, healthRes, recovRes, tRes] = await Promise.all([
+      const [sRes, pRes, bRes, aRes, uRes, sosRes, payRes, incRes, incStatRes, healthRes, recovRes, tRes, sessRes, secMetRes, secIncRes] = await Promise.all([
         axios.get('/admin/stats').catch(() => ({ data: {} })),
         axios.get('/admin/pending-assistants').catch(() => ({ data: [] })),
         axios.get('/admin/bookings').catch(() => ({ data: [] })),
@@ -1179,6 +1203,9 @@ export default function AdminDashboard() {
         axios.get('/admin/finance/health').catch(() => ({ data: { health: null } })),
         axios.get('/admin/finance/payment-recovery').catch(() => ({ data: { stuck_payments: [] } })),
         axios.get('/admin/support-tickets').catch(() => axios.get('/support/tickets')).catch(() => ({ data: [] })),
+        axios.get('/admin/sessions').catch(() => ({ data: { sessions: [] } })),
+        axios.get('/security/admin/incidents/metrics').catch(() => ({ data: { metrics: {} } })),
+        axios.get('/security/admin/incidents').catch(() => ({ data: { incidents: [] } })),
       ]);
 
       setStats(sRes.data || {});
@@ -1194,6 +1221,9 @@ export default function AdminDashboard() {
       setPaymentRecoveryList(recovRes.data?.stuck_payments || []);
       const ticketArray = Array.isArray(tRes.data) ? tRes.data : (tRes.data?.tickets || []);
       setSupportTickets(ticketArray);
+      setAdminSessionsList(sessRes.data?.sessions || []);
+      setSecurityMetrics(secMetRes.data?.metrics || {});
+      setSecurityIncidentsList(secIncRes.data?.incidents || []);
       setLastSynced(new Date());
 
       // If inspecting a booking, sync it with newest data
@@ -1210,13 +1240,45 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  // Admin Forced Revocation Handlers (Phase 6.4)
+  const handleAdminRevokeSession = async (sessionId) => {
+    if (!window.confirm('Are you sure you want to forcibly terminate this user session? The user will be immediately rejected from making further API requests.')) return;
+    setRevokingSessionId(sessionId);
+    try {
+      await axios.post(`/admin/sessions/${sessionId}/revoke`);
+      toast.success('Session forcibly revoked');
+      fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to revoke session');
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
+
+  const handleAdminRevokeUserSessions = async (userId, userEmail) => {
+    if (!window.confirm(`Are you sure you want to forcibly terminate ALL sessions for user ${userEmail || userId}?`)) return;
+    try {
+      await axios.post(`/admin/users/${userId}/revoke-sessions`);
+      toast.success(`All sessions terminated for ${userEmail || userId}`);
+      fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to revoke user sessions');
+    }
+  };
+
   // Polling and Socket Integration (Rapid 3-Second Live Telemetry Sync)
   useEffect(() => {
     fetchAll();
     const interval = setInterval(fetchAll, 3000);
 
     if (window.socket) {
-      window.socket.emit('join_admin');
+      const emitJoinAdmin = () => {
+        window.socket.emit('join_admin');
+      };
+
+      emitJoinAdmin();
+      window.socket.on('connect', emitJoinAdmin);
+
       const handleLiveEvent = () => fetchAll();
       window.socket.on('sos_alert', handleLiveEvent);
       window.socket.on('status_update', handleLiveEvent);
@@ -1231,6 +1293,7 @@ export default function AdminDashboard() {
 
       return () => {
         clearInterval(interval);
+        window.socket.off('connect', emitJoinAdmin);
         window.socket.off('sos_alert', handleLiveEvent);
         window.socket.off('status_update', handleLiveEvent);
         window.socket.off('new_booking', handleLiveEvent);
@@ -1275,7 +1338,7 @@ export default function AdminDashboard() {
       await fetchAll();
     } catch (err) {
       console.error('Toggle online error:', err);
-      toast.error('Failed to update duty status');
+      toast.error(err.response?.data?.message || 'Failed to update duty status');
     }
   };
 
@@ -1287,7 +1350,7 @@ export default function AdminDashboard() {
       await fetchAll();
     } catch (err) {
       console.error('Toggle approval error:', err);
-      toast.error('Failed to update assistant approval');
+      toast.error(err.response?.data?.message || 'Failed to update assistant approval');
     }
   };
 
@@ -1852,6 +1915,8 @@ export default function AdminDashboard() {
             { id: 'assistants', label: 'Sahayak Force & KYC', icon: Briefcase, badge: kycQueue.length },
             { id: 'passengers', label: 'Passengers Directory', icon: Users, count: usersList.length },
             { id: 'sos', label: 'Emergency Incident SOS', icon: AlertTriangle, alert: sosAlerts.length },
+            { id: 'sessions', label: 'Active Sessions', icon: Shield, count: adminSessionsList.length },
+            { id: 'security_monitoring', label: 'Security & Incidents', icon: ShieldAlert, alert: securityMetrics?.criticalIncidents > 0 ? securityMetrics.criticalIncidents : undefined, count: securityIncidentsList.length },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -4010,6 +4075,342 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ========================================================
+            TAB 11: SECURITY & ACTIVE SESSIONS (Phase 6.4)
+            ======================================================== */}
+        {activeTab === 'sessions' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Header & Controls Panel */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold tracking-tight text-black dark:text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-blue-600" />
+                  Active Server-Authoritative Sessions
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Live sessions across Passenger, Sahayak, and Operations Controller channels with instant administrative revocation.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative w-full md:w-64">
+                  <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search user, email, role, or IP..."
+                    value={adminSessionsSearch}
+                    onChange={(e) => setAdminSessionsSearch(e.target.value)}
+                    className="input-base text-xs pl-9 pr-3 py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchAll}
+                  className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
+                  title="Refresh Sessions"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Sessions Table */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="py-3.5 px-4 font-bold">User Account</th>
+                      <th className="py-3.5 px-4 font-bold">Role</th>
+                      <th className="py-3.5 px-4 font-bold">Device / Browser</th>
+                      <th className="py-3.5 px-4 font-bold">IP Address</th>
+                      <th className="py-3.5 px-4 font-bold">Created</th>
+                      <th className="py-3.5 px-4 font-bold">Last Activity</th>
+                      <th className="py-3.5 px-4 font-bold">Expires</th>
+                      <th className="py-3.5 px-4 font-bold text-right">Administrative Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {adminSessionsList
+                      .filter((s) => {
+                        if (!adminSessionsSearch) return true;
+                        const q = adminSessionsSearch.toLowerCase();
+                        return (
+                          (s.user?.email || '').toLowerCase().includes(q) ||
+                          (s.user?.name || '').toLowerCase().includes(q) ||
+                          (s.user?.role || '').toLowerCase().includes(q) ||
+                          (s.ip_address || s.ipAddress || '').toLowerCase().includes(q) ||
+                          (s.device_info || s.deviceInfo || '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map((s) => (
+                        <tr key={s.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                          <td className="py-3 px-4 font-bold text-zinc-900 dark:text-white">
+                            <div>{s.user?.name || 'Unnamed Account'}</div>
+                            <div className="text-[11px] text-zinc-500 font-normal font-mono">{s.user?.email}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              s.user?.role === 'admin'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                : s.user?.role === 'assistant'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                            }`}>
+                              {s.user?.role || 'passenger'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 max-w-xs truncate text-zinc-600 dark:text-zinc-300">
+                            {s.device_info || s.deviceInfo || 'Standard Browser Client'}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-zinc-500 dark:text-zinc-400">
+                            {s.ip_address || s.ipAddress || 'Protected IP'}
+                          </td>
+                          <td className="py-3 px-4 text-zinc-500">
+                            {new Date(s.created_at || s.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4 text-zinc-500">
+                            {new Date(s.last_activity_at || s.lastActivityAt || s.created_at).toLocaleTimeString()}
+                          </td>
+                          <td className="py-3 px-4 text-zinc-500">
+                            {new Date(s.expires_at || s.expiresAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4 text-right space-x-2">
+                            <button
+                              type="button"
+                              disabled={revokingSessionId === s.id}
+                              onClick={() => handleAdminRevokeSession(s.id)}
+                              className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {revokingSessionId === s.id ? 'Revoking...' : 'Revoke Session'}
+                            </button>
+                            {s.user_id && (
+                              <button
+                                type="button"
+                                onClick={() => handleAdminRevokeUserSessions(s.user_id, s.user?.email)}
+                                className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[11px] font-bold transition-all cursor-pointer"
+                              >
+                                Revoke All
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    {adminSessionsList.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-zinc-400">
+                          No active server-side sessions found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            TAB 12: SECURITY MONITORING & INCIDENTS (Phase 6.7)
+            ======================================================== */}
+        {activeTab === 'security_monitoring' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Metric Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
+                <span className="text-[11px] font-mono text-zinc-400 uppercase block">Open Incidents</span>
+                <span className="text-2xl font-bold font-mono text-black dark:text-white">
+                  {securityMetrics.openIncidents || 0}
+                </span>
+                <p className="text-[10px] text-zinc-500 mt-1">Requiring triage or investigation</p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
+                <span className="text-[11px] font-mono text-rose-500 uppercase block flex items-center gap-1">
+                  <ShieldAlert className="w-3.5 h-3.5" /> Critical Incidents
+                </span>
+                <span className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400">
+                  {securityMetrics.criticalIncidents || 0}
+                </span>
+                <p className="text-[10px] text-zinc-500 mt-1">High priority threat events</p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
+                <span className="text-[11px] font-mono text-amber-500 uppercase block">Security Events (24h)</span>
+                <span className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400">
+                  {securityMetrics.securityEvents24h || 0}
+                </span>
+                <p className="text-[10px] text-zinc-500 mt-1">Failed Logins: {securityMetrics.failedLogins24h || 0}</p>
+              </div>
+
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
+                <span className="text-[11px] font-mono text-emerald-500 uppercase block">Active Containment</span>
+                <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                  {securityMetrics.activeContainments || 0}
+                </span>
+                <p className="text-[10px] text-zinc-500 mt-1">Token reuses: {securityMetrics.refreshReuseEvents || 0}</p>
+              </div>
+            </div>
+
+            {/* Incidents Table Panel */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-xs">
+              <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-blue-600" />
+                  <h4 className="font-bold text-sm text-black dark:text-white font-mono">
+                    Security Incidents Log ({securityIncidentsList.length})
+                  </h4>
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <select
+                    value={securitySeverityFilter}
+                    onChange={(e) => setSecuritySeverityFilter(e.target.value)}
+                    className="input-base text-xs py-1.5 px-2.5 bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                  >
+                    <option value="ALL">All Severities</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+
+                  <select
+                    value={securityIncidentsFilter}
+                    onChange={(e) => setSecurityIncidentsFilter(e.target.value)}
+                    className="input-base text-xs py-1.5 px-2.5 bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="open">Open</option>
+                    <option value="investigating">Investigating</option>
+                    <option value="contained">Contained</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="dismissed">Dismissed</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={fetchAll}
+                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="py-3 px-4 font-bold">Severity</th>
+                      <th className="py-3 px-4 font-bold">Incident Type</th>
+                      <th className="py-3 px-4 font-bold">Status</th>
+                      <th className="py-3 px-4 font-bold">Events</th>
+                      <th className="py-3 px-4 font-bold">Source IP / User</th>
+                      <th className="py-3 px-4 font-bold">First / Last Detected</th>
+                      <th className="py-3 px-4 font-bold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {securityIncidentsList
+                      .filter(inc => {
+                        if (securitySeverityFilter !== 'ALL' && inc.severity !== securitySeverityFilter) return false;
+                        if (securityIncidentsFilter !== 'ALL' && inc.status !== securityIncidentsFilter) return false;
+                        return true;
+                      })
+                      .map(inc => (
+                        <tr key={inc.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              inc.severity === 'critical'
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                : inc.severity === 'high'
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300'
+                                : inc.severity === 'medium'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                            }`}>
+                              {inc.severity}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-bold text-zinc-900 dark:text-white">
+                            {inc.incident_type}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                              inc.status === 'open'
+                                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400'
+                                : inc.status === 'investigating'
+                                ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400'
+                                : inc.status === 'contained'
+                                ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400'
+                                : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
+                            }`}>
+                              {inc.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold">
+                            {inc.event_count || 1}
+                          </td>
+                          <td className="py-3 px-4 text-zinc-500 max-w-xs truncate">
+                            {inc.source_ip || inc.user_id || 'Platform Node'}
+                          </td>
+                          <td className="py-3 px-4 text-[11px] text-zinc-500">
+                            <div>{new Date(inc.last_detected_at).toLocaleTimeString()}</div>
+                            <div className="text-[10px] text-zinc-400 font-mono">{new Date(inc.first_detected_at).toLocaleDateString()}</div>
+                          </td>
+                          <td className="py-3 px-4 text-right space-x-1.5">
+                            {inc.status === 'open' && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await axios.post(`/security/admin/incidents/${inc.id}/acknowledge`);
+                                    toast.success('Incident marked investigating');
+                                    fetchAll();
+                                  } catch (err) {
+                                    toast.error('Failed to acknowledge');
+                                  }
+                                }}
+                                className="px-2 py-1 rounded bg-amber-50 text-amber-700 hover:bg-amber-100 text-[10px] font-bold"
+                              >
+                                Triage
+                              </button>
+                            )}
+                            {inc.status !== 'resolved' && inc.status !== 'dismissed' && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await axios.post(`/security/admin/incidents/${inc.id}/resolve`);
+                                    toast.success('Incident resolved');
+                                    fetchAll();
+                                  } catch (err) {
+                                    toast.error('Failed to resolve');
+                                  }
+                                }}
+                                className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px] font-bold"
+                              >
+                                Resolve
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    {securityIncidentsList.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-zinc-400 font-mono">
+                          Zero security incidents detected. System operating within secure parameters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 

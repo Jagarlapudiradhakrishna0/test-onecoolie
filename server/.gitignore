@@ -2,7 +2,19 @@
 .env
 .env.*
 !.env.example
+.env.local
+.env.production
+
+# Cryptographic Keys & Certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
 
 node_modules
 logs
 *.log
+src/data/admin_audit_logs.json
+src/data/admin_audit_logs.jsonl

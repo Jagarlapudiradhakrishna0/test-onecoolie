@@ -20,12 +20,34 @@ const SENSITIVE_KEYS = new Set([
   'jwt',
   'secret',
   'authorization',
+  'accesstoken',
+  'access_token',
+  'refreshtoken',
+  'refresh_token',
+  'mfa_encryption_key',
+  'mfasecret',
+  'mfa_secret',
+  'recoverycode',
+  'recovery_code',
+  'recoverycodes',
+  'recovery_codes',
   'razorpay_key_secret',
   'razorpay_webhook_secret',
   'supabase_secret_key',
   'key_secret',
   'signature',
-  'razorpay_signature'
+  'razorpay_signature',
+  'otp',
+  'otp_code',
+  'otp_hash',
+  'reset_token',
+  'reset_token_hash',
+  'apikey',
+  'api_key',
+  'private_key',
+  'cookie',
+  'bearer',
+  'credentials'
 ]);
 
 /**
@@ -53,7 +75,11 @@ function sanitize(data, depth = 0) {
       SENSITIVE_KEYS.has(lowerKey) ||
       lowerKey.includes('secret') ||
       lowerKey.includes('password') ||
-      lowerKey.includes('authorization');
+      lowerKey.includes('authorization') ||
+      lowerKey.includes('token') ||
+      lowerKey.includes('otp') ||
+      lowerKey.includes('apikey') ||
+      lowerKey.includes('api_key');
 
     if (isSensitive) {
       if (lowerKey.includes('signature')) {
@@ -149,5 +175,6 @@ function requestLoggerMiddleware(req, res, next) {
 module.exports = {
   logger,
   requestLoggerMiddleware,
-  sanitize
+  sanitize,
+  redactSensitiveData: sanitize
 };

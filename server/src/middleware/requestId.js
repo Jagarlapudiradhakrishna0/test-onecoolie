@@ -1,31 +1,60 @@
 /**
  * server/src/middleware/requestId.js
  *
- * Unique Request Correlation ID Middleware (Phase 6)
+ * ONECOOLIE Phase 6.7: Request Correlation Identifier Middleware
  *
- * Attaches a secure request identifier for distributed tracing and observability.
- * Exposes `req.requestId` and adds the `X-Request-ID` response header.
+ * Ensures every incoming HTTP request carries a high-entropy, traceable
+ * correlation ID (X-Request-ID). Propagates through req.requestId, res.locals.requestId,
+ * response headers, structured logs, and security telemetry.
  */
 
 const crypto = require('crypto');
 
-const VALID_REQUEST_ID_REGEX = /^[a-zA-Z0-9_-]{8,128}$/;
+/**
+ * Validates whether a provided request ID conforms to safe alphanumeric characters and hyphens/underscores.
+ * @param {string} id
+ * @returns {boolean}
+ */
+function isValidRequestId(id) {
+  if (!id || typeof id !== 'string') return false;
+  return /^[a-zA-Z0-9_-]{8,64}$/.test(id.trim());
+}
 
+/**
+ * Generates a high-entropy request correlation identifier.
+ * @returns {string}
+ */
+function generateRequestId() {
+  const timestamp = Date.now().toString(36);
+  const randomBytes = crypto.randomBytes(8).toString('hex');
+  return `req_${timestamp}_${randomBytes}`;
+}
+
+/**
+ * Express middleware to attach and emit X-Request-ID.
+ */
 function requestIdMiddleware(req, res, next) {
-  const incomingId = req.headers['x-request-id'];
+  const incomingHeader = req.headers['x-request-id'] || req.headers['x-correlation-id'];
+  let correlationId;
 
-  // Accept incoming valid request ID or generate a cryptographically random one
-  let requestId;
-  if (typeof incomingId === 'string' && VALID_REQUEST_ID_REGEX.test(incomingId.trim())) {
-    requestId = incomingId.trim();
+  if (incomingHeader && isValidRequestId(incomingHeader)) {
+    correlationId = incomingHeader.trim();
   } else {
-    requestId = `req_${Date.now().toString(36)}_${crypto.randomBytes(8).toString('hex')}`;
+    correlationId = generateRequestId();
   }
 
-  req.requestId = requestId;
-  res.setHeader('X-Request-ID', requestId);
+  req.requestId = correlationId;
+  res.locals = res.locals || {};
+  res.locals.requestId = correlationId;
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('X-Request-ID', correlationId);
+  }
 
   next();
 }
 
-module.exports = requestIdMiddleware;
+module.exports = {
+  requestIdMiddleware,
+  isValidRequestId,
+  generateRequestId
+};

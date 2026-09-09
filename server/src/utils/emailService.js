@@ -92,8 +92,8 @@ try {
 
 const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`🔑 ONECOOLIE EMAIL OTP FOR: ${to}`);
-  console.log(`👉 CODE: [ ${otp} ] (Valid for ${expiryMinutes} mins)`);
+  console.log(`🔑 ONECOOLIE EMAIL OTP DISPATCH FOR: ${to}`);
+  console.log(`👉 STATUS: DISPATCHED SECURELY (Valid for ${expiryMinutes} mins)`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   // Option 1: Brevo (Sendinblue) HTTPS REST API (Port 443 — NO custom domain required, delivers to ANY Gmail recipient)

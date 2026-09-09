@@ -711,9 +711,21 @@ exports.assignAssistant = async (req, res) => {
 
 exports.processPayment = async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+
     const { booking, error } = await resolveBooking(supabase, req.params.id);
     if (error || !booking) {
       return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const isPassenger = booking.passenger_id === req.user.id;
+    const isAssistant = booking.assistant_id && booking.assistant_id === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isPassenger && !isAssistant && !isAdmin) {
+      return res.status(403).json({ message: 'You are not authorized to view payment details for this booking.' });
     }
 
     const { data: payment } = await supabase

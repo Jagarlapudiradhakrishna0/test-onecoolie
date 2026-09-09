@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, LogOut, ShieldCheck, HelpCircle, Sliders, Luggage, Briefcase, ChevronDown, CheckCircle2, Phone } from 'lucide-react';
+import { ArrowRight, LogOut, ShieldCheck, HelpCircle, Sliders, Luggage, Briefcase, ChevronDown, CheckCircle2, Phone, Shield, Laptop, Smartphone, Globe, Activity } from 'lucide-react';
+import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,13 +13,23 @@ import { useLanguage } from '../context/LanguageContext';
    ============================================================ */
 
 export default function ProfileMenu({ role, onNavigate }) {
-  const { user, logout, updateUserPhone, getPhoneStatus } = useAuth();
+  const { user, logout, logoutAll, getSessions, updateUserPhone, getPhoneStatus } = useAuth();
   const { theme, setTheme } = useTheme();
   const { lang, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [modal, setModal] = useState(null);
   const ref = useRef(null);
+
+  // Active sessions states (Phase 6.4)
+  const [sessionsList, setSessionsList] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState('');
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
+
+  // Security telemetry events (Phase 6.7)
+  const [securityEvents, setSecurityEvents] = useState([]);
+  const [securityEventsLoading, setSecurityEventsLoading] = useState(false);
 
   // Phone editing states
   const [editPhone, setEditPhone] = useState('');
@@ -93,6 +104,54 @@ export default function ProfileMenu({ role, onNavigate }) {
     }
   };
 
+  // Fetch active sessions & security activity when sessions modal opens
+  useEffect(() => {
+    if (modal === 'sessions') {
+      setSessionsLoading(true);
+      setSessionsError('');
+      if (getSessions) {
+        getSessions()
+          .then((res) => {
+            setSessionsList(res?.sessions || []);
+          })
+          .catch((err) => {
+            setSessionsError(err.response?.data?.message || 'Unable to load active sessions.');
+          })
+          .finally(() => {
+            setSessionsLoading(false);
+          });
+      }
+
+      setSecurityEventsLoading(true);
+      axios.get('/security/my-events')
+        .then((res) => {
+          setSecurityEvents(res.data?.events || []);
+        })
+        .catch(() => {
+          setSecurityEvents([]);
+        })
+        .finally(() => {
+          setSecurityEventsLoading(false);
+        });
+    }
+  }, [modal, getSessions]);
+
+  const handleLogoutAllDevices = async () => {
+    if (!window.confirm('Are you sure you want to log out from all devices? All other active sessions will be terminated immediately.')) {
+      return;
+    }
+    setLoggingOutAll(true);
+    try {
+      await logoutAll();
+      setModal(null);
+      navigate('/');
+    } catch (err) {
+      setSessionsError(err.response?.data?.message || 'Failed to terminate all sessions.');
+    } finally {
+      setLoggingOutAll(false);
+    }
+  };
+
   const menuItems =
     role === 'assistant'
       ? [
@@ -110,6 +169,13 @@ export default function ProfileMenu({ role, onNavigate }) {
           sub: 'Track payouts and daily earnings',
           act: () => onNavigate?.('history'),
           icon: Sliders,
+        },
+        {
+          key: 'sessions',
+          label: 'Devices & Security',
+          sub: 'Active sessions and sign-out controls',
+          act: () => setModal('sessions'),
+          icon: Shield,
         },
         {
           key: 'safety',
@@ -141,6 +207,13 @@ export default function ProfileMenu({ role, onNavigate }) {
           act: () => onNavigate?.('trips'),
           icon: Luggage,
           highlight: true,
+        },
+        {
+          key: 'sessions',
+          label: 'Devices & Security',
+          sub: 'Active sessions and sign-out controls',
+          act: () => setModal('sessions'),
+          icon: Shield,
         },
         {
           key: 'safety',
@@ -338,6 +411,168 @@ export default function ProfileMenu({ role, onNavigate }) {
             className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-md p-6 sm:p-8 max-h-[85vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800 shadow-2xl animate-scale-in text-black dark:text-white my-auto"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Active Sessions & Device Security Modal (Phase 6.4) */}
+            {modal === 'sessions' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <h3 className="text-xl font-bold tracking-tight">
+                      Devices & Security
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    Phase 6.4 Active
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-5">
+                  Server-authoritative session records for your OneCoolie account. You can verify your active devices or immediately terminate access across all devices.
+                </p>
+
+                {sessionsError && (
+                  <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                    {sessionsError}
+                  </div>
+                )}
+
+                {sessionsLoading ? (
+                  <div className="py-8 text-center text-xs text-zinc-400 space-y-2">
+                    <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p>Loading active sessions...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-1">
+                    {sessionsList.length === 0 ? (
+                      <p className="text-xs text-zinc-400 text-center py-4">No active sessions found.</p>
+                    ) : (
+                      sessionsList.map((s) => {
+                        const isMobile = (s.device_info || s.deviceInfo || '').toLowerCase().includes('mobile') ||
+                                         (s.user_agent || '').toLowerCase().includes('mobile');
+                        const Icon = isMobile ? Smartphone : Laptop;
+                        return (
+                          <div
+                            key={s.id}
+                            className={`p-3.5 rounded-2xl border transition-all ${
+                              s.is_current || s.isCurrent
+                                ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800'
+                                : 'bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-3 min-w-0">
+                                <div className="p-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shrink-0 mt-0.5">
+                                  <Icon className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
+                                </div>
+                                <div className="min-w-0 space-y-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                                      {s.device_info || s.deviceInfo || 'Authorized Browser Session'}
+                                    </p>
+                                    {(s.is_current || s.isCurrent) && (
+                                      <span className="px-2 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-600 text-white">
+                                        This Device
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                                    IP: {s.ip_address || s.ipAddress || 'Protected Telemetry'}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-400">
+                                    Last Active: {new Date(s.last_activity_at || s.lastActivityAt || s.created_at).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* Recent Security Activity (Phase 6.7) */}
+                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 mb-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                      Recent Security Activity
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3">
+                    Continuously monitored security-relevant events recorded on your account.
+                  </p>
+
+                  {securityEventsLoading ? (
+                    <div className="py-4 text-center text-xs text-zinc-400 space-y-1">
+                      <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                      <p className="text-[10px]">Loading audit events...</p>
+                    </div>
+                  ) : securityEvents.length === 0 ? (
+                    <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 text-center">
+                      <p className="text-[11px] text-zinc-400">No recent security anomalies recorded.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[25vh] overflow-y-auto pr-1">
+                      {securityEvents.map((evt) => {
+                        const isSevere = evt.severity === 'critical' || evt.severity === 'high';
+                        const isWarn = evt.severity === 'medium';
+                        const badgeBg = isSevere
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                          : isWarn
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
+                        
+                        const formatEventType = (type) => {
+                          if (!type) return 'Security Event';
+                          return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                        };
+
+                        return (
+                          <div
+                            key={evt.id}
+                            className="p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/30 flex items-center justify-between text-xs"
+                          >
+                            <div className="min-w-0 flex-1 pr-2">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${badgeBg}`}>
+                                  {evt.severity || 'info'}
+                                </span>
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                                  {formatEventType(evt.event_type)}
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-mono text-zinc-400">
+                                IP: {evt.ip_address || 'Protected'}
+                              </p>
+                            </div>
+                            <span className="text-[10px] text-zinc-400 shrink-0">
+                              {new Date(evt.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Logout All Devices Action */}
+                <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                  <button
+                    type="button"
+                    disabled={loggingOutAll}
+                    onClick={handleLogoutAllDevices}
+                    className="w-full py-3 px-4 rounded-2xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{loggingOutAll ? 'Terminating All Sessions...' : 'Log Out From All Devices'}</span>
+                  </button>
+                  <p className="text-[10px] text-zinc-400 text-center">
+                    Terminates all access tokens and refresh tokens across phones, tablets, and computers.
+                  </p>
+                </div>
+              </>
+            )}
+
             {modal === 'safety' && (
               <>
                 <h3 className="text-xl font-bold tracking-tight mb-2">

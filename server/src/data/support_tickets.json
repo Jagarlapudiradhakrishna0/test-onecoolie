@@ -1,5 +1,82 @@
 [
   {
+    "id": "OC-10554",
+    "type": "passenger",
+    "subject": "1",
+    "category": "Booking",
+    "issueType": "Booking",
+    "desc": "12",
+    "description": "12",
+    "priority": "medium",
+    "status": "resolved",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "rk",
+    "passengerPhone": "+91 9398553191",
+    "passengerEmail": "2303a52055@sru.edu.in",
+    "trip": {
+      "id": "2040091b-ef08-4e44-98c0-23c1f7255afe",
+      "seat": "Seat 12 (Lower)",
+      "coach": "Coach D2",
+      "route": "KZJ → KZJ",
+      "isReal": true,
+      "source": "KZJ",
+      "status": "CANCELLED",
+      "dateDay": "07",
+      "service": "Luggage Assistance",
+      "trainNo": "57606",
+      "dateYear": "2026",
+      "platform": "1",
+      "dateMonth": "SEP",
+      "trainName": "Vikarabad Secunderabad",
+      "dateDayName": "MON",
+      "destination": "KZJ"
+    },
+    "aiSummary": "Booking: 12",
+    "conversation": [
+      {
+        "id": "msg-1788809930257",
+        "name": "rk",
+        "text": "1\n\n12",
+        "sender": "passenger",
+        "timestamp": "01:08 AM"
+      },
+      {
+        "id": "msg-1788809930258-sys",
+        "name": "System",
+        "text": "Your conversation has been transferred to OneCoolie Support. A support executive has joined this chat.",
+        "sender": "system",
+        "timestamp": "01:08 AM"
+      },
+      {
+        "id": "msg-1788809967874",
+        "name": "Station Desk Support",
+        "text": "hello",
+        "sender": "support",
+        "timestamp": "07:39 PM"
+      },
+      {
+        "id": "msg-1788810010520",
+        "name": "rk",
+        "text": "hi",
+        "sender": "passenger",
+        "timestamp": "07:40 PM"
+      },
+      {
+        "id": "sys-1788810034194",
+        "name": "System",
+        "text": "Ticket status updated to \"Resolved by Station Master\".",
+        "sender": "system",
+        "timestamp": "07:40 PM"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-09-07T19:38:53.442738+00:00",
+    "updated_at": "2026-09-07T19:40:34.307392+00:00",
+    "createdAt": "2026-09-07T19:38:53.442738+00:00",
+    "updatedAt": "2026-09-07T19:40:34.307392+00:00"
+  },
+  {
     "id": "OC-50735",
     "type": "passenger",
     "subject": "Platform Assistance Dispute",

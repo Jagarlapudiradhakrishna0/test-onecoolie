@@ -12,6 +12,7 @@ const walletService = require('../utils/walletService');
 const { processPendingSettlements } = require('../utils/settlementService');
 const payoutRules = require('../config/payoutRules');
 const auditService = require('../utils/auditService');
+const { logAdminAction } = require('../services/adminAuditService');
 
 let io = null;
 
@@ -505,11 +506,16 @@ exports.approvePayout = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('status', 'requested')
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ message: updateErr.message });
+    }
+
+    if (!updatedPayout) {
+      return res.status(409).json({ message: 'Payout was concurrently updated or is no longer in requested status.' });
     }
 
     await auditService.recordFinancialAudit(supabase, {
@@ -523,6 +529,38 @@ exports.approvePayout = async (req, res) => {
       previous_state: { status: payout.status },
       new_state: { status: 'approved' }
     });
+
+    try {
+      await logAdminAction({
+        req,
+        action: 'payout_approved',
+        resource_type: 'payout',
+        resource_id: id,
+        result: 'success',
+        metadata: {
+          amount: payout.amount,
+          assistant_id: payout.assistant_id,
+          before: { status: payout.status },
+          after: { status: 'approved' }
+        }
+      });
+    } catch (auditErr) {
+      // Transaction Coupling: Revert payout approval in PostgreSQL
+      await supabase
+        .from('assistant_payouts')
+        .update({
+          status: payout.status,
+          reviewed_at: payout.reviewed_at || null,
+          reviewed_by: payout.reviewed_by || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      console.error('[CRITICAL AUDIT ROLLBACK] Payout approval rolled back due to audit failure:', auditErr.message);
+      return res.status(500).json({
+        message: 'Security Policy Enforcement: Audit logging failed for high-risk payout approval. Action was rolled back.'
+      });
+    }
 
     emitWalletUpdate(payout.assistant_id, { payoutId: id, status: 'approved' });
 
@@ -583,11 +621,16 @@ exports.rejectPayout = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .in('status', ['requested', 'approved'])
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ message: updateErr.message });
+    }
+
+    if (!updatedPayout) {
+      return res.status(409).json({ message: 'Payout was concurrently updated or cannot be rejected.' });
     }
 
     // Safely restore linked earnings from 'held' -> 'available' (skipping any 'reversed')
@@ -614,6 +657,51 @@ exports.rejectPayout = async (req, res) => {
       new_state: { status: 'rejected' },
       metadata: { reason, released_earning_ids: earningIds }
     });
+
+    try {
+      await logAdminAction({
+        req,
+        action: 'payout_rejected',
+        resource_type: 'payout',
+        resource_id: id,
+        result: 'success',
+        metadata: {
+          amount: payout.amount,
+          assistant_id: payout.assistant_id,
+          reason,
+          released_earning_ids: earningIds,
+          before: { status: payout.status },
+          after: { status: 'rejected' }
+        }
+      });
+    } catch (auditErr) {
+      // Transaction Coupling: Revert payout rejection and restore linked earnings to held
+      await supabase
+        .from('assistant_payouts')
+        .update({
+          status: payout.status,
+          failure_reason: payout.failure_reason || null,
+          reviewed_at: payout.reviewed_at || null,
+          reviewed_by: payout.reviewed_by || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (earningIds.length > 0) {
+        await supabase
+          .from('assistant_earnings')
+          .update({
+            status: 'held',
+            updated_at: new Date().toISOString()
+          })
+          .in('id', earningIds);
+      }
+
+      console.error('[CRITICAL AUDIT ROLLBACK] Payout rejection rolled back due to audit failure:', auditErr.message);
+      return res.status(500).json({
+        message: 'Security Policy Enforcement: Audit logging failed for high-risk payout rejection. Action was rolled back.'
+      });
+    }
 
     emitWalletUpdate(payout.assistant_id, { payoutId: id, status: 'rejected' });
 
@@ -663,11 +751,16 @@ exports.markPayoutProcessing = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .in('status', ['requested', 'approved'])
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ message: updateErr.message });
+    }
+
+    if (!updatedPayout) {
+      return res.status(409).json({ message: 'Payout was concurrently updated or is not in an eligible state to mark as processing.' });
     }
 
     await auditService.recordFinancialAudit(supabase, {
@@ -681,6 +774,36 @@ exports.markPayoutProcessing = async (req, res) => {
       previous_state: { status: payout.status },
       new_state: { status: 'processing' }
     });
+
+    try {
+      await logAdminAction({
+        req,
+        action: 'payout_processing',
+        resource_type: 'payout',
+        resource_id: id,
+        result: 'success',
+        metadata: {
+          amount: payout.amount,
+          assistant_id: payout.assistant_id,
+          before: { status: payout.status },
+          after: { status: 'processing' }
+        }
+      });
+    } catch (auditErr) {
+      await supabase
+        .from('assistant_payouts')
+        .update({
+          status: payout.status,
+          processed_at: payout.processed_at || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      console.error('[CRITICAL AUDIT ROLLBACK] Payout processing rolled back due to audit failure:', auditErr.message);
+      return res.status(500).json({
+        message: 'Security Policy Enforcement: Audit logging failed for high-risk payout processing. Action was rolled back.'
+      });
+    }
 
     emitWalletUpdate(payout.assistant_id, { payoutId: id, status: 'processing' });
 
@@ -811,8 +934,9 @@ exports.markPayoutPaid = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .in('status', ['processing', 'approved'])
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       if (updateErr.code === '23505' || (updateErr.message && updateErr.message.toLowerCase().includes('unique'))) {
@@ -821,6 +945,10 @@ exports.markPayoutPaid = async (req, res) => {
         });
       }
       return res.status(500).json({ message: updateErr.message });
+    }
+
+    if (!updatedPayout) {
+      return res.status(409).json({ message: 'Payout was concurrently updated, already paid, or not in an eligible state to mark as paid.' });
     }
 
     // Atomically transition linked earnings: 'held' -> 'paid_out'
@@ -853,6 +981,55 @@ exports.markPayoutPaid = async (req, res) => {
       },
       metadata: { settlement_notes: cleanNotes }
     });
+
+    try {
+      await logAdminAction({
+        req,
+        action: 'payout_paid',
+        resource_type: 'payout',
+        resource_id: id,
+        result: 'success',
+        metadata: {
+          amount: updatedPayout.amount,
+          assistant_id: payout.assistant_id,
+          payout_reference: cleanRef,
+          payout_method: cleanMethod,
+          settlement_date: cleanDate,
+          settlement_notes: cleanNotes,
+          before: { status: payout.status },
+          after: { status: 'paid' }
+        }
+      });
+    } catch (auditErr) {
+      // Transaction Coupling: Revert payout to previous status and restore earnings to held
+      await supabase
+        .from('assistant_payouts')
+        .update({
+          status: payout.status,
+          payout_reference: payout.payout_reference || null,
+          payout_method: payout.payout_method || null,
+          settlement_date: payout.settlement_date || null,
+          settlement_notes: payout.settlement_notes || null,
+          processed_at: payout.processed_at || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (earningIds.length > 0) {
+        await supabase
+          .from('assistant_earnings')
+          .update({
+            status: 'held',
+            updated_at: new Date().toISOString()
+          })
+          .in('id', earningIds);
+      }
+
+      console.error('[CRITICAL AUDIT ROLLBACK] Payout settlement rolled back due to audit failure:', auditErr.message);
+      return res.status(500).json({
+        message: 'Security Policy Enforcement: Audit logging failed for high-risk payout settlement. Action was rolled back.'
+      });
+    }
 
     await auditService.recordFinancialAudit(supabase, {
       actor_id: req.user?.id || null,
@@ -941,11 +1118,16 @@ exports.markPayoutFailed = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .in('status', ['processing', 'approved'])
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ message: updateErr.message });
+    }
+
+    if (!updatedPayout) {
+      return res.status(409).json({ message: 'Payout was concurrently updated or cannot be marked as failed.' });
     }
 
     // Safely restore linked earnings to 'available' (skipping any 'reversed')
@@ -972,6 +1154,48 @@ exports.markPayoutFailed = async (req, res) => {
       new_state: { status: 'failed' },
       metadata: { failure_reason, restored_earning_ids: earningIds }
     });
+
+    try {
+      await logAdminAction({
+        req,
+        action: 'payout_failed',
+        resource_type: 'payout',
+        resource_id: id,
+        result: 'success',
+        metadata: {
+          amount: payout.amount,
+          assistant_id: payout.assistant_id,
+          failure_reason,
+          restored_earning_ids: earningIds,
+          before: { status: payout.status },
+          after: { status: 'failed' }
+        }
+      });
+    } catch (auditErr) {
+      await supabase
+        .from('assistant_payouts')
+        .update({
+          status: payout.status,
+          failure_reason: payout.failure_reason || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (earningIds.length > 0) {
+        await supabase
+          .from('assistant_earnings')
+          .update({
+            status: 'held',
+            updated_at: new Date().toISOString()
+          })
+          .in('id', earningIds);
+      }
+
+      console.error('[CRITICAL AUDIT ROLLBACK] Payout failure update rolled back due to audit failure:', auditErr.message);
+      return res.status(500).json({
+        message: 'Security Policy Enforcement: Audit logging failed for high-risk payout failure update. Action was rolled back.'
+      });
+    }
 
     emitWalletUpdate(payout.assistant_id, { payoutId: id, status: 'failed' });
 

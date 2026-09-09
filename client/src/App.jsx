@@ -103,7 +103,9 @@ function SmartRedirect() {
 export default function App() {
   const {
     user,
-    authLoading
+    authLoading,
+    sessionNotice,
+    clearSessionNotice
   } = useContext(AuthContext);
 
   if (authLoading) {
@@ -118,6 +120,28 @@ export default function App() {
   return (
     <>
       <OfflineBanner />
+
+      {/* Session Expired / Revocation Alert Banner (Phase 6.4) */}
+      {sessionNotice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] max-w-md w-full px-4 animate-scale-in">
+          <div className="p-4 rounded-2xl bg-zinc-950 text-white border border-zinc-700 shadow-2xl flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-1.5 animate-ping" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-zinc-100">Authentication Notice</p>
+                <p className="text-xs text-zinc-400 mt-0.5">{sessionNotice}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={clearSessionNotice}
+              className="text-zinc-400 hover:text-white text-[11px] font-bold px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 shrink-0 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <BrowserRouter>
         <Suspense

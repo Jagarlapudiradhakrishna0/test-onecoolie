@@ -7,8 +7,7 @@
  * 3. Automatic recovery on page refresh or browser restarts across all devices
  */
 
-const SUPABASE_URL = 'https://pzrttunhyfporcpcybax.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_dXyQiI56vk_nQF_l8DiysQ_sCa4bPt4';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 /**
  * Get cached chat messages from localStorage immediately (synchronous)

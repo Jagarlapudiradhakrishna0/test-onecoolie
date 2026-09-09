@@ -7,7 +7,6 @@ const { protect } = require('../middleware/authMiddleware');
 const {
   register,
   login,
-  seedTestUsers,
   sendOtp,
   verifyOtpAndLogin,
   verifyOtpAndRegister,
@@ -16,7 +15,16 @@ const {
   getPhoneStatus,
   forgotPassword,
   verifyResetOtp,
-  resetPassword
+  resetPassword,
+  setupAdminMfa,
+  verifyAdminMfaEnrollment,
+  getAdminMfaStatus,
+  verifyAdminMfaLogin,
+  regenerateAdminRecoveryCodes,
+  refreshTokenHandler,
+  logoutHandler,
+  logoutAllHandler,
+  getMySessionsHandler
 } = require('../controllers/authController');
 
 /*
@@ -77,6 +85,28 @@ const forgotPasswordLimiter = rateLimit({
   validate: { xForwardedForHeader: false }
 });
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per 15 minutes per IP
+  message: {
+    message: 'Too many login attempts. Please wait 15 minutes before trying again.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 registration attempts per 15 minutes per IP
+  message: {
+    message: 'Too many registration attempts. Please wait 15 minutes before trying again.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
+});
+
 /*
 |--------------------------------------------------------------------------
 | OTP Routes — Production Email Authentication
@@ -116,9 +146,71 @@ router.post('/reset-password', resetPassword);
 |--------------------------------------------------------------------------
 */
 
-router.post('/register', register);
-router.post('/login', login);
-router.get('/seed', seedTestUsers);
+router.post('/register', registerLimiter, register);
+router.post('/login', loginLimiter, login);
+
+/*
+|--------------------------------------------------------------------------
+| Phase 6.2: Admin Multi-Factor Authentication (TOTP) Routes
+|--------------------------------------------------------------------------
+*/
+
+const mfaVerifyLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 15,
+  message: {
+    message: 'Too many MFA verification attempts. Please wait a few minutes before trying again.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Admin MFA enrollment initialization
+router.post('/admin/mfa/setup', setupAdminMfa);
+
+// Admin MFA first-time enrollment confirmation
+router.post('/admin/mfa/verify-enrollment', mfaVerifyLimiter, verifyAdminMfaEnrollment);
+
+// Admin MFA status inspection
+router.get('/admin/mfa/status', protect, getAdminMfaStatus);
+
+// Admin MFA challenge verification during login
+router.post('/admin/mfa/verify-login', mfaVerifyLimiter, verifyAdminMfaLogin);
+
+// Admin emergency recovery code regeneration
+router.post('/admin/mfa/regenerate-recovery-codes', protect, regenerateAdminRecoveryCodes);
+
+/*
+|--------------------------------------------------------------------------
+| Phase 6.3: Session Management & Refresh Token Rotation Routes
+|--------------------------------------------------------------------------
+*/
+
+const refreshLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  message: { message: 'Too many token refresh requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Phase 6.6: CSRF Protection & Token Endpoint
+const { csrfEndpoint, csrfProtection } = require('../middleware/csrfProtection');
+
+// Issue fresh CSRF double-submit cookie & token
+router.get('/csrf-token', csrfEndpoint);
+
+// Refresh access token via opaque refresh token (cookie or body)
+router.post('/refresh', refreshLimiter, csrfProtection, refreshTokenHandler);
+
+// Invalidate current server-side session (logout)
+router.post('/logout', protect, csrfProtection, logoutHandler);
+
+// Invalidate all active sessions across all devices
+router.post('/logout-all', protect, csrfProtection, logoutAllHandler);
+
+// List active & past sessions for authenticated user
+router.get('/sessions', protect, getMySessionsHandler);
 
 // Account Profile & Phone Management
 router.put('/update-phone', protect, updatePhoneNumber);

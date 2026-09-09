@@ -1,14 +1,15 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import axios from '../api/axios';
 
-const SUPABASE_URL = 'https://pzrttunhyfporcpcybax.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_dXyQiI56vk_nQF_l8DiysQ_sCa4bPt4';
+import { clearStoredTokens, setStoredTokens } from '../api/axios';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [sessionNotice, setSessionNotice] = useState('');
 
   // Restore login session
   useEffect(() => {
@@ -21,19 +22,38 @@ export const AuthProvider = ({ children }) => {
 
         if (parsedUser && parsedUser.role) {
           setUser(parsedUser);
+          if (window.socket) {
+            window.socket.auth = { token };
+            if (!window.socket.connected) {
+              window.socket.connect();
+            }
+          }
         } else {
-          localStorage.removeItem('userInfo');
-          localStorage.removeItem('token');
+          clearStoredTokens();
         }
       }
     } catch (error) {
       console.error('Failed to restore authentication:', error);
-
-      localStorage.removeItem('userInfo');
-      localStorage.removeItem('token');
+      clearStoredTokens();
     } finally {
       setAuthLoading(false);
     }
+  }, []);
+
+  // Listen for forced session expiration / revocation from axios interceptor
+  useEffect(() => {
+    const handleSessionExpired = (event) => {
+      const msg = event?.detail?.message || 'Your session has ended. Please sign in again.';
+      setSessionNotice(msg);
+      setUser(null);
+      clearStoredTokens();
+      if (window.socket) {
+        window.socket.auth = { token: '' };
+        window.socket.disconnect();
+      }
+    };
+    window.addEventListener('session-expired', handleSessionExpired);
+    return () => window.removeEventListener('session-expired', handleSessionExpired);
   }, []);
 
   // ============================================================
@@ -41,7 +61,9 @@ export const AuthProvider = ({ children }) => {
   // ============================================================
   const persistSession = (data) => {
     const backendUser = data.user || data;
-    const token = data.token || backendUser?.token;
+    const token = data.accessToken || data.token || backendUser?.token || backendUser?.accessToken;
+    const refreshToken = data.refreshToken || backendUser?.refreshToken;
+    const sessionId = data.sessionId || backendUser?.sessionId;
 
     if (!token || !backendUser?.id) return null;
 
@@ -54,15 +76,26 @@ export const AuthProvider = ({ children }) => {
       email: backendUser.email,
       phone: backendUser.phone || null,
       role: backendUser.role,
+      admin_role: backendUser.admin_role || null,
+      permissions: backendUser.permissions || [],
       station_code: backendUser.station_code || null,
       is_approved: backendUser.is_approved ?? false,
       kyc_status: backendUser.kyc_status || null,
+      sessionId: sessionId || null,
       token
     };
 
     localStorage.setItem('userInfo', JSON.stringify(userData));
-    localStorage.setItem('token', token);
+    setStoredTokens({ accessToken: token, refreshToken });
     setUser(userData);
+    setSessionNotice(''); // Clear any previous expired notice
+
+    if (window.socket) {
+      window.socket.auth = { token };
+      if (!window.socket.connected) {
+        window.socket.connect();
+      }
+    }
 
     return userData;
   };
@@ -164,67 +197,16 @@ export const AuthProvider = ({ children }) => {
 
       console.log('LOGIN RESPONSE:', data);
 
-      const backendUser = data.user || data;
-      const token = data.token || backendUser.token;
-
-      // Check token
-      if (!token) {
-        throw new Error(
-          'Login successful but server did not return a token.'
-        );
+      // 1. Admin Multi-Factor Authentication challenge issued
+      if (data.requiresMfa) {
+        return data; // { requiresMfa: true, mfaEnrolled, mfaToken, mfaSetupToken, message }
       }
 
-      // Check user
-      if (!backendUser || !backendUser.id) {
-        throw new Error(
-          'Login successful but server did not return user data.'
-        );
+      // 2. Standard Session Login
+      const userData = persistSession(data);
+      if (!userData) {
+        throw new Error('Login successful but server did not return valid session credentials.');
       }
-
-      // Check role
-      if (!backendUser.role) {
-        throw new Error(
-          'Login successful but server did not return a user role.'
-        );
-      }
-
-      // Build frontend user object
-      const userData = {
-        id: backendUser.id,
-        _id: backendUser.id,
-
-        passenger_id: backendUser.passenger_id || (backendUser.role === 'passenger' ? backendUser.id : null),
-        assistant_id: backendUser.assistant_id || (backendUser.role === 'assistant' ? backendUser.id : null),
-
-        name: backendUser.name,
-        email: backendUser.email,
-        phone: backendUser.phone || null,
-        role: backendUser.role,
-
-        station_code: backendUser.station_code || null,
-
-        is_approved: backendUser.is_approved ?? false,
-
-        kyc_status: backendUser.kyc_status || null,
-
-        token
-      };
-
-      console.log('USER SAVED:', userData);
-
-      // Save authentication
-      localStorage.setItem(
-        'userInfo',
-        JSON.stringify(userData)
-      );
-
-      localStorage.setItem(
-        'token',
-        token
-      );
-
-      // Update React state
-      setUser(userData);
 
       return userData;
 
@@ -556,13 +538,80 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // LOGOUT
+  // LOGOUT (Invalidates backend server-side session)
   // ============================================================
-  const logout = () => {
-    localStorage.removeItem('userInfo');
-    localStorage.removeItem('token');
+  const logout = async () => {
+    try {
+      await axios.post('/auth/logout');
+    } catch (e) {
+      // Backend failure should not block frontend clearing
+    } finally {
+      clearStoredTokens();
+      if (window.socket) {
+        window.socket.auth = { token: '' };
+        window.socket.disconnect();
+      }
+      setUser(null);
+    }
+  };
 
-    setUser(null);
+  // ============================================================
+  // LOGOUT ALL DEVICES (Terminates all user sessions on backend)
+  // ============================================================
+  const logoutAll = async () => {
+    try {
+      await axios.post('/auth/logout-all');
+    } catch (e) {
+      // Backend failure should not block frontend clearing
+    } finally {
+      clearStoredTokens();
+      if (window.socket) {
+        window.socket.auth = { token: '' };
+        window.socket.disconnect();
+      }
+      setUser(null);
+    }
+  };
+
+  // ============================================================
+  // ADMIN MFA OPERATIONS
+  // ============================================================
+  const verifyAdminMfaLogin = async ({ mfaToken, code }) => {
+    const { data } = await axios.post('/auth/admin/mfa/verify-login', { mfaToken, code });
+    const userData = persistSession(data);
+    return { ...data, user: userData };
+  };
+
+  const setupAdminMfa = async ({ mfaSetupToken }) => {
+    const { data } = await axios.post('/auth/admin/mfa/setup', { mfaSetupToken });
+    return data; // { success, message, qrCode, otpauthUrl }
+  };
+
+  const verifyAdminMfaEnrollment = async ({ mfaSetupToken, code }) => {
+    const { data } = await axios.post('/auth/admin/mfa/verify-enrollment', { mfaSetupToken, code });
+    if (data?.token || data?.accessToken) {
+      persistSession(data);
+    }
+    return data; // { success, message, token, recoveryCodes, notice }
+  };
+
+  // ============================================================
+  // ACTIVE SESSIONS MANAGEMENT
+  // ============================================================
+  const getSessions = async () => {
+    const { data } = await axios.get('/auth/sessions');
+    return data; // { count, sessions }
+  };
+
+  const refreshSession = async () => {
+    const rt = localStorage.getItem('refreshToken');
+    if (!rt) throw new Error('No refresh token available');
+    const { data } = await axios.post('/auth/refresh', { refreshToken: rt });
+    if (data?.accessToken) {
+      setStoredTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+      return data;
+    }
+    throw new Error('Refresh failed');
   };
 
   return (
@@ -570,9 +619,17 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         authLoading,
+        sessionNotice,
+        clearSessionNotice: () => setSessionNotice(''),
         login,
         register,
         logout,
+        logoutAll,
+        verifyAdminMfaLogin,
+        setupAdminMfa,
+        verifyAdminMfaEnrollment,
+        getSessions,
+        refreshSession,
         updateUserPhone,
         getPhoneStatus,
         // OTP methods
