@@ -130,14 +130,11 @@ export default function SupportInbox({ initialTickets = null, selectedTicketIdPr
     );
     setReplyText('');
 
-    // 2. Sync to local supportStore
-    addTicketMessage(selectedTicket.id, newMsg);
-
-    // 3. Sync to backend API
+    // 2. Sync to local supportStore and backend API (handled inside addTicketMessage)
     try {
-      await axios.post(`/support/tickets/${selectedTicket.id}/messages`, newMsg);
+      addTicketMessage(selectedTicket.id, newMsg);
     } catch (err) {
-      console.warn('Backend message sync error:', err.message);
+      console.warn('Message sync notice:', err.message);
     } finally {
       setIsSending(false);
     }

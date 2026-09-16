@@ -829,7 +829,138 @@ exports.handleWebhook = async (req, res) => {
       });
     }
 
-    // Safely acknowledge any other webhook events (e.g. refunds, settlement notices)
+    if (eventType === 'refund.processed') {
+      const refundEntity = eventData.payload?.refund?.entity || {};
+      const gatewayRefundId = refundEntity.id;
+      const paymentGatewayId = refundEntity.payment_id;
+
+      let refundRecord = null;
+      if (gatewayRefundId) {
+        const { data: rData } = await supabase
+          .from('refunds')
+          .select('*')
+          .eq('gateway_refund_id', gatewayRefundId)
+          .maybeSingle();
+        refundRecord = rData;
+      }
+
+      if (!refundRecord && paymentGatewayId) {
+        const { data: rData } = await supabase
+          .from('refunds')
+          .select('*')
+          .eq('gateway_payment_id', paymentGatewayId)
+          .order('created_at', { ascending: false })
+          .maybeSingle();
+        refundRecord = rData;
+      }
+
+      const nowIso = new Date().toISOString();
+
+      if (refundRecord) {
+        await supabase
+          .from('refunds')
+          .update({
+            status: 'processed',
+            gateway_refund_id: gatewayRefundId || refundRecord.gateway_refund_id,
+            processed_at: nowIso,
+            updated_at: nowIso
+          })
+          .eq('id', refundRecord.id);
+      }
+
+      if (refundRecord?.payment_id) {
+        await supabase
+          .from('payments')
+          .update({
+            status: 'refunded',
+            updated_at: nowIso
+          })
+          .eq('id', refundRecord.payment_id);
+      } else if (paymentGatewayId) {
+        await supabase
+          .from('payments')
+          .update({
+            status: 'refunded',
+            updated_at: nowIso
+          })
+          .eq('gateway_payment_id', paymentGatewayId);
+      }
+
+      const bookingId = refundRecord?.booking_id;
+      if (bookingId) {
+        await supabase
+          .from('bookings')
+          .update({
+            payment_status: 'refunded',
+            updated_at: nowIso
+          })
+          .eq('id', bookingId);
+
+        try {
+          const { broadcast } = require('./serviceController');
+          if (typeof broadcast === 'function') {
+            broadcast('payment:refunded', {
+              bookingId,
+              gatewayRefundId,
+              amount: refundEntity.amount ? refundEntity.amount / 100 : refundRecord?.amount,
+              status: 'refunded'
+            });
+          }
+        } catch (bcErr) {}
+      }
+
+      try {
+        await supabase.from('payment_webhook_events').insert({
+          gateway: 'razorpay',
+          event_type: eventType,
+          gateway_event_id: eventId,
+          payment_id: refundRecord?.payment_id || null,
+          booking_id: bookingId || null,
+          status: 'processed',
+          payload: eventData
+        });
+      } catch (auditErr) {}
+
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Refund successfully finalized via webhook.'
+      });
+    }
+
+    if (eventType === 'refund.failed') {
+      const refundEntity = eventData.payload?.refund?.entity || {};
+      const gatewayRefundId = refundEntity.id;
+      const errorReason = refundEntity.error_description || refundEntity.error_reason || 'Refund failed at gateway';
+
+      if (gatewayRefundId) {
+        await supabase
+          .from('refunds')
+          .update({
+            status: 'failed',
+            failure_reason: String(errorReason).slice(0, 500),
+            updated_at: new Date().toISOString()
+          })
+          .eq('gateway_refund_id', gatewayRefundId);
+      }
+
+      try {
+        await supabase.from('payment_webhook_events').insert({
+          gateway: 'razorpay',
+          event_type: eventType,
+          gateway_event_id: eventId,
+          status: 'processed',
+          error_message: errorReason,
+          payload: eventData
+        });
+      } catch (auditErr) {}
+
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Refund failure recorded.'
+      });
+    }
+
+    // Safely acknowledge any other webhook events (e.g. settlement notices)
     return res.status(200).json({
       status: 'ok',
       message: `Webhook event ${eventType} acknowledged.`

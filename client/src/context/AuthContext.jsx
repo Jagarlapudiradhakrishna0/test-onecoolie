@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import axios from '../api/axios';
 
-import { clearStoredTokens, setStoredTokens } from '../api/axios';
+import { clearStoredTokens, setStoredTokens, initCsrfToken } from '../api/axios';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 export const AuthContext = createContext();
@@ -10,6 +10,11 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [sessionNotice, setSessionNotice] = useState('');
+
+  // Proactively fetch and initialize CSRF token cookie on startup
+  useEffect(() => {
+    initCsrfToken().catch(() => { });
+  }, []);
 
   // Restore login session
   useEffect(() => {
@@ -195,8 +200,6 @@ export const AuthProvider = ({ children }) => {
         admin_code
       });
 
-      console.log('LOGIN RESPONSE:', data);
-
       // 1. Admin Multi-Factor Authentication challenge issued
       if (data.requiresMfa) {
         return data; // { requiresMfa: true, mfaEnrolled, mfaToken, mfaSetupToken, message }
@@ -240,8 +243,6 @@ export const AuthProvider = ({ children }) => {
         station_code,
         phone
       });
-
-      console.log('REGISTER RESPONSE:', data);
 
       const backendUser = data.user || data;
       const token = data.token || backendUser?.token;
@@ -653,4 +654,4 @@ export const AuthProvider = ({ children }) => {
 // ============================================================
 export const useAuth = () => {
   return useContext(AuthContext);
-};
+};

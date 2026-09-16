@@ -3,10 +3,11 @@
  *
  * Robust, multi-tier chat synchronization and persistence utility:
  * 1. Instant local display & cross-tab sync via localStorage + BroadcastChannel
- * 2. Permanent cloud persistence via Supabase REST (services.chat_messages)
+ * 2. Authoritative backend persistence via /service/:booking_id/chat REST API
  * 3. Automatic recovery on page refresh or browser restarts across all devices
  */
 
+import axios from '../api/axios';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 /**
@@ -63,7 +64,8 @@ export function broadcastChatTab(bookingId, bookingCode, message) {
 }
 
 /**
- * Merge two chat arrays without duplicates based on sender, text, and timestamp
+ * Merge two chat arrays without duplicates based on unique IDs, clientMessageId,
+ * or content + timestamp window reconciliation
  */
 export function mergeChatMessages(existing = [], incoming = []) {
   const merged = [...existing];
@@ -71,16 +73,51 @@ export function mergeChatMessages(existing = [], incoming = []) {
 
   incoming.forEach((inMsg) => {
     if (!inMsg || !inMsg.text) return;
+    const inId = inMsg.id || inMsg.clientMessageId;
     const inTime = inMsg.timestamp ? new Date(inMsg.timestamp).getTime() : 0;
-    const exists = merged.some((m) => {
-      if (m.from === inMsg.from && m.text === inMsg.text) {
+    const inText = String(inMsg.text).trim();
+
+    // Find if already present
+    const existingIndex = merged.findIndex((m) => {
+      // 1. Match by unique canonical ID or clientMessageId
+      if (inId && (m.id === inId || m.clientMessageId === inId)) {
+        return true;
+      }
+      if (m.clientMessageId && inMsg.clientMessageId && m.clientMessageId === inMsg.clientMessageId) {
+        return true;
+      }
+      // 2. Fallback match: same text + sender role + timestamp within 8 seconds
+      if (String(m.text).trim() === inText) {
+        const mSender = m.from || m.senderRole;
+        const inSender = inMsg.from || inMsg.senderRole;
+        const sameSender = !mSender || !inSender || mSender === inSender;
         const mTime = m.timestamp ? new Date(m.timestamp).getTime() : 0;
-        return Math.abs(mTime - inTime) < 6000;
+        if (sameSender && inTime > 0 && mTime > 0 && Math.abs(mTime - inTime) < 8000) {
+          return true;
+        }
       }
       return false;
     });
-    if (!exists) {
-      merged.push(inMsg);
+
+    if (existingIndex !== -1) {
+      // Reconcile optimistic message with canonical server message if needed
+      const cur = merged[existingIndex];
+      const needsIdUpdate = (!cur.id || cur.id.startsWith('temp-') || cur.id.startsWith('client-')) && inMsg.id;
+      if (needsIdUpdate || (cur.status === 'sending' && inMsg.status !== 'sending')) {
+        merged[existingIndex] = {
+          ...cur,
+          ...inMsg,
+          id: inMsg.id || cur.id,
+          status: 'delivered',
+        };
+        changed = true;
+      }
+    } else {
+      merged.push({
+        ...inMsg,
+        id: inMsg.id || inMsg.clientMessageId || `client-${Date.now()}-${Math.random()}`,
+        status: inMsg.status || 'delivered',
+      });
       changed = true;
     }
   });
@@ -89,96 +126,116 @@ export function mergeChatMessages(existing = [], incoming = []) {
 }
 
 /**
- * Fetch remote chat history directly from Supabase bookings.services.chat_messages
+ * Fetch remote chat history from backend /service/:id/chat with Supabase REST fallback
  */
 export async function fetchRemoteChat(bookingId, bookingCode) {
   const ref = bookingId || bookingCode;
   if (!ref) return [];
 
   try {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
-    const filter = isUUID ? `id=eq.${ref}` : `booking_id=eq.${ref}`;
-    const url = `${SUPABASE_URL}/rest/v1/bookings?${filter}&select=services`;
+    const res = await axios.get(`/service/${ref}/chat`);
+    if (res.data && Array.isArray(res.data.messages)) {
+      return res.data.messages;
+    }
+  } catch (backendErr) {
+    // Fallback to direct Supabase read if server is booting or backend is restarting
+    try {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
+      const filter = isUUID ? `id=eq.${ref}` : `booking_id=eq.${ref}`;
+      const url = `${SUPABASE_URL}/rest/v1/bookings?${filter}&select=services`;
 
-    const res = await fetch(url, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-    });
+      const res = await fetch(url, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const services = data[0]?.services;
-        if (services && Array.isArray(services.chat_messages)) {
-          return services.chat_messages;
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const services = data[0]?.services;
+          if (services && Array.isArray(services.chat_messages)) {
+            return services.chat_messages;
+          }
         }
       }
+    } catch (err) {
+      console.warn('Direct chat fetch notice:', err);
     }
-  } catch (err) {
-    console.warn('Direct chat fetch notice:', err);
   }
   return [];
 }
 
 /**
- * Persist a new message into Supabase bookings.services.chat_messages
+ * Persist a new message into backend /service/:id/chat with Supabase REST fallback
  */
 export async function persistRemoteChat(bookingId, bookingCode, message) {
   const ref = bookingId || bookingCode;
   if (!ref || !message) return;
 
   try {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
-    const filter = isUUID ? `id=eq.${ref}` : `booking_id=eq.${ref}`;
-    const url = `${SUPABASE_URL}/rest/v1/bookings?${filter}&select=id,services`;
-
-    const getRes = await fetch(url, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
+    await axios.post(`/service/${ref}/chat`, {
+      text: message.text,
+      clientMessageId: message.clientMessageId || message.id,
+      timestamp: message.timestamp,
     });
+  } catch (backendErr) {
+    // Fallback to direct Supabase PATCH only if backend service returned an error
+    try {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
+      const filter = isUUID ? `id=eq.${ref}` : `booking_id=eq.${ref}`;
+      const url = `${SUPABASE_URL}/rest/v1/bookings?${filter}&select=id,services`;
 
-    if (!getRes.ok) return;
-    const data = await getRes.json();
-    if (!Array.isArray(data) || data.length === 0) return;
-
-    const row = data[0];
-    const currentServices = row.services && typeof row.services === 'object' ? row.services : {};
-    const oldMessages = Array.isArray(currentServices.chat_messages) ? currentServices.chat_messages : [];
-
-    const msgTime = message.timestamp ? new Date(message.timestamp).getTime() : Date.now();
-    const alreadyExists = oldMessages.some((m) => {
-      if (m.from === message.from && m.text === message.text) {
-        const mTime = m.timestamp ? new Date(m.timestamp).getTime() : Date.now();
-        return Math.abs(mTime - msgTime) < 6000;
-      }
-      return false;
-    });
-
-    if (alreadyExists) return;
-
-    const updatedMessages = [...oldMessages, message];
-
-    await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${row.id}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({
-        services: {
-          ...currentServices,
-          chat_messages: updatedMessages,
+      const getRes = await fetch(url, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        updated_at: new Date().toISOString(),
-      }),
-    });
-  } catch (err) {
-    console.warn('Direct chat persist notice:', err);
+      });
+
+      if (!getRes.ok) return;
+      const data = await getRes.json();
+      if (!Array.isArray(data) || data.length === 0) return;
+
+      const row = data[0];
+      const currentServices = row.services && typeof row.services === 'object' ? row.services : {};
+      const oldMessages = Array.isArray(currentServices.chat_messages) ? currentServices.chat_messages : [];
+
+      const msgTime = message.timestamp ? new Date(message.timestamp).getTime() : Date.now();
+      const alreadyExists = oldMessages.some((m) => {
+        if (m.clientMessageId && message.clientMessageId && m.clientMessageId === message.clientMessageId) {
+          return true;
+        }
+        if (m.from === message.from && m.text === message.text) {
+          const mTime = m.timestamp ? new Date(m.timestamp).getTime() : Date.now();
+          return Math.abs(mTime - msgTime) < 4000;
+        }
+        return false;
+      });
+
+      if (alreadyExists) return;
+
+      const updatedMessages = [...oldMessages, message];
+
+      await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${row.id}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          services: {
+            ...currentServices,
+            chat_messages: updatedMessages,
+          },
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    } catch (err) {
+      console.warn('Direct chat persist notice:', err);
+    }
   }
 }

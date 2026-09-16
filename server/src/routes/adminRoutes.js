@@ -11,6 +11,7 @@ const {
   getAllBookings,
   getBookingById,
   updateBooking,
+  bulkActionBookings,
   getUsers,
   updateUser,
   deleteUser,
@@ -44,6 +45,7 @@ router.post('/users/:id/revoke-sessions', requirePermission('admins.manage'), re
 
 // Bookings management
 router.get('/bookings', requirePermission('bookings.view'), getAllBookings);
+router.post('/bookings/bulk', requirePermission('bookings.manage'), bulkActionBookings);
 router.get('/bookings/:id', requirePermission('bookings.view'), getBookingById);
 router.patch('/bookings/:id', requirePermission('bookings.manage'), updateBooking);
 router.post('/bookings/:id/cancel', requirePermission('bookings.manage'), cancelBookingByAdmin);
@@ -75,15 +77,19 @@ const {
   markPayoutProcessing,
   markPayoutPaid,
   markPayoutFailed,
+  disbursePayout,
+  getPayoutProviderStatusHandler
 } = require('../controllers/payoutController');
 const { adminPayoutLimiter } = require('../middleware/financialRateLimiter');
 
 router.get('/payouts', requirePermission('payouts.view'), getAllPayouts);
+router.get('/payouts/provider/status', requirePermission('payouts.view'), getPayoutProviderStatusHandler);
 router.get('/payouts/:id', requirePermission('payouts.view'), getAdminPayoutById);
 router.post('/payouts/:id/approve', adminPayoutLimiter, requirePermission('payouts.approve'), approvePayout);
 router.post('/payouts/:id/reject', adminPayoutLimiter, requirePermission('payouts.approve'), rejectPayout);
 router.post('/payouts/:id/processing', adminPayoutLimiter, requirePermission('payouts.process'), markPayoutProcessing);
 router.post('/payouts/:id/paid', adminPayoutLimiter, requirePermission('payouts.process'), markPayoutPaid);
+router.post('/payouts/:id/disburse', adminPayoutLimiter, requirePermission('payouts.process'), disbursePayout);
 router.post('/payouts/:id/failed', adminPayoutLimiter, requirePermission('payouts.process'), markPayoutFailed);
 
 // Finance & Financial Reconciliation Management (Phases 4 & 5)

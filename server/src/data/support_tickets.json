@@ -1,5 +1,231 @@
 [
   {
+    "id": "OC-TEST-1789549476143",
+    "type": "passenger",
+    "subject": "Wheelchair request at platform",
+    "category": "Passenger Help",
+    "issueType": "Passenger Help",
+    "desc": "Need wheelchair escort for senior citizen",
+    "description": "Need wheelchair escort for senior citizen",
+    "priority": "medium",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "Test Passenger",
+    "passengerPhone": "",
+    "passengerEmail": "",
+    "trip": null,
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1789549476144",
+        "name": "Test Passenger",
+        "text": "Need wheelchair escort for senior citizen",
+        "sender": "passenger",
+        "timestamp": "02:34 PM"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-09-16T09:04:41.341976+00:00",
+    "updated_at": "2026-09-16T09:04:36.148+00:00",
+    "createdAt": "2026-09-16T09:04:41.341976+00:00",
+    "updatedAt": "2026-09-16T09:04:36.148+00:00"
+  },
+  {
+    "id": "OC-TEST-1789549412947",
+    "type": "passenger",
+    "subject": "Wheelchair request at platform",
+    "category": "Passenger Help",
+    "issueType": "Passenger Help",
+    "desc": "Need wheelchair escort for senior citizen",
+    "description": "Need wheelchair escort for senior citizen",
+    "priority": "medium",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "Test Passenger",
+    "passengerPhone": "",
+    "passengerEmail": "",
+    "trip": null,
+    "aiSummary": "",
+    "conversation": [
+      {
+        "id": "msg-1789549412950",
+        "name": "Test Passenger",
+        "text": "Need wheelchair escort for senior citizen",
+        "sender": "passenger",
+        "timestamp": "02:33 PM"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-09-16T09:03:38.146824+00:00",
+    "updated_at": "2026-09-16T09:03:32.965+00:00",
+    "createdAt": "2026-09-16T09:03:38.146824+00:00",
+    "updatedAt": "2026-09-16T09:03:32.965+00:00"
+  },
+  {
+    "id": "OC-10540",
+    "type": "passenger",
+    "subject": "Trip Support: Train 20834",
+    "category": "General",
+    "issueType": "General",
+    "desc": "Trip Support: Train 20834",
+    "description": "Trip Support: Train 20834",
+    "priority": "urgent",
+    "status": "in_progress",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "vishwam Musham",
+    "passengerPhone": "+91 9652760797",
+    "passengerEmail": "mushamvishwam@gmail.com",
+    "trip": {
+      "id": "5a9263d8-bf0c-44e4-8afc-e91879d70fdc",
+      "seat": "Seat 33 (Lower)",
+      "coach": "Coach S4",
+      "route": "WL → WL",
+      "isReal": true,
+      "source": "WL",
+      "status": "COMPLETED",
+      "dateDay": "15",
+      "service": "Coach Escort",
+      "trainNo": "20834",
+      "dateYear": "2026",
+      "platform": "1",
+      "dateMonth": "SEP",
+      "trainName": "Secunderabad - Visakhapatnam Vande Bharat Express",
+      "dateDayName": "TUE",
+      "destination": "WL"
+    },
+    "aiSummary": "Passenger reported: \"View Trip Progress →\".\nTrip context: Train 20834 (WL → WL), Coach Coach S4, Seat Seat 33 (Lower), Service: Coach Escort.\nAI attempted automated assignment & telemetry check.\nIssue was unresolved automatically. Ticket escalated for immediate human assistance.",
+    "conversation": [
+      {
+        "id": "msg-welcome",
+        "name": "OneCoolie Support Assistant",
+        "text": "Hi! I'm your OneCoolie Support Assistant. Ask me anything about your booking, assistant, luggage, payment or journey. How can I help?",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Payment issue"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Cancel my booking"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Refund status"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Train delay"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to support"
+          }
+        ],
+        "tripCard": null,
+        "timestamp": "05:24 PM"
+      },
+      {
+        "id": "msg-1789300469971",
+        "name": "vishwam Musham",
+        "text": "Where is my assistant?",
+        "sender": "passenger",
+        "timestamp": "05:24 PM"
+      },
+      {
+        "id": "msg-1789300470674",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've checked your booking details.\n\nTrain: 20834 (Secunderabad - Visakhapatnam Vande Bharat Express)\nCoach: Coach S4 • Seat: Seat 33 (Lower)\nStation: Secunderabad\n\nYour assistant has not been assigned yet. We are currently searching for the nearest available assistant at the concourse.\n\nYou'll be notified automatically as soon as an assistant is assigned. ✓",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "track_trip",
+            "label": "View Trip Progress →"
+          }
+        ],
+        "tripCard": {
+          "id": "5a9263d8-bf0c-44e4-8afc-e91879d70fdc",
+          "seat": "Seat 33 (Lower)",
+          "coach": "Coach S4",
+          "route": "WL → WL",
+          "isReal": true,
+          "source": "WL",
+          "status": "COMPLETED",
+          "dateDay": "15",
+          "service": "Coach Escort",
+          "trainNo": "20834",
+          "dateYear": "2026",
+          "platform": "1",
+          "dateMonth": "SEP",
+          "trainName": "Secunderabad - Visakhapatnam Vande Bharat Express",
+          "dateDayName": "TUE",
+          "destination": "WL"
+        },
+        "timestamp": "05:24 PM",
+        "showFeedback": true
+      },
+      {
+        "id": "msg-1789300474340",
+        "name": "vishwam Musham",
+        "text": "View Trip Progress →",
+        "sender": "passenger",
+        "timestamp": "05:24 PM"
+      },
+      {
+        "id": "msg-1789300475044",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've analyzed your question regarding your journey on Train 20834 (WL → WL).\n\nOur platform assistants handle station porterage, wheelchair escort, and berth guidance seamlessly.\n\nIf this doesn't fully resolve what you need, let me know or click below to connect directly with our 24/7 human support team.",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to a support agent →"
+          }
+        ],
+        "tripCard": null,
+        "timestamp": "05:24 PM",
+        "showFeedback": true
+      },
+      {
+        "id": "msg-1789300476708-sys",
+        "name": "System",
+        "text": "Your conversation has been transferred to OneCoolie Support. A support executive has joined this chat.",
+        "sender": "system",
+        "timestamp": "05:24 PM"
+      },
+      {
+        "id": "msg-1789300478890",
+        "name": "Support Executive",
+        "text": "Hello vishwam Musham! I'm coordinating with the station team right now. I can see your booking for Train 20834 (Coach S4, Seat 33 (Lower)). How can I assist you right away?",
+        "sender": "support",
+        "timestamp": "11:54 AM"
+      },
+      {
+        "id": "msg-1789300502413",
+        "name": "vishwam Musham",
+        "text": "Where is my train and assistant",
+        "sender": "passenger",
+        "timestamp": "11:55 AM"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-09-13T11:54:37.593143+00:00",
+    "updated_at": "2026-09-13T11:55:02.555907+00:00",
+    "createdAt": "2026-09-13T11:54:37.593143+00:00",
+    "updatedAt": "2026-09-13T11:55:02.555907+00:00"
+  },
+  {
     "id": "OC-10554",
     "type": "passenger",
     "subject": "1",
@@ -68,13 +294,27 @@
         "text": "Ticket status updated to \"Resolved by Station Master\".",
         "sender": "system",
         "timestamp": "07:40 PM"
+      },
+      {
+        "id": "sys-1789047593586",
+        "name": "System",
+        "text": "Ticket status updated to \"open\".",
+        "sender": "system",
+        "timestamp": "01:39 PM"
+      },
+      {
+        "id": "sys-1789047605079",
+        "name": "System",
+        "text": "Ticket status updated to \"Resolved by Station Master\".",
+        "sender": "system",
+        "timestamp": "01:40 PM"
       }
     ],
     "resolution_notes": "",
     "created_at": "2026-09-07T19:38:53.442738+00:00",
-    "updated_at": "2026-09-07T19:40:34.307392+00:00",
+    "updated_at": "2026-09-10T13:40:05.208962+00:00",
     "createdAt": "2026-09-07T19:38:53.442738+00:00",
-    "updatedAt": "2026-09-07T19:40:34.307392+00:00"
+    "updatedAt": "2026-09-10T13:40:05.208962+00:00"
   },
   {
     "id": "OC-50735",
@@ -251,13 +491,27 @@
         "text": "Hello vikas! I'm coordinating with the station team right now. I can see your booking for Train 12722 (Coach A1, Seat 3 (Lower)). How can I assist you right away?",
         "sender": "support",
         "timestamp": "07:33 PM"
+      },
+      {
+        "id": "msg-1789047306317",
+        "name": "Station Desk Support",
+        "text": "hi",
+        "sender": "support",
+        "timestamp": "01:35 PM"
+      },
+      {
+        "id": "msg-1789047306501",
+        "name": "Station Desk Support",
+        "text": "hi",
+        "sender": "support",
+        "timestamp": "01:35 PM"
       }
     ],
     "resolution_notes": "",
     "created_at": "2026-09-07T19:33:48.239118+00:00",
-    "updated_at": "2026-09-07T19:33:49.674132+00:00",
+    "updated_at": "2026-09-10T13:35:06.73133+00:00",
     "createdAt": "2026-09-07T19:33:48.239118+00:00",
-    "updatedAt": "2026-09-07T19:33:49.674132+00:00"
+    "updatedAt": "2026-09-10T13:35:06.73133+00:00"
   },
   {
     "id": "OC-99999",

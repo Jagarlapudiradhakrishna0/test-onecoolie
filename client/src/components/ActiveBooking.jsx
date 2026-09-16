@@ -146,10 +146,31 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
       }
     };
 
+    const handleIncomingChat = (incomingMsg) => {
+      if (!incomingMsg || !incomingMsg.text) return;
+      const targetId = incomingMsg.bookingId;
+      const targetCode = incomingMsg.bookingCode;
+      if (
+        !targetId ||
+        targetId === bookingUuid ||
+        targetId === bookingCode ||
+        targetCode === bookingUuid ||
+        targetCode === bookingCode
+      ) {
+        setChatMsgs((prev) => {
+          const { merged, changed } = mergeChatMessages(prev, [incomingMsg]);
+          if (!changed) return prev;
+          saveLocalChat(bookingUuid, bookingCode, merged);
+          return merged;
+        });
+      }
+    };
+
     if (window.socket) {
       joinRooms();
       window.socket.on('connect', joinRooms);
       window.socket.on('status_update', handleStatus);
+      window.socket.on('chat_message', handleIncomingChat);
     }
 
     return () => {
@@ -159,6 +180,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
       if (window.socket) {
         window.socket.off('connect', joinRooms);
         window.socket.off('status_update', handleStatus);
+        window.socket.off('chat_message', handleIncomingChat);
       }
     };
   }, [bookingUuid, bookingCode, onUpdate]);
@@ -533,12 +555,17 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     if (lastSentRef.current.text === text && now - lastSentRef.current.time < 800) return;
     lastSentRef.current = { text, time: now };
 
+    const clientMsgId = `cmsg-${now}-${Math.random().toString(36).slice(2, 9)}`;
     const msg = {
+      id: clientMsgId,
+      clientMessageId: clientMsgId,
       bookingId: bookingUuid || booking?.id,
       bookingCode: bookingCode || booking?.booking_id || null,
       from: 'passenger',
+      senderRole: 'passenger',
       text,
       timestamp: new Date().toISOString(),
+      status: 'sending',
     };
 
     setChatMsgs((prev) => {
@@ -548,9 +575,6 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     });
     setMsgInput('');
     broadcastChatTab(bookingUuid, bookingCode, msg);
-    if (window.socket) {
-      window.socket.emit('chat_message', msg);
-    }
     persistRemoteChat(bookingUuid, bookingCode, msg);
   };
 

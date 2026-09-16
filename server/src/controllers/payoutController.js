@@ -418,19 +418,39 @@ exports.cancelPayout = async (req, res) => {
  */
 exports.getAllPayouts = async (req, res) => {
   try {
-    const { status, assistant_id } = req.query;
+    const { status, assistant_id, limit = 100, page = 1 } = req.query;
+
+    const ALLOWED_STATUSES = ['all', 'requested', 'approved', 'processing', 'paid', 'rejected', 'failed', 'cancelled'];
+    if (status && status.toLowerCase() !== 'all' && !ALLOWED_STATUSES.includes(status.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid payout status filter "${status}". Allowed values: ${ALLOWED_STATUSES.join(', ')}.`
+      });
+    }
+
+    if (assistant_id && !/^[0-9a-fA-F-]{36}$/.test(String(assistant_id).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid assistant_id format. Must be a valid UUID.'
+      });
+    }
 
     let query = supabase
       .from('assistant_payouts')
       .select('*, assistant:assistant_id(id, name, email, phone, station_code), items:assistant_payout_items(*)')
       .order('created_at', { ascending: false });
 
-    if (status && status !== 'ALL') {
+    if (status && status.toLowerCase() !== 'all') {
       query = query.eq('status', status.toLowerCase());
     }
     if (assistant_id) {
-      query = query.eq('assistant_id', assistant_id);
+      query = query.eq('assistant_id', assistant_id.trim());
     }
+
+    const parsedLimit = Math.max(1, Math.min(200, parseInt(limit, 10) || 100));
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (parsedPage - 1) * parsedLimit;
+    query = query.range(offset, offset + parsedLimit - 1);
 
     const { data, error } = await query;
     if (error) {
@@ -1207,6 +1227,148 @@ exports.markPayoutFailed = async (req, res) => {
   } catch (err) {
     console.error('ADMIN MARK FAILED ERROR:', err);
     res.status(500).json({ message: 'Unable to update payout status.' });
+  }
+};
+
+const payoutProviderService = require('../services/payoutProviderService');
+
+/**
+ * GET /api/admin/payouts/provider/status
+ * Returns operational provider status (mock vs production).
+ */
+exports.getPayoutProviderStatusHandler = async (req, res) => {
+  try {
+    const status = payoutProviderService.getPayoutProviderStatus();
+    res.json({ success: true, ...status });
+  } catch (err) {
+    res.status(500).json({ message: 'Unable to fetch provider status.' });
+  }
+};
+
+/**
+ * POST /api/admin/payouts/:id/disburse
+ * Admin triggers automated payout disbursement via the configured UPI / Banking provider.
+ */
+exports.disbursePayout = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: payout, error: fetchErr } = await supabase
+      .from('assistant_payouts')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !payout) {
+      return res.status(404).json({ message: 'Payout not found.' });
+    }
+
+    if (payout.status === 'paid') {
+      return res.status(409).json({ message: 'Payout has already been paid.' });
+    }
+
+    if (!['requested', 'approved', 'processing'].includes(payout.status)) {
+      return res.status(400).json({ message: `Payout in status '${payout.status}' cannot be disbursed.` });
+    }
+
+    // Fetch assistant details
+    const { data: assistant } = await supabase
+      .from('users')
+      .select('id, name, email, phone')
+      .eq('id', payout.assistant_id)
+      .maybeSingle();
+
+    // Execute disbursement
+    const disburseResult = await payoutProviderService.executeDisbursement({
+      payout,
+      assistant,
+      actorId: req.user?.id || 'admin'
+    });
+
+    if (!disburseResult.success) {
+      return res.status(502).json({
+        success: false,
+        message: disburseResult.error || 'Disbursement failed through payout provider.'
+      });
+    }
+
+    // Fetch linked items
+    const { data: items } = await supabase
+      .from('assistant_payout_items')
+      .select('earning_id, amount')
+      .eq('payout_id', id);
+
+    const earningIds = (items || []).map((i) => i.earning_id);
+
+    // If provider confirmed paid
+    if (disburseResult.status === 'paid') {
+      const nowIso = new Date().toISOString();
+      const { data: updatedPayout, error: updateErr } = await supabase
+        .from('assistant_payouts')
+        .update({
+          status: 'paid',
+          payout_reference: disburseResult.payout_reference,
+          gateway_payout_id: disburseResult.gateway_payout_id,
+          settlement_date: nowIso,
+          processed_at: nowIso,
+          metadata: {
+            ...(payout.metadata || {}),
+            ...(disburseResult.metadata || {})
+          },
+          updated_at: nowIso
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateErr) {
+        return res.status(500).json({ message: 'Disbursed but failed to update record: ' + updateErr.message });
+      }
+
+      // Transition held earnings to paid_out
+      if (earningIds.length > 0) {
+        await supabase
+          .from('assistant_earnings')
+          .update({ status: 'paid_out', updated_at: nowIso })
+          .in('id', earningIds);
+      }
+
+      await auditService.recordFinancialAudit(supabase, {
+        actor_id: req.user?.id || null,
+        actor_role: req.user?.role || 'admin',
+        action: 'payout_disbursed',
+        entity_type: 'assistant_payout',
+        entity_id: id,
+        payout_id: id,
+        amount: payout.amount,
+        previous_state: { status: payout.status },
+        new_state: { status: 'paid' },
+        metadata: disburseResult.metadata
+      });
+
+      emitWalletUpdate(payout.assistant_id, { payoutId: id, status: 'paid' });
+
+      return res.json({
+        success: true,
+        message: disburseResult.mode === 'mock'
+          ? 'Development simulated disbursement successful.'
+          : 'Live payout disbursed successfully.',
+        payout: updatedPayout,
+        providerMode: disburseResult.mode
+      });
+    }
+
+    // If asynchronous / processing
+    return res.json({
+      success: true,
+      message: 'Payout disbursement initiated and processing.',
+      payout,
+      providerMode: disburseResult.mode
+    });
+
+  } catch (err) {
+    console.error('DISBURSE PAYOUT ERROR:', err);
+    res.status(500).json({ message: 'Disbursement error: ' + err.message });
   }
 };
 

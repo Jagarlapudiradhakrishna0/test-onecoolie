@@ -328,7 +328,8 @@ The backend requires the following configuration parameters in `server/.env`:
 ```env
 # Server Port & Allowed Origin
 PORT=5000
-CLIENT_URL=http://localhost:5173
+CLIENT_URL=https://onecoolie.vercel.app
+ALLOWED_ORIGINS=https://onecoolie.vercel.app
 
 # Supabase Managed PostgreSQL
 SUPABASE_URL=https://your-project.supabase.co
@@ -363,15 +364,15 @@ TRAIN_API_BASE_URL=https://irctc-indian-railway-pnr-status.p.rapidapi.com
 cd server
 npm install
 npm start
-# Server listens on port 5000 (http://localhost:5000)
+# Server listens on port 5000 (Production: https://onecoolie.onrender.com)
 ```
 
 ### 2. Frontend Client Setup
 ```bash
 cd client
 npm install
-npm run dev
-# Vite dev server runs at http://localhost:5173
+npm run build
+# Deployed at https://onecoolie.vercel.app
 ```
 
 ### 3. Production Build Validation

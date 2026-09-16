@@ -60,17 +60,9 @@ const getAllowedOrigins = () => {
       if (!origins.includes(o)) origins.push(o);
     });
 
-  // Include local development origins ONLY in non-production environments
-  if (!prod) {
-    const devDefaults = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:3000'
-    ];
-    for (const d of devDefaults) {
-      if (!origins.includes(d)) origins.push(d);
-    }
+  // Default to configured CLIENT_URL or deployed frontend
+  if (origins.length === 0) {
+    origins.push(process.env.CLIENT_URL || 'https://onecoolie.vercel.app');
   }
 
   return origins;

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Brand from '../components/Brand';
 import { useAuth } from '../context/AuthContext';
+import { initCsrfToken } from '../api/axios';
 import {
   Shield, KeyRound, Smartphone, AlertOctagon,
   Copy, Download, CheckCircle, ArrowLeft, Lock
@@ -18,8 +19,16 @@ export default function AdminLogin() {
     login,
     verifyAdminMfaLogin,
     setupAdminMfa,
-    verifyAdminMfaEnrollment
+    verifyAdminMfaEnrollment,
+    clearSessionNotice
   } = useAuth();
+
+  useEffect(() => {
+    initCsrfToken().catch(() => { });
+    if (typeof clearSessionNotice === 'function') {
+      clearSessionNotice();
+    }
+  }, [clearSessionNotice]);
 
   // Mode: 'credentials' | 'verify_mfa' | 'enroll_mfa' | 'enroll_recovery_codes'
   const [mode, setMode] = useState('credentials');
@@ -309,11 +318,10 @@ export default function AdminLogin() {
                 <button
                   type="button"
                   onClick={() => { setMfaType('totp'); setError(''); }}
-                  className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    mfaType === 'totp'
+                  className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${mfaType === 'totp'
                       ? 'bg-blue-600 text-white shadow-md'
                       : 'text-zinc-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <Smartphone className="w-3.5 h-3.5" />
                   <span>Authenticator App</span>
@@ -322,11 +330,10 @@ export default function AdminLogin() {
                 <button
                   type="button"
                   onClick={() => { setMfaType('recovery'); setError(''); }}
-                  className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    mfaType === 'recovery'
+                  className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${mfaType === 'recovery'
                       ? 'bg-blue-600 text-white shadow-md'
                       : 'text-zinc-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <KeyRound className="w-3.5 h-3.5" />
                   <span>Recovery Code</span>

@@ -10,10 +10,12 @@
 const ROLES = {
   SUPER_ADMIN: 'super_admin',
   OPERATIONS_ADMIN: 'operations_admin',
+  STATION_MANAGER: 'station_manager',
   ASSISTANT_ADMIN: 'assistant_admin',
   FINANCE_ADMIN: 'finance_admin',
   SAFETY_ADMIN: 'safety_admin',
   SUPPORT_ADMIN: 'support_admin',
+  SUPPORT_AGENT: 'support_agent',
   AUDITOR: 'auditor'
 };
 
@@ -134,6 +136,29 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.SUPPORT_MANAGE
   ],
 
+  [ROLES.STATION_MANAGER]: [
+    PERMISSIONS.DASHBOARD_VIEW,
+    PERMISSIONS.BOOKINGS_VIEW,
+    PERMISSIONS.BOOKINGS_MANAGE,
+    PERMISSIONS.PASSENGERS_VIEW,
+    PERMISSIONS.PASSENGERS_MANAGE,
+    PERMISSIONS.ASSISTANTS_VIEW,
+    PERMISSIONS.ASSISTANTS_APPROVE,
+    PERMISSIONS.SUPPORT_VIEW,
+    PERMISSIONS.SUPPORT_MANAGE,
+    PERMISSIONS.SOS_VIEW,
+    PERMISSIONS.OPERATIONS_READ,
+    PERMISSIONS.OPERATIONS_VERIFY
+  ],
+
+  [ROLES.SUPPORT_AGENT]: [
+    PERMISSIONS.DASHBOARD_VIEW,
+    PERMISSIONS.BOOKINGS_VIEW,
+    PERMISSIONS.PASSENGERS_VIEW,
+    PERMISSIONS.SUPPORT_VIEW,
+    PERMISSIONS.SUPPORT_MANAGE
+  ],
+
   [ROLES.AUDITOR]: [
     PERMISSIONS.DASHBOARD_VIEW,
     PERMISSIONS.BOOKINGS_VIEW,
@@ -152,6 +177,7 @@ const ROLE_PERMISSIONS = {
 
 /**
  * Normalizes an admin role string.
+ * Supports aliases (e.g. 'manager' -> 'station_manager').
  * @param {string} role
  * @returns {string|null}
  */
@@ -159,6 +185,8 @@ function normalizeAdminRole(role) {
   if (!role || typeof role !== 'string') return null;
   const clean = role.trim().toLowerCase();
   if (Object.values(ROLES).includes(clean)) return clean;
+  if (clean === 'manager') return ROLES.STATION_MANAGER;
+  if (clean === 'support') return ROLES.SUPPORT_AGENT;
   return null;
 }
 

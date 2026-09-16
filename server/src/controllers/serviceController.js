@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const supabase = require('../config/db');
 const { formatBooking } = require('../utils/bookingFormatter');
 const { resolveBooking } = require('../utils/bookingResolver');
@@ -599,8 +600,6 @@ exports.triggerSOS = async (req, res) => {
 // --------------------------------------------------
 // GET CHAT MESSAGES (GET /service/:booking_id/chat)
 // --------------------------------------------------
-// GET CHAT MESSAGES (GET /service/:booking_id/chat)
-// --------------------------------------------------
 exports.getChatMessages = async (req, res) => {
   try {
     const { booking_id } = req.params;
@@ -626,9 +625,24 @@ exports.getChatMessages = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to view chat messages for this booking.' });
     }
 
-    const messages = (booking.services && Array.isArray(booking.services.chat_messages))
+    const rawMessages = (booking.services && Array.isArray(booking.services.chat_messages))
       ? booking.services.chat_messages
       : [];
+
+    // Ensure all messages have canonical structure and are sorted chronologically
+    const messages = rawMessages.map((m, idx) => ({
+      id: m.id || `msg-${m.timestamp || idx}-${idx}`,
+      clientMessageId: m.clientMessageId || m.id || `msg-${idx}`,
+      bookingId: booking.id,
+      bookingCode: booking.booking_id,
+      from: m.from || m.senderRole || 'passenger',
+      senderRole: m.senderRole || m.from || 'passenger',
+      senderId: m.senderId || null,
+      senderName: m.senderName || '',
+      text: m.text || '',
+      timestamp: m.timestamp || new Date().toISOString(),
+      status: m.status || 'delivered',
+    })).sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
 
     return res.json({ messages });
   } catch (err) {
@@ -638,77 +652,132 @@ exports.getChatMessages = async (req, res) => {
 };
 
 // --------------------------------------------------
+// CANONICAL CHAT PERSISTENCE & BROADCAST SERVICE
+// --------------------------------------------------
+async function saveAndBroadcastChatMessage({ bookingRef, user, text, clientMessageId, timestamp }) {
+  if (!text || !String(text).trim()) {
+    const emptyErr = new Error('Message text is required.');
+    emptyErr.statusCode = 400;
+    throw emptyErr;
+  }
+  const cleanText = String(text).trim().slice(0, 1000);
+
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingRef);
+  let query = supabase.from('bookings').select('id, booking_id, services, passenger_id, assistant_id');
+  if (isUUID) {
+    query = query.eq('id', bookingRef);
+  } else {
+    query = query.eq('booking_id', bookingRef);
+  }
+
+  const { data: booking, error } = await query.maybeSingle();
+  if (error || !booking) {
+    const notFoundErr = new Error('Booking not found.');
+    notFoundErr.statusCode = 404;
+    throw notFoundErr;
+  }
+
+  const isPassenger = booking.passenger_id === user?.id;
+  const isAssistant = booking.assistant_id && booking.assistant_id === user?.id;
+  const isAdmin = user?.role === 'admin';
+
+  if (!isPassenger && !isAssistant && !isAdmin) {
+    const authErr = new Error('Not authorized to send chat messages for this booking.');
+    authErr.statusCode = 403;
+    throw authErr;
+  }
+
+  const authorSender = isAdmin ? 'admin' : (isAssistant ? 'assistant' : 'passenger');
+  const curServices = (booking.services && typeof booking.services === 'object') ? booking.services : {};
+  const oldMsgs = Array.isArray(curServices.chat_messages) ? curServices.chat_messages : [];
+
+  const effectiveClientId = clientMessageId || null;
+
+  // Idempotency check: if message already exists by clientMessageId or exact match within 4s
+  const existingMsg = oldMsgs.find((m) => {
+    if (effectiveClientId && (m.clientMessageId === effectiveClientId || m.id === effectiveClientId)) {
+      return true;
+    }
+    if (m.from === authorSender && m.text === cleanText) {
+      const mTime = new Date(m.timestamp).getTime();
+      const reqTime = new Date(timestamp || Date.now()).getTime();
+      return Math.abs(mTime - reqTime) < 4000;
+    }
+    return false;
+  });
+
+  if (existingMsg) {
+    return { message: existingMsg, messages: oldMsgs, alreadyExisted: true };
+  }
+
+  const canonicalId = crypto.randomUUID();
+  const validTimestamp = timestamp && !isNaN(new Date(timestamp).getTime())
+    ? new Date(timestamp).toISOString()
+    : new Date().toISOString();
+
+  const newMessage = {
+    id: canonicalId,
+    clientMessageId: effectiveClientId || canonicalId,
+    bookingId: booking.id,
+    bookingCode: booking.booking_id,
+    from: authorSender,
+    senderRole: authorSender,
+    senderId: user?.id || null,
+    senderName: user?.name || (authorSender === 'admin' ? 'Support Desk' : (authorSender === 'assistant' ? 'Assistant' : 'Passenger')),
+    text: cleanText,
+    timestamp: validTimestamp,
+    status: 'delivered',
+  };
+
+  const updatedMessages = [...oldMsgs, newMessage];
+
+  await supabase
+    .from('bookings')
+    .update({
+      services: {
+        ...curServices,
+        chat_messages: updatedMessages,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', booking.id);
+
+  // Broadcast ONCE across both room aliases using array to prevent duplicates
+  if (io) {
+    const rooms = [`booking_${booking.id}`];
+    if (booking.booking_id && booking.booking_id !== booking.id) {
+      rooms.push(`booking_${booking.booking_id}`);
+    }
+    io.to(rooms).emit('chat_message', newMessage);
+  }
+
+  return { message: newMessage, messages: updatedMessages, alreadyExisted: false };
+}
+
+// --------------------------------------------------
 // SEND CHAT MESSAGE (POST /service/:booking_id/chat)
 // --------------------------------------------------
 exports.sendChatMessage = async (req, res) => {
   try {
     const { booking_id } = req.params;
-    const { text, timestamp } = req.body;
-
-    if (!text || !text.trim()) {
-      return res.status(400).json({ message: 'Message text is required.' });
-    }
-
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking_id);
-
-    let query = supabase.from('bookings').select('id, booking_id, services, passenger_id, assistant_id');
-    if (isUUID) {
-      query = query.eq('id', booking_id);
-    } else {
-      query = query.eq('booking_id', booking_id);
-    }
-
-    const { data: booking, error } = await query.maybeSingle();
-    if (error || !booking) {
-      return res.status(404).json({ message: 'Booking not found.' });
-    }
-
-    const isPassenger = booking.passenger_id === req.user?.id;
-    const isAssistant = booking.assistant_id && booking.assistant_id === req.user?.id;
-    const isAdmin = req.user?.role === 'admin';
-
-    if (!isPassenger && !isAssistant && !isAdmin) {
-      return res.status(403).json({ message: 'Not authorized to send chat messages for this booking.' });
-    }
-
-    // Determine sender identity authoritatively from verified token and booking relationship
-    const authorSender = isAdmin ? 'admin' : (isAssistant ? 'assistant' : 'passenger');
-
-    const curServices = (booking.services && typeof booking.services === 'object') ? booking.services : {};
-    const oldMsgs = Array.isArray(curServices.chat_messages) ? curServices.chat_messages : [];
-
-    const newMessage = {
-      bookingId: booking.id,
-      bookingCode: booking.booking_id,
-      from: authorSender,
-      text: String(text).trim().slice(0, 1000),
-      timestamp: timestamp || new Date().toISOString(),
-    };
-
-    const updatedMessages = [...oldMsgs, newMessage];
-
-    await supabase
-      .from('bookings')
-      .update({
-        services: {
-          ...curServices,
-          chat_messages: updatedMessages,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', booking.id);
-
-    // Broadcast via socket to both UUID and booking code rooms
-    if (io) {
-      io.to(`booking_${booking.id}`).emit('chat_message', newMessage);
-      if (booking.booking_id && booking.booking_id !== booking.id) {
-        io.to(`booking_${booking.booking_id}`).emit('chat_message', newMessage);
-      }
-    }
-
-    return res.json({ success: true, message: newMessage, messages: updatedMessages });
+    const { text, clientMessageId, client_message_id, timestamp } = req.body;
+    const result = await saveAndBroadcastChatMessage({
+      bookingRef: booking_id,
+      user: req.user,
+      text,
+      clientMessageId: clientMessageId || client_message_id,
+      timestamp,
+    });
+    return res.json({
+      success: true,
+      message: result.message,
+      messages: result.messages,
+      duplicate: Boolean(result.alreadyExisted),
+    });
   } catch (err) {
     console.error('SEND CHAT MESSAGE ERROR:', err);
-    return res.status(500).json({ message: 'Unable to send message.' });
+    return res.status(err.statusCode || 500).json({ message: err.message || 'Unable to send message.' });
   }
 };
+
+exports.saveAndBroadcastChatMessage = saveAndBroadcastChatMessage;

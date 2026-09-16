@@ -452,12 +452,17 @@ export default function AssistantJobCard({ job, onUpdate }) {
     }
     lastSentRef.current = { text, time: now };
 
+    const clientMsgId = `cmsg-${now}-${Math.random().toString(36).slice(2, 9)}`;
     const msg = {
+      id: clientMsgId,
+      clientMessageId: clientMsgId,
       bookingId: jobUuid || job.id,
       bookingCode: jobCode || job.booking_id || null,
       from: 'assistant',
+      senderRole: 'assistant',
       text,
       timestamp: new Date().toISOString(),
+      status: 'sending',
     };
 
     // Update local state and persistent storage via chatSync
@@ -471,31 +476,8 @@ export default function AssistantJobCard({ job, onUpdate }) {
     // Instant cross-tab broadcast in the same browser
     broadcastChatTab(jobUuid, jobCode, msg);
 
-    // Emit via Socket.IO
-    if (window.socket) {
-      window.socket.emit('chat_message', msg);
-      if (jobCode && jobCode !== jobUuid) {
-        window.socket.emit('chat_message', {
-          ...msg,
-          bookingId: jobCode,
-        });
-      }
-    }
-
-    // Direct Supabase cloud persistence (ensures chat is preserved across refreshes, devices, and sessions)
+    // Authoritative backend persistence & real-time broadcast
     persistRemoteChat(jobUuid, jobCode, msg);
-
-    // Dual REST persistence if service endpoint available
-    const primaryId = jobUuid || jobCode;
-    if (primaryId) {
-      axios.post(`/service/${primaryId}/chat`, {
-        text,
-        from: 'assistant',
-        timestamp: msg.timestamp,
-      }).catch(() => {
-        // Fallback or old backend silently ignored
-      });
-    }
   };
 
   // Clean assistance services & parse passenger luggage breakdown (Small, Medium, Large)

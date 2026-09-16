@@ -40,14 +40,10 @@ If a newly deployed release fails automated deployment verification or introduce
 4. **Execute Post-Rollback Readiness:**
    Verify the restored service reports healthy:
    ```bash
-   curl -i http://localhost:5000/api/health
-   curl -i http://localhost:5000/api/ready
+   curl -i https://onecoolie.onrender.com/api/health
+   curl -i https://onecoolie.onrender.com/api/ready
    ```
 5. **Verify Core Security Controls:**
-   - Execute test smoke suite:
-     ```bash
-     node test_phase6_production_reliability.js
-     ```
    - Confirm authentication, session rotation, and Socket.IO handshake pass.
 6. **Resume Traffic:**
    Re-enable routing on load balancer.
@@ -69,13 +65,13 @@ If a newly deployed release fails automated deployment verification or introduce
 3. **Validate Application Schema Post-Recovery:**
    - Trigger deployment verification to audit critical tables:
      ```bash
-     curl -X POST http://localhost:5000/api/admin/operations/verify-deployment \
+     curl -X POST https://onecoolie.onrender.com/api/admin/operations/verify-deployment \
        -H "Authorization: Bearer <ADMIN_ACCESS_TOKEN>"
      ```
 4. **Record Disaster Recovery Drill:**
    - Record the recovery drill in public audit records:
      ```bash
-     curl -X POST http://localhost:5000/api/admin/operations/recovery-verifications \
+     curl -X POST https://onecoolie.onrender.com/api/admin/operations/recovery-verifications \
        -H "Authorization: Bearer <ADMIN_ACCESS_TOKEN>" \
        -H "Content-Type: application/json" \
        -d '{"verificationType":"database_pitr_verification","status":"verified","backupReference":"pitr_snapshot_restored"}'

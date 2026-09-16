@@ -12,24 +12,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import ToastProvider from './components/Toast';
 
-const socketUrl = (() => {
-  if (import.meta.env.DEV) {
-    const envSock = import.meta.env.VITE_SOCKET_URL;
-    if (envSock && (envSock.includes('localhost') || envSock.includes('127.0.0.1'))) {
-      return envSock;
-    }
-    return 'http://localhost:5000';
-  }
-  const prodSock = import.meta.env.VITE_SOCKET_URL;
-  if (prodSock && !prodSock.includes('localhost') && !prodSock.includes('127.0.0.1')) {
-    return prodSock;
-  }
-  const prodApi = import.meta.env.VITE_API_URL;
-  if (prodApi && !prodApi.includes('localhost') && !prodApi.includes('127.0.0.1') && !prodApi.startsWith('/')) {
-    return prodApi.replace(/\/api\/?$/, '');
-  }
-  return 'https://onecoolie.onrender.com';
-})();
+const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://onecoolie.onrender.com';
 
 const initialToken = localStorage.getItem('token') || '';
 
@@ -81,9 +64,9 @@ window.socket.on('session-revoked', (data) => {
 
   // 7. Redirect the user to the appropriate login page
   const path = window.location.pathname;
-  if (!path.includes('/auth') && !path.includes('/admin/login')) {
+  if (!path.includes('/auth') && !path.includes('/admin-auth')) {
     if (path.startsWith('/admin')) {
-      window.location.href = '/admin/login';
+      window.location.href = '/admin-auth';
     } else {
       window.location.href = '/auth';
     }

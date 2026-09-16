@@ -491,6 +491,7 @@ export default function PassengerDashboard() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmCancel, setConfirmCancel] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // 3-dots action menu & Edit Booking state
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -1073,14 +1074,38 @@ export default function PassengerDashboard() {
   };
 
   const doCancel = async () => {
-    if (!confirmCancel) return;
+    if (!confirmCancel || isCancelling) return;
+    const cancelTargetId = confirmCancel;
+    setIsCancelling(true);
     try {
-      await axios.post(`/bookings/${confirmCancel}/cancel`);
+      const res = await axios.post(`/bookings/${cancelTargetId}/cancel`);
+      const updatedBooking = res.data?.booking || res.data;
+
+      // 1. Immediately update bookings state optimistically / from backend response
+      setBookings((prev) =>
+        prev.map((b) => (b.id === cancelTargetId || b.booking_id === cancelTargetId
+          ? {
+              ...b,
+              booking_status: 'cancelled',
+              payment_status: updatedBooking?.payment_status || (b.payment_method === 'cash' ? 'cancelled' : b.payment_status),
+              ...updatedBooking
+            }
+          : b
+        ))
+      );
+
+      // 2. Immediately update active state if cancelled
+      setActive((prev) =>
+        prev ? (prev.id === cancelTargetId || prev.booking_id === cancelTargetId ? null : prev) : null
+      );
+
       setConfirmCancel(null);
-      toast.success('Assistance booking cancelled');
+      toast.success(res.data?.message || 'Assistance booking cancelled');
       fetchBookings();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Cancellation failed');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -3972,12 +3997,13 @@ export default function PassengerDashboard() {
       {/* Cancel Confirmation Dialog */}
       <ConfirmDialog
         open={Boolean(confirmCancel)}
+        loading={isCancelling}
         title="Cancel Assistance Booking"
         message="Are you sure you want to cancel this station assistance request? Your allocated assistant will be released back to the platform pool."
         confirmText="Yes, Cancel Booking"
         cancelText="Keep Booking"
         onConfirm={doCancel}
-        onCancel={() => setConfirmCancel(null)}
+        onCancel={() => !isCancelling && setConfirmCancel(null)}
       />
     </div>
   );

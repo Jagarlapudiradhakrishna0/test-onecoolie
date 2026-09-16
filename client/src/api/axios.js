@@ -1,23 +1,8 @@
 import axios from 'axios';
 
-// Centralized API Base URL resolution (Phase 7):
-// - If VITE_API_URL is explicitly set, use it across all environments.
-// - In development fallback: use '/api' to cleanly leverage Vite's reverse proxy to localhost:5000.
-// - In production fallback: use production cloud backend URL.
-const resolvedBaseUrl = (() => {
-  if (import.meta.env.DEV) {
-    const envUrl = import.meta.env.VITE_API_URL;
-    if (envUrl && (envUrl.startsWith('/') || envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
-      return envUrl;
-    }
-    return '/api';
-  }
-  const prodUrl = import.meta.env.VITE_API_URL;
-  if (prodUrl && !prodUrl.includes('localhost') && !prodUrl.includes('127.0.0.1')) {
-    return prodUrl;
-  }
-  return 'https://onecoolie.onrender.com/api';
-})();
+// Centralized API Base URL resolution:
+// Defaults strictly to deployed production backend URL
+const resolvedBaseUrl = import.meta.env.VITE_API_URL || 'https://onecoolie.onrender.com/api';
 
 const instance = axios.create({
   baseURL: resolvedBaseUrl,
@@ -64,7 +49,7 @@ export const getStoredRefreshToken = () => {
     if (rt && typeof rt === 'string' && rt !== 'undefined' && rt !== 'null') {
       return rt.trim();
     }
-  } catch (e) {}
+  } catch (e) { }
   return null;
 };
 
@@ -72,6 +57,9 @@ export const setStoredTokens = ({ accessToken, refreshToken }) => {
   try {
     if (accessToken) {
       localStorage.setItem('token', accessToken);
+      if (typeof window !== 'undefined' && window.socket) {
+        window.socket.auth = { token: accessToken };
+      }
       const userRaw = localStorage.getItem('userInfo');
       if (userRaw) {
         try {
@@ -80,7 +68,7 @@ export const setStoredTokens = ({ accessToken, refreshToken }) => {
           parsed.accessToken = accessToken;
           delete parsed.refreshToken;
           localStorage.setItem('userInfo', JSON.stringify(parsed));
-        } catch (pe) {}
+        } catch (pe) { }
       }
     }
     // Phase 6.6: HttpOnly cookie mode eliminates client-side refreshToken in localStorage
@@ -101,7 +89,35 @@ export const clearStoredTokens = () => {
     localStorage.removeItem('userInfo');
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('userInfo');
-  } catch (e) {}
+  } catch (e) { }
+};
+
+// ============================================================
+// CSRF TOKEN INITIALIZATION & CACHING
+// Fetches fresh double-submit CSRF cookie from backend
+// ============================================================
+let csrfFetchPromise = null;
+
+export const initCsrfToken = async () => {
+  if (typeof document === 'undefined') return null;
+  const existing = getCookieValue('onecoolie_csrf');
+  if (existing) return existing;
+
+  if (!csrfFetchPromise) {
+    csrfFetchPromise = axios
+      .get(`${resolvedBaseUrl}/auth/csrf-token`, { withCredentials: true })
+      .then((res) => {
+        return res.data?.csrfToken || getCookieValue('onecoolie_csrf');
+      })
+      .catch((err) => {
+        console.warn('[CSRF] Failed to fetch initial CSRF token:', err.message);
+        return null;
+      })
+      .finally(() => {
+        csrfFetchPromise = null;
+      });
+  }
+  return csrfFetchPromise;
 };
 
 // ============================================================
@@ -126,11 +142,24 @@ const processQueue = (error, token = null) => {
 // REQUEST INTERCEPTOR: Attach Bearer Access Token & CSRF Token
 // ============================================================
 instance.interceptors.request.use(
-  (config) => {
+  async (config) => {
     config.headers = config.headers || {};
 
-    // Attach CSRF double-submit token if cookie exists
-    const csrfToken = getCookieValue('onecoolie_csrf');
+    const method = (config.method || 'get').toUpperCase();
+    const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+
+    // If state-changing request and no CSRF cookie exists, proactively fetch one
+    let csrfToken = getCookieValue('onecoolie_csrf');
+    if (isStateChanging && !csrfToken && !config.url?.includes('/auth/csrf-token')) {
+      try {
+        csrfToken = await initCsrfToken();
+      } catch (e) { }
+    }
+
+    if (!csrfToken) {
+      csrfToken = getCookieValue('onecoolie_csrf');
+    }
+
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
     }
@@ -162,6 +191,22 @@ instance.interceptors.response.use(
 
     // If no response or status is not 401, reject immediately
     if (!error.response || error.response.status !== 401 || !originalRequest) {
+      return Promise.reject(error);
+    }
+
+    // Authentication and challenge endpoints intentionally return 401 on bad credentials / bad OTP / expired challenge.
+    // They must NEVER trigger an automated /auth/refresh session loop.
+    const isAuthChallengeEndpoint =
+      originalRequest.url?.includes('/auth/login') ||
+      originalRequest.url?.includes('/auth/register') ||
+      originalRequest.url?.includes('/auth/admin/mfa') ||
+      originalRequest.url?.includes('/auth/otp') ||
+      originalRequest.url?.includes('/auth/forgot-password') ||
+      originalRequest.url?.includes('/auth/verify-reset-otp') ||
+      originalRequest.url?.includes('/auth/reset-password') ||
+      originalRequest.url?.includes('/auth/csrf-token');
+
+    if (isAuthChallengeEndpoint) {
       return Promise.reject(error);
     }
 
@@ -202,7 +247,16 @@ instance.interceptors.response.use(
       const storedRefreshToken = getStoredRefreshToken();
       const refreshBody = storedRefreshToken ? { refreshToken: storedRefreshToken } : {};
       const refreshHeaders = { 'Content-Type': 'application/json' };
-      const csrf = getCookieValue('onecoolie_csrf');
+
+      let csrf = getCookieValue('onecoolie_csrf');
+      if (!csrf) {
+        try {
+          csrf = await initCsrfToken();
+        } catch (e) { }
+      }
+      if (!csrf) {
+        csrf = getCookieValue('onecoolie_csrf');
+      }
       if (csrf) refreshHeaders['X-CSRF-Token'] = csrf;
 
       // Use raw axios with withCredentials: true so the HttpOnly refresh cookie is sent

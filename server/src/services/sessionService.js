@@ -121,7 +121,7 @@ async function createSession({ user, req, client = defaultSupabase }) {
 
   // Derive request telemetry
   const userAgent = req?.headers?.['user-agent'] || 'Unknown Client';
-  const ipAddress = req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req?.ip || req?.socket?.remoteAddress || '127.0.0.1';
+  const ipAddress = req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req?.ip || req?.socket?.remoteAddress || 'unknown';
   const deviceInfo = userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop / Browser';
 
   const nowIso = new Date().toISOString();

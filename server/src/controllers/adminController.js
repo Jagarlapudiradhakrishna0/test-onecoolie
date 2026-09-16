@@ -225,11 +225,55 @@ exports.getPendingAssistants = async (req, res) => {
 // --------------------------------------------------
 exports.getAssistants = async (req, res) => {
   try {
-    const { data: assistants, error } = await supabase
+    const { status, station_code, is_online, search } = req.query;
+
+    // Validate status parameter
+    const ALLOWED_STATUSES = ['all', 'pending', 'approved', 'rejected'];
+    if (status && status !== 'all' && !ALLOWED_STATUSES.includes(status.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status filter "${status}". Allowed values: ${ALLOWED_STATUSES.join(', ')}.`
+      });
+    }
+
+    let query = supabase
       .from('users')
       .select('id, name, email, phone, station_code, is_approved, is_online, kyc_status, created_at')
       .eq('role', 'assistant')
       .order('created_at', { ascending: false });
+
+    // Apply validated status filter
+    if (status && status.toLowerCase() !== 'all') {
+      const cleanStatus = status.toLowerCase();
+      if (cleanStatus === 'pending') {
+        query = query.or('is_approved.is.false,kyc_status.eq.pending');
+      } else if (cleanStatus === 'approved') {
+        query = query.eq('is_approved', true);
+      } else if (cleanStatus === 'rejected') {
+        query = query.eq('kyc_status', 'rejected');
+      }
+    }
+
+    // Apply station code filter if provided
+    if (station_code && typeof station_code === 'string') {
+      const cleanStation = station_code.trim().toUpperCase();
+      if (cleanStation.length > 10) {
+        return res.status(400).json({ success: false, message: 'Invalid station_code parameter. Maximum length is 10 characters.' });
+      }
+      query = query.eq('station_code', cleanStation);
+    }
+
+    // Apply online filter if provided
+    if (is_online !== undefined) {
+      if (!['true', 'false', '1', '0', 'all'].includes(String(is_online).toLowerCase())) {
+        return res.status(400).json({ success: false, message: 'Invalid is_online filter. Allowed values: true, false, all.' });
+      }
+      if (String(is_online).toLowerCase() !== 'all') {
+        query = query.eq('is_online', String(is_online) === 'true' || String(is_online) === '1');
+      }
+    }
+
+    const { data: assistants, error } = await query;
 
     if (error) return res.status(400).json({ message: error.message });
 
@@ -346,7 +390,25 @@ exports.rejectAssistant = async (req, res) => {
 // --------------------------------------------------
 exports.getAllBookings = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { booking_status, payment_status, station_code, limit = 100, page = 1 } = req.query;
+
+    const ALLOWED_BOOKING_STATUSES = ['all', 'pending', 'assigned', 'accepted', 'in_service', 'completed', 'cancelled'];
+    if (booking_status && booking_status !== 'all' && !ALLOWED_BOOKING_STATUSES.includes(booking_status.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid booking_status filter "${booking_status}". Allowed values: ${ALLOWED_BOOKING_STATUSES.join(', ')}.`
+      });
+    }
+
+    const ALLOWED_PAYMENT_STATUSES = ['all', 'pending', 'paid', 'failed', 'refunded', 'cancelled'];
+    if (payment_status && payment_status !== 'all' && !ALLOWED_PAYMENT_STATUSES.includes(payment_status.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid payment_status filter "${payment_status}". Allowed values: ${ALLOWED_PAYMENT_STATUSES.join(', ')}.`
+      });
+    }
+
+    let query = supabase
       .from('bookings')
       .select(`
         *,
@@ -354,6 +416,29 @@ exports.getAllBookings = async (req, res) => {
         assistant:assistant_id(id, name, email, phone, station_code, is_online)
       `)
       .order('created_at', { ascending: false });
+
+    if (booking_status && booking_status.toLowerCase() !== 'all') {
+      query = query.eq('booking_status', booking_status.toLowerCase());
+    }
+
+    if (payment_status && payment_status.toLowerCase() !== 'all') {
+      query = query.eq('payment_status', payment_status.toLowerCase());
+    }
+
+    if (station_code && typeof station_code === 'string') {
+      const cleanStation = station_code.trim().toUpperCase();
+      if (cleanStation.length > 10) {
+        return res.status(400).json({ success: false, message: 'Invalid station_code. Maximum 10 characters.' });
+      }
+      query = query.eq('station_code', cleanStation);
+    }
+
+    const parsedLimit = Math.max(1, Math.min(200, parseInt(limit, 10) || 100));
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (parsedPage - 1) * parsedLimit;
+    query = query.range(offset, offset + parsedLimit - 1);
+
+    const { data, error } = await query;
 
     if (error) return res.status(400).json({ message: error.message });
 
@@ -512,15 +597,29 @@ exports.updateBooking = async (req, res) => {
 // --------------------------------------------------
 exports.getUsers = async (req, res) => {
   try {
-    const { role } = req.query;
+    const { role, limit = 100, page = 1 } = req.query;
+
+    const ALLOWED_ROLES = ['all', 'passenger', 'assistant', 'admin'];
+    if (role && role !== 'all' && !ALLOWED_ROLES.includes(role.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid role filter "${role}". Allowed values: ${ALLOWED_ROLES.join(', ')}.`
+      });
+    }
+
     let query = supabase
       .from('users')
       .select('id, name, email, phone, role, station_code, is_approved, is_online, created_at')
       .order('created_at', { ascending: false });
 
-    if (role) {
-      query = query.eq('role', role);
+    if (role && role.toLowerCase() !== 'all') {
+      query = query.eq('role', role.toLowerCase());
     }
+
+    const parsedLimit = Math.max(1, Math.min(200, parseInt(limit, 10) || 100));
+    const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (parsedPage - 1) * parsedLimit;
+    query = query.range(offset, offset + parsedLimit - 1);
 
     const { data: users, error } = await query;
     if (error) return res.status(400).json({ message: error.message });
@@ -1131,19 +1230,49 @@ exports.getAllActiveSessions = async (req, res) => {
 
     if (error) throw error;
 
-    // Mask IPs and sanitize
-    const safe = (sessions || []).map(s => ({
-      id: s.id,
-      userId: s.user_id,
-      deviceInfo: s.device_info || 'Unknown Device',
-      userAgent: s.user_agent,
-      ipAddress: s.ip_address ? s.ip_address.replace(/:\d+$/, '') : 'Hidden',
-      createdAt: s.created_at,
-      lastActivityAt: s.last_activity_at,
-      expiresAt: s.expires_at,
-      isActive: true,
-      isCurrent: s.id === req.sessionId
-    }));
+    // Fetch user profiles for all session user IDs to provide real names and roles
+    const userIds = [...new Set((sessions || []).map(s => s.user_id).filter(Boolean))];
+    const userMap = {};
+    if (userIds.length > 0) {
+      const { data: usersData } = await client
+        .from('users')
+        .select('id, name, email, role')
+        .in('id', userIds);
+      (usersData || []).forEach(u => {
+        userMap[u.id] = u;
+      });
+    }
+
+    // Mask IPs and attach real user profile
+    const safe = (sessions || []).map(s => {
+      const u = userMap[s.user_id];
+      return {
+        id: s.id,
+        userId: s.user_id,
+        user_id: s.user_id,
+        user: {
+          id: s.user_id,
+          name: u?.name || (u?.email ? (u.email.split('@')[0].charAt(0).toUpperCase() + u.email.split('@')[0].slice(1)) : 'Platform User'),
+          email: u?.email || 'user@onecoolie.in',
+          role: u?.role || 'passenger'
+        },
+        deviceInfo: s.device_info || 'Desktop / Chrome',
+        device_info: s.device_info || 'Desktop / Chrome',
+        userAgent: s.user_agent,
+        user_agent: s.user_agent,
+        ipAddress: s.ip_address ? s.ip_address.replace(/:\d+$/, '') : 'Hidden',
+        ip_address: s.ip_address ? s.ip_address.replace(/:\d+$/, '') : 'Hidden',
+        createdAt: s.created_at,
+        created_at: s.created_at,
+        lastActivityAt: s.last_activity_at,
+        last_activity_at: s.last_activity_at,
+        expiresAt: s.expires_at,
+        expires_at: s.expires_at,
+        isActive: true,
+        status: 'active',
+        isCurrent: s.id === req.sessionId
+      };
+    });
 
     return res.json({ sessions: safe });
   } catch (err) {
@@ -1228,5 +1357,85 @@ exports.revokeAllUserSessionsAdmin = async (req, res) => {
   } catch (err) {
     console.error('ADMIN FORCED USER SESSIONS REVOKE ERROR:', err);
     return res.status(500).json({ message: 'Failed to revoke user sessions.' });
+  }
+};
+
+/**
+ * POST /admin/bookings/bulk
+ * Perform a bulk action on multiple bookings.
+ * Body: { action: 'cancel'|'delete'|'mark_paid'|'flag_suspicious', ids: string[], reason?: string }
+ */
+exports.bulkActionBookings = async (req, res) => {
+  try {
+    const { action, ids, reason = 'Bulk admin action' } = req.body || {};
+
+    if (!action || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'action and a non-empty ids array are required.' });
+    }
+
+    const ALLOWED_ACTIONS = ['cancel', 'delete', 'mark_paid', 'flag_suspicious'];
+    if (!ALLOWED_ACTIONS.includes(action)) {
+      return res.status(400).json({ message: `action must be one of: ${ALLOWED_ACTIONS.join(', ')}` });
+    }
+
+    const MAX_BULK = 100;
+    if (ids.length > MAX_BULK) {
+      return res.status(400).json({ message: `Cannot process more than ${MAX_BULK} bookings in a single bulk action.` });
+    }
+
+    const nowIso = new Date().toISOString();
+    let updatePayload = {};
+    let successCount = 0;
+    let errors = [];
+
+    if (action === 'cancel') {
+      updatePayload = { booking_status: 'cancelled', cancelled_at: nowIso, cancellation_reason: reason };
+    } else if (action === 'delete') {
+      updatePayload = { booking_status: 'deleted', cancelled_at: nowIso, cancellation_reason: reason, deleted_at: nowIso };
+    } else if (action === 'mark_paid') {
+      updatePayload = { payment_status: 'paid', payment_confirmed_at: nowIso };
+    } else if (action === 'flag_suspicious') {
+      updatePayload = { is_flagged: true, flag_reason: reason, flagged_at: nowIso };
+    }
+
+    // Process in batches of 20 to avoid query size limits
+    const BATCH = 20;
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batchIds = ids.slice(i, i + BATCH);
+      const { data, error } = await supabase
+        .from('bookings')
+        .update(updatePayload)
+        .in('id', batchIds)
+        .select('id');
+
+      if (error) {
+        errors.push({ batch: i / BATCH + 1, error: error.message });
+      } else {
+        successCount += (data || []).length;
+      }
+    }
+
+    try {
+      await logAdminAction({
+        req,
+        action: `admin_bulk_${action}`,
+        resource_type: 'booking',
+        resource_id: ids[0],
+        result: errors.length === 0 ? 'success' : 'partial',
+        metadata: { ids, action, successCount, errors, reason }
+      });
+    } catch (aErr) {}
+
+    return res.json({
+      success: true,
+      action,
+      successCount,
+      failedCount: ids.length - successCount,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `${action} applied to ${successCount} of ${ids.length} booking(s).`
+    });
+  } catch (err) {
+    console.error('BULK BOOKING ACTION ERROR:', err);
+    return res.status(500).json({ message: 'Failed to perform bulk action.' });
   }
 };

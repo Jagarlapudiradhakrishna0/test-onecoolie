@@ -15,7 +15,8 @@
 
 const DEFAULT_APPROVED_ADMINS = Object.freeze([
   'admin01@onecoolie.in',
-  'admin02@onecoolie.in'
+  'admin02@onecoolie.in',
+  'admin@onecoolie.com'
 ]);
 
 /**

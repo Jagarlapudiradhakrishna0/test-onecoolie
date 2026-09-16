@@ -373,12 +373,13 @@ exports.getTicketById = async (req, res) => {
 exports.addMessageToTicket = async (req, res) => {
   try {
     const { id } = req.params;
-    const { text, sender, name } = req.body;
+    const { text, sender, name, id: clientMsgId, clientMessageId } = req.body;
 
-    if (!text || !text.trim()) {
+    if (!text || !String(text).trim()) {
       return res.status(400).json({ error: 'Message text is required.' });
     }
 
+    const cleanText = String(text).trim().slice(0, 2000);
     const tickets = loadTickets();
     const cleanId = String(id).trim().toLowerCase().replace('#', '');
     const index = tickets.findIndex((t) => String(t.id).toLowerCase().replace('#', '') === cleanId);
@@ -387,20 +388,42 @@ exports.addMessageToTicket = async (req, res) => {
       return res.status(404).json({ error: 'Support ticket not found.' });
     }
 
-    const defaultSender = req.user?.role === 'admin' ? 'support' : (req.user?.role === 'assistant' ? 'assistant' : 'passenger');
-    const defaultName = req.user?.name || (defaultSender === 'support' ? 'Support Desk' : 'Passenger');
+    // Determine authoritative sender from authenticated user
+    const authorSender = req.user?.role === 'admin'
+      ? 'support'
+      : (req.user?.role === 'assistant' ? 'assistant' : (sender || 'passenger'));
+    const authorName = req.user?.name || name || (authorSender === 'support' ? 'Support Desk' : 'Passenger');
 
-    const newMsg = {
-      id: `msg-${Date.now()}`,
-      sender: sender || defaultSender,
-      name: name || defaultName,
-      text: text.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
+    const effectiveId = clientMessageId || clientMsgId || `msg-${Date.now()}`;
 
     if (!Array.isArray(tickets[index].conversation)) {
       tickets[index].conversation = [];
     }
+
+    // Strict idempotency: prevent duplicate message insertion
+    const alreadyExists = tickets[index].conversation.some((m) => {
+      if (m.id && (m.id === effectiveId || m.clientMessageId === effectiveId)) {
+        return true;
+      }
+      if (m.sender === authorSender && m.text === cleanText) {
+        const mTime = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+        return mTime > 0 && Math.abs(Date.now() - mTime) < 5000;
+      }
+      return false;
+    });
+
+    if (alreadyExists) {
+      return res.json(tickets[index]);
+    }
+
+    const newMsg = {
+      id: effectiveId,
+      clientMessageId: effectiveId,
+      sender: authorSender,
+      name: authorName,
+      text: cleanText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
 
     tickets[index].conversation.push(newMsg);
     tickets[index].updated_at = new Date().toISOString();

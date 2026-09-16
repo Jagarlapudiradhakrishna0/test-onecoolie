@@ -334,4 +334,67 @@ router.post(
   }
 );
 
+/*
+|--------------------------------------------------------------------------
+| Admin Incident Deletion & Test Data Purge
+|--------------------------------------------------------------------------
+*/
+router.delete(
+  '/admin/incidents/:incidentId',
+  protect,
+  requirePermission('security:respond'),
+  async (req, res) => {
+    try {
+      const { incidentId } = req.params;
+      await defaultSupabase.from('security_incident_events').delete().eq('incident_id', incidentId);
+      await defaultSupabase.from('security_response_actions').delete().eq('incident_id', incidentId);
+      const { error } = await defaultSupabase.from('security_incidents').delete().eq('id', incidentId);
+      if (error) throw error;
+      return res.status(200).json({ success: true, message: 'Incident record permanently deleted.' });
+    } catch (err) {
+      logger.error('[SECURITY_API] Delete failed:', err);
+      return res.status(400).json({ success: false, message: err.message });
+    }
+  }
+);
+
+router.post(
+  '/admin/incidents/purge-test-data',
+  protect,
+  requirePermission('security:respond'),
+  async (req, res) => {
+    try {
+      await defaultSupabase.from('security_incident_events').delete().neq('incident_id', '00000000-0000-0000-0000-000000000000');
+      await defaultSupabase.from('security_response_actions').delete().neq('incident_id', '00000000-0000-0000-0000-000000000000');
+      const { error: incErr } = await defaultSupabase.from('security_incidents').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (incErr) throw incErr;
+      await defaultSupabase.from('security_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      return res.status(200).json({ success: true, message: 'Test security telemetry purged successfully.' });
+    } catch (err) {
+      logger.error('[SECURITY_API] Purge test data failed:', err);
+      return res.status(400).json({ success: false, message: err.message });
+    }
+  }
+);
+
+// Alias: /ignore → dismissIncident (frontend calls /ignore, service uses dismiss internally)
+router.post(
+  '/admin/incidents/:incidentId/ignore',
+  protect,
+  requirePermission('security:respond'),
+  async (req, res) => {
+    try {
+      const incident = await dismissIncident(req.params.incidentId, req.user);
+      return res.status(200).json({
+        success: true,
+        message: 'Incident ignored.',
+        incident
+      });
+    } catch (err) {
+      logger.error('[SECURITY_API] Ignore failed:', err);
+      return res.status(400).json({ success: false, message: err.message });
+    }
+  }
+);
+
 module.exports = router;

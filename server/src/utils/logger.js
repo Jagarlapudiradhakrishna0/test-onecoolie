@@ -121,6 +121,11 @@ function log(level, message, meta = {}) {
 }
 
 const logger = {
+  debug: (msg, meta) => {
+    if (process.env.NODE_ENV !== 'production') {
+      log('debug', msg, meta);
+    }
+  },
   info: (msg, meta) => log('info', msg, meta),
   warn: (msg, meta) => log('warn', msg, meta),
   error: (msg, meta) => log('error', msg, meta),

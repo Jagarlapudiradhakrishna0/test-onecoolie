@@ -73,25 +73,11 @@ export default function BookingLive() {
         const res = await axios.get(`/bookings/${id}`, { timeout: 10000 });
         data = res.data;
       } catch (primaryErr) {
-        // Fallback: If running locally and remote Render is cold-starting or unreachable
-        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-          try {
-            const token = localStorage.getItem('token');
-            const localRes = await fetch(`http://localhost:5000/api/bookings/${id}`, {
-              headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {})
-              }
-            });
-            if (localRes.ok) {
-              data = await localRes.json();
-            } else {
-              throw primaryErr;
-            }
-          } catch {
-            throw primaryErr;
-          }
-        } else {
+        // If primary request failed, try retry once via axios
+        try {
+          const retryRes = await axios.get(`/bookings/${id}`, { timeout: 15000 });
+          data = retryRes.data;
+        } catch {
           throw primaryErr;
         }
       }

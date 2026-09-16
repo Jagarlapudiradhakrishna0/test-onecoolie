@@ -53,6 +53,14 @@ const protect = async (req, res, next) => {
         algorithms: ['HS256']
       });
 
+      // Enforce issuer & audience validation when present, allowing legacy token transition
+      if (decoded.iss && decoded.iss !== TOKEN_ISSUER) {
+        return res.status(401).json({ message: 'Invalid token issuer' });
+      }
+      if (decoded.aud && ![TOKEN_AUDIENCE, 'onecoolie-admin'].includes(decoded.aud)) {
+        return res.status(401).json({ message: 'Invalid token audience' });
+      }
+
       // 2. Reject intermediate MFA challenge tokens from accessing standard API endpoints
       if (decoded && (decoded.scope === 'mfa_pending' || decoded.scope === 'mfa_setup_required')) {
         return res.status(401).json({ message: 'Authentication error: MFA verification required' });

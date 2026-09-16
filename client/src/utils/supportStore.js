@@ -445,7 +445,7 @@ export function createTicket({
  */
 export function addTicketMessage(ticketId, message) {
   const tickets = getTickets();
-  const index = tickets.findIndex((t) => t.id === ticketId);
+  const index = tickets.findIndex((t) => String(t.id).toLowerCase().replace('#', '') === String(ticketId).toLowerCase().replace('#', ''));
   if (index === -1) return null;
 
   const ticket = tickets[index];
@@ -453,11 +453,24 @@ export function addTicketMessage(ticketId, message) {
     id: message.id || `msg-${Date.now()}`, // preserve original ID to prevent blink on sync
     sender: message.sender || 'passenger',
     name: message.name || (message.sender === 'support' ? 'Support Executive' : 'Passenger'),
-    text: message.text,
+    text: String(message.text || '').trim(),
     timestamp: message.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 
-  ticket.conversation = [...(ticket.conversation || []), newMsg];
+  const existingConv = Array.isArray(ticket.conversation) ? ticket.conversation : [];
+  const alreadyExists = existingConv.some((m) => {
+    if (m.id && (m.id === newMsg.id || m.clientMessageId === newMsg.id)) return true;
+    if (m.sender === newMsg.sender && String(m.text).trim() === newMsg.text) {
+      return true;
+    }
+    return false;
+  });
+
+  if (alreadyExists) {
+    return newMsg;
+  }
+
+  ticket.conversation = [...existingConv, newMsg];
   ticket.updatedAt = new Date().toISOString();
 
   // If support executive replies and status was open or bot_escalated, move to in_progress

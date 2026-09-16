@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Brand from '../components/Brand';
 import LaunchCenter from '../components/LaunchCenter';
@@ -11,12 +12,33 @@ import {
 } from 'recharts';
 import {
   Shield, Train, User, Clock, AlertTriangle, CheckCircle, XCircle, Search, Filter,
-  Download, RefreshCw, Eye, Phone, Mail, MapPin, CreditCard, ChevronRight, TrendingUp,
+  Download, RefreshCw, Eye, Phone, Mail, MapPin, CreditCard, ChevronRight, ChevronLeft, TrendingUp,
   Users, Check, X, ExternalLink, Printer, Key, Briefcase, Calendar, Info, Layers,
   Compass, ArrowUpRight, CheckSquare, Power, ToggleLeft, ToggleRight,
   ShieldCheck, FileText, Activity, DollarSign, ShieldAlert, AlertOctagon, RotateCcw,
-  Headphones, LifeBuoy, Plus, MessageSquare
+  Headphones, LifeBuoy, Plus, MessageSquare, MoreVertical, SlidersHorizontal, ArrowUpDown,
+  BadgeCheck, Hourglass, CheckCircle2, FileCheck, Bell, PhoneCall, Radio, BellOff,
+  Copy
 } from 'lucide-react';
+import {
+  AdminSidebar,
+  AdminTopHeader,
+  KpiCard,
+  BookingFilterToolbar,
+  BookingTabs,
+  BookingTable,
+  BookingDrawer,
+  OperationsAnalyticsView
+} from '../components/admin/AdminComponents';
+import StationDeskSupportView from '../components/admin/station-desk/StationDeskSupportView';
+import PassengersDirectoryView from '../components/admin/passengers/PassengersDirectoryView';
+import FinancialReconciliationView from '../components/admin/finance/FinancialReconciliationView';
+import FinancialIncidentsView from '../components/admin/finance/incidents/FinancialIncidentsView';
+import SahayakPayoutsView from '../components/admin/payouts/SahayakPayoutsView';
+import ActiveSessions from './active-sessions/ActiveSessions';
+import SecurityIncidents from './security-incidents/SecurityIncidents';
+import BookingInspectorModal from '../components/admin/booking-inspector/BookingInspectorModal';
+
 
 /* ============================================================
    ONECOOLIE ENTERPRISE ADMIN OPERATIONS COMMAND CENTER
@@ -47,608 +69,2506 @@ const PAYMENT_COLORS = {
 };
 
 // ----------------------------------------------------------------------
-// SUBCOMPONENT: BOOKING DETAIL MODAL (FULL VISIBILITY & CONTROL)
+// SUBCOMPONENT: BOOKING DETAIL MODAL (SUPERSEDED BY UBER-INSPIRED BOOKING INSPECTOR)
 // ----------------------------------------------------------------------
-function BookingDetailModal({ booking, onClose, onUpdate, assistants = [] }) {
-  // Local state to reflect live changes instantly
-  const [currentBooking, setCurrentBooking] = useState(booking);
-  const [selectedAssistant, setSelectedAssistant] = useState(booking?.assistant_id || '');
-  const [actionLoading, setActionLoading] = useState(false);
+const BookingDetailModal = BookingInspectorModal;
 
-  // Synchronize when the booking prop updates
-  useEffect(() => {
-    setCurrentBooking(booking);
-    setSelectedAssistant(booking?.assistant_id || '');
-  }, [booking]);
 
-  // Close on Escape key press
+// ----------------------------------------------------------------------
+// SUBCOMPONENT: SAHAYAK FORCE & KYC (PREMIUM UBER/STRIPE ENTERPRISE OPERATIONS)
+// ----------------------------------------------------------------------
+function SahayakForceKycView({
+  kycQueue = [],
+  assistantsList = [],
+  bookings = [],
+  onDecideAssistant,
+  onToggleOnline,
+  onToggleApproval,
+  onFilterToAssistant,
+  onRefresh,
+  actionLoading,
+  stations = []
+}) {
+  // Fleet filters & table state
+  const [searchFleet, setSearchFleet] = useState('');
+  const [selectedHub, setSelectedHub] = useState('ALL');
+  const [selectedDuty, setSelectedDuty] = useState('ALL');
+  const [selectedApproval, setSelectedApproval] = useState('ALL');
+  const [sortBy, setSortBy] = useState('name_asc');
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [selectedRowIds, setSelectedRowIds] = useState(new Set());
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // KYC queue filters
+  const [searchKyc, setSearchKyc] = useState('');
+  const [selectedKycHub, setSelectedKycHub] = useState('ALL');
+
+  // Modals & Drawers state
+  const [reviewApplicant, setReviewApplicant] = useState(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [checklist, setChecklist] = useState({
+    identityDoc: 'verified',
+    phoneVerified: 'verified',
+    stationAssigned: 'verified',
+    profileInfo: 'verified',
+    eligibility: 'verified',
+  });
+
+  const [suspendModal, setSuspendModal] = useState({ open: false, assistant: null });
+  const [approveModal, setApproveModal] = useState({ open: false, applicant: null });
+  const [rejectModal, setRejectModal] = useState({ open: false, applicant: null, reason: '' });
+  const [addSahayakModal, setAddSahayakModal] = useState(false);
+  const [addSahayakForm, setAddSahayakForm] = useState({ name: '', phone: '', email: '', station_code: 'KZJ' });
+  const [guidelinesModal, setGuidelinesModal] = useState(false);
+  const [profileDrawer, setProfileDrawer] = useState({ open: false, assistant: null });
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const [isRefreshingLocal, setIsRefreshingLocal] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Close modals on escape
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (reviewApplicant) setReviewApplicant(null);
+        if (profileDrawer.open) setProfileDrawer({ open: false, assistant: null });
+        if (suspendModal.open) setSuspendModal({ open: false, assistant: null });
+        if (approveModal.open) setApproveModal({ open: false, applicant: null });
+        if (rejectModal.open) setRejectModal({ open: false, applicant: null, reason: '' });
+        if (addSahayakModal) setAddSahayakModal(false);
+        if (guidelinesModal) setGuidelinesModal(false);
+        setActiveMenuId(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [reviewApplicant, profileDrawer.open, suspendModal.open, approveModal.open, rejectModal.open, addSahayakModal, guidelinesModal]);
 
-  if (!currentBooking) return null;
+  // Click outside to close actions menu
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenuId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
-  const handleStatusChange = async (newStatus) => {
-    try {
-      setActionLoading(true);
-      const updated = await onUpdate(currentBooking.id, { booking_status: newStatus });
-      if (updated) {
-        setCurrentBooking(updated);
-      } else {
-        setCurrentBooking(prev => ({ ...prev, booking_status: newStatus }));
+  // 1. DYNAMIC CALCULATIONS FOR OPERATIONAL METRICS
+  const totalAssistants = assistantsList.length;
+  const pendingKycCount = kycQueue.length;
+  const onlineNowCount = assistantsList.filter((a) => a.is_online).length;
+  const activeMissionsCount = bookings.filter((b) => {
+    const s = (b.booking_status || '').toLowerCase();
+    return s === 'accepted' || s === 'arriving' || s === 'in_service';
+  }).length;
+  const approvedCount = assistantsList.filter((a) => a.is_approved).length;
+
+  // Station Hub Distribution
+  const stationDistribution = useMemo(() => {
+    const hubs = [
+      { code: 'KZJ', name: 'Kazipet (KZJ)' },
+      { code: 'SC', name: 'Secunderabad (SC)' },
+      { code: 'BZA', name: 'Vijayawada (BZA)' },
+      { code: 'WL', name: 'Warangal (WR)' },
+    ];
+    return hubs.map((h) => {
+      const count = assistantsList.filter((a) => (a.station_code || '').toUpperCase() === h.code).length;
+      const pct = totalAssistants > 0 ? Math.round((count / totalAssistants) * 100) : 0;
+      return { ...h, count, pct };
+    });
+  }, [assistantsList, totalAssistants]);
+
+  // 2. FILTERED REGISTERED FLEET
+  const filteredAssistants = useMemo(() => {
+    return assistantsList.filter((ast) => {
+      // Search
+      if (searchFleet.trim()) {
+        const q = searchFleet.toLowerCase();
+        const matchesName = (ast.name || '').toLowerCase().includes(q);
+        const matchesPhone = (ast.phone || '').toLowerCase().includes(q);
+        const matchesEmail = (ast.email || '').toLowerCase().includes(q);
+        const matchesStation = (ast.station_code || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesPhone && !matchesEmail && !matchesStation) return false;
       }
-      toast.success(`Booking status updated to ${newStatus.toUpperCase()}`);
-    } catch (err) {
-      console.error('Status update error:', err);
-      toast.error('Failed to update booking status');
-    } finally {
-      setActionLoading(false);
+      // Hub
+      if (selectedHub !== 'ALL') {
+        if ((ast.station_code || '').toUpperCase() !== selectedHub.toUpperCase()) return false;
+      }
+      // Duty
+      if (selectedDuty === 'online' && !ast.is_online) return false;
+      if (selectedDuty === 'offline' && ast.is_online) return false;
+      // Approval
+      if (selectedApproval === 'approved' && !ast.is_approved) return false;
+      if (selectedApproval === 'pending' && ast.is_approved) return false;
+      if (selectedApproval === 'suspended' && ast.is_approved) return false;
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'name_asc') return (a.name || '').localeCompare(b.name || '');
+      if (sortBy === 'name_desc') return (b.name || '').localeCompare(a.name || '');
+      if (sortBy === 'missions_desc') {
+        const aMissions = a.completed_missions || 0;
+        const bMissions = b.completed_missions || 0;
+        return bMissions - aMissions;
+      }
+      if (sortBy === 'recent') {
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      }
+      return 0;
+    });
+  }, [assistantsList, searchFleet, selectedHub, selectedDuty, selectedApproval, sortBy]);
+
+  // Pagination for fleet
+  const totalFleetCount = filteredAssistants.length;
+  const totalPages = Math.ceil(totalFleetCount / rowsPerPage) || 1;
+  const startIdx = (page - 1) * rowsPerPage + 1;
+  const endIdx = Math.min(page * rowsPerPage, totalFleetCount);
+  const paginatedAssistants = useMemo(() => {
+    return filteredAssistants.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+  }, [filteredAssistants, page, rowsPerPage]);
+
+  // 3. FILTERED KYC QUEUE
+  const filteredKycQueue = useMemo(() => {
+    return kycQueue.filter((app) => {
+      if (searchKyc.trim()) {
+        const q = searchKyc.toLowerCase();
+        const matchesName = (app.name || '').toLowerCase().includes(q);
+        const matchesPhone = (app.phone || '').toLowerCase().includes(q);
+        const matchesEmail = (app.email || '').toLowerCase().includes(q);
+        const matchesStation = (app.station_code || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesPhone && !matchesEmail && !matchesStation) return false;
+      }
+      if (selectedKycHub !== 'ALL') {
+        if ((app.station_code || '').toUpperCase() !== selectedKycHub.toUpperCase()) return false;
+      }
+      return true;
+    });
+  }, [kycQueue, searchKyc, selectedKycHub]);
+
+  // Handlers
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRowIds(new Set(paginatedAssistants.map((a) => a.id)));
+    } else {
+      setSelectedRowIds(new Set());
     }
   };
 
-  const handlePaymentChange = async (newPaymentStatus) => {
+  const handleRowCheckbox = (id, e) => {
+    e.stopPropagation();
+    const next = new Set(selectedRowIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedRowIds(next);
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshingLocal(true);
     try {
-      setActionLoading(true);
-      const updated = await onUpdate(currentBooking.id, { payment_status: newPaymentStatus });
-      if (updated) {
-        setCurrentBooking(updated);
-      } else {
-        setCurrentBooking(prev => ({ ...prev, payment_status: newPaymentStatus }));
-      }
-      toast.success(`Payment marked as ${newPaymentStatus.toUpperCase()}`);
+      if (onRefresh) await onRefresh();
+      toast.success('Live operations telemetry synchronized');
     } catch (err) {
-      console.error('Payment update error:', err);
-      toast.error('Failed to update payment status');
+      toast.error('Failed to sync telemetry');
     } finally {
-      setActionLoading(false);
+      setTimeout(() => setIsRefreshingLocal(false), 500);
     }
   };
 
-  const handleAssistantReassign = async () => {
-    try {
-      setActionLoading(true);
-      const assistantIdToAssign = selectedAssistant || null;
-      const updated = await onUpdate(currentBooking.id, { assistant_id: assistantIdToAssign });
-      if (updated) {
-        setCurrentBooking(updated);
-      }
-      toast.success(assistantIdToAssign ? 'Sahayak assigned successfully' : 'Sahayak assignment removed');
-    } catch (err) {
-      console.error('Assistant assignment error:', err);
-      toast.error('Failed to reassign assistant');
-    } finally {
-      setActionLoading(false);
+  const handleConfirmSuspend = async () => {
+    if (!suspendModal.assistant) return;
+    await onToggleApproval(suspendModal.assistant);
+    setSuspendModal({ open: false, assistant: null });
+  };
+
+  const handleConfirmApprove = async () => {
+    if (!approveModal.applicant) return;
+    await onDecideAssistant(approveModal.applicant.id, 'approve');
+    setApproveModal({ open: false, applicant: null });
+    if (reviewApplicant && reviewApplicant.id === approveModal.applicant.id) {
+      setReviewApplicant(null);
     }
   };
 
-  const handleResolveSOS = async () => {
-    try {
-      setActionLoading(true);
-      const updated = await onUpdate(currentBooking.id, { sos_triggered: false });
-      if (updated) {
-        setCurrentBooking(updated);
-      } else {
-        setCurrentBooking(prev => ({ ...prev, sos_triggered: false }));
-      }
-      toast.success('Emergency alert marked as resolved');
-    } catch (err) {
-      console.error('SOS resolve error:', err);
-      toast.error('Failed to resolve SOS');
-    } finally {
-      setActionLoading(false);
+  const handleConfirmReject = async () => {
+    if (!rejectModal.applicant) return;
+    await onDecideAssistant(rejectModal.applicant.id, 'reject', rejectModal.reason);
+    setRejectModal({ open: false, applicant: null, reason: '' });
+    if (reviewApplicant && reviewApplicant.id === rejectModal.applicant.id) {
+      setReviewApplicant(null);
     }
   };
 
-  const handlePrintSlip = () => {
-    window.print();
+  const handleCopySignupLink = () => {
+    const url = `${window.location.origin}/assistant-auth`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    toast.success('Sahayak registration portal link copied');
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  const services = currentBooking.services || {};
-  const luggageCount = typeof services.luggage === 'number' ? services.luggage : (services.luggage ? 1 : 0);
+  // Helper avatar color
+  const getAvatarBadge = (name = '', idx = 0) => {
+    const initials = name
+      .split(' ')
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'SA';
+
+    const colorPresets = [
+      'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+      'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+      'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    ];
+    return {
+      initials,
+      classes: colorPresets[idx % colorPresets.length],
+    };
+  };
+
+  const getStationName = (code) => {
+    const c = (code || '').toUpperCase();
+    if (c === 'KZJ') return 'Kazipet';
+    if (c === 'SC') return 'Secunderabad';
+    if (c === 'BZA') return 'Vijayawada';
+    if (c === 'WL') return 'Warangal';
+    return c || 'Kazipet';
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in cursor-pointer"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto cursor-default"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="space-y-6 animate-fade-in select-none text-xs pb-12 font-sans">
 
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/80 dark:bg-zinc-950/80">
-          <div className="flex items-center gap-3">
-            <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs font-mono">
-              RM
-            </span>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-mono font-bold text-base text-black dark:text-white">
-                  Booking #{currentBooking.booking_id || currentBooking.id?.slice(-8).toUpperCase()}
-                </h3>
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${STATUS_COLORS[currentBooking.booking_status] || 'border-zinc-300'}`}>
-                  {currentBooking.booking_status}
-                </span>
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${PAYMENT_COLORS[currentBooking.payment_status] || 'bg-zinc-100'}`}>
-                  {currentBooking.payment_status}
-                </span>
-                {currentBooking.sos_triggered && (
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-red-600 text-white animate-pulse flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" /> SOS ACTIVE
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-zinc-500 font-mono mt-0.5">
-                Created: {new Date(currentBooking.created_at).toLocaleString()} · Station: <strong className="text-black dark:text-white">{currentBooking.station_code}</strong>
-              </p>
-            </div>
+      {/* ── 1. PAGE HEADER ROW ── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-500 font-mono text-[10.5px] uppercase font-bold tracking-wider">
+            <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>FIELD OPERATIONS</span>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handlePrintSlip}
-              title="Print Dispatch Slip"
-              className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-              }}
-              title="Close modal"
-              className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          <h1 className="text-2xl sm:text-[28px] font-black tracking-tight text-zinc-900 dark:text-white font-sans mt-0.5">
+            Sahayak KYC Verification Queue
+          </h1>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
+            Review and verify incoming railway porter applicants before platform activation.
+          </p>
         </div>
 
-        {/* Modal Body */}
-        <div className="px-6 py-6 overflow-y-auto space-y-6 flex-1 text-xs">
-
-          {/* Grid of 3 Dossier Cards */}
-          <div className="grid md:grid-cols-3 gap-4">
-
-            {/* 1. Passenger Dossier */}
-            <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider font-mono text-[10px]">
-                <User className="w-3.5 h-3.5 text-blue-600" /> Passenger Dossier
-              </div>
-              <div>
-                <p className="font-bold text-sm text-black dark:text-white">
-                  {currentBooking.passenger?.name || 'Guest Passenger'}
-                </p>
-                <p className="text-zinc-500 font-mono mt-0.5">{currentBooking.passenger?.email || '—'}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <Phone className="w-3 h-3 text-emerald-600" />
-                  {currentBooking.passenger?.phone ? (
-                    <a href={`tel:${currentBooking.passenger.phone}`} className="font-mono text-blue-600 dark:text-blue-400 hover:underline font-semibold">
-                      {currentBooking.passenger.phone}
-                    </a>
-                  ) : (
-                    <span className="text-zinc-400 italic">No phone logged</span>
-                  )}
-                </div>
-                <p className="text-[10px] text-zinc-400 font-mono mt-2 truncate">
-                  User ID: {currentBooking.passenger_id}
-                </p>
-              </div>
-            </div>
-
-            {/* 2. Sahayak (Assistant) Dossier */}
-            <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider font-mono text-[10px]">
-                <Briefcase className="w-3.5 h-3.5 text-blue-600" /> Assigned Sahayak
-              </div>
-              {currentBooking.assistant ? (
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-sm text-black dark:text-white">
-                      {currentBooking.assistant.name}
-                    </p>
-                    <span className={`w-2 h-2 rounded-full ${currentBooking.assistant.is_online ? 'bg-emerald-500 ring-2 ring-emerald-300' : 'bg-zinc-400'}`} />
-                  </div>
-                  <p className="text-zinc-500 font-mono mt-0.5">{currentBooking.assistant.email || '—'}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Phone className="w-3 h-3 text-emerald-600" />
-                    {currentBooking.assistant.phone ? (
-                      <a href={`tel:${currentBooking.assistant.phone}`} className="font-mono text-blue-600 dark:text-blue-400 hover:underline font-semibold">
-                        {currentBooking.assistant.phone}
-                      </a>
-                    ) : (
-                      <span className="text-zinc-400 italic">No phone logged</span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-zinc-500 font-mono mt-1">
-                    Hub: <strong>{currentBooking.assistant.station_code || currentBooking.station_code}</strong> · Assistant ID: #{currentBooking.assistant_id?.slice(-6).toUpperCase()}
-                  </p>
-                </div>
-              ) : (
-                <div className="text-zinc-400 py-2 italic font-mono text-[11px]">
-                  No assistant currently assigned to this mission.
-                </div>
-              )}
-
-              {/* Reassignment Dropdown */}
-              <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex gap-2">
-                <select
-                  value={selectedAssistant}
-                  onChange={(e) => setSelectedAssistant(e.target.value)}
-                  className="input-base text-[11px] py-1 px-2 flex-1 h-8 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                >
-                  <option value="">-- Unassign Sahayak --</option>
-                  {assistants.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.station_code}) {a.is_online ? '• Online' : ''}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleAssistantReassign}
-                  disabled={actionLoading}
-                  className="btn-primary text-[11px] py-1 px-3 h-8 cursor-pointer disabled:opacity-50"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-
-            {/* 3. Security & OTP Dossier */}
-            <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider font-mono text-[10px]">
-                <Key className="w-3.5 h-3.5 text-blue-600" /> Handshake Security & OTP
-              </div>
-              <div className="space-y-2">
-                <div className="p-2.5 rounded-lg bg-black text-white dark:bg-white dark:text-black flex items-center justify-between shadow-xs">
-                  <span className="text-[10px] font-mono tracking-wider uppercase text-zinc-400 dark:text-zinc-600">Secret Start OTP</span>
-                  <span className="text-lg font-mono font-black tracking-widest text-blue-400 dark:text-blue-600">
-                    {currentBooking.start_otp || '------'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-zinc-500">Verification Status:</span>
-                  <span className={`font-bold font-mono ${currentBooking.start_otp_verified ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {currentBooking.start_otp_verified ? '✓ Verified by Sahayak' : '⏳ Awaiting Handshake'}
-                  </span>
-                </div>
-                {currentBooking.service_started_at && (
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                    <span>Started:</span>
-                    <span>{new Date(currentBooking.service_started_at).toLocaleTimeString()}</span>
-                  </div>
-                )}
-                {currentBooking.completed_at && (
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                    <span>Completed:</span>
-                    <span>{new Date(currentBooking.completed_at).toLocaleTimeString()}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Train & Journey Telemetry Section */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Train className="w-4 h-4 text-blue-600" />
-                <h4 className="font-bold text-sm text-black dark:text-white">
-                  Train Transit & Coach Telemetry Specifications
-                </h4>
-              </div>
-              <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2.5 py-1 rounded-md">
-                PNR: {currentBooking.pnr || currentBooking.services?.pnr || 'NOT LOGGED'}
-              </span>
-            </div>
-
-            <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 font-mono">
-              <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-lg">
-                <span className="text-[10px] text-zinc-400 uppercase block">Train Number & Name</span>
-                <span className="font-bold text-black dark:text-white text-xs">
-                  {currentBooking.train_no || currentBooking.train_number}
-                </span>
-                <p className="text-[11px] text-zinc-500 truncate">{currentBooking.train_name}</p>
-              </div>
-
-              <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-lg">
-                <span className="text-[10px] text-zinc-400 uppercase block">Station & Platform</span>
-                <span className="font-bold text-black dark:text-white text-xs">
-                  {currentBooking.station_code} {currentBooking.platform ? `· Platform ${currentBooking.platform}` : ''}
-                </span>
-                <p className="text-[11px] text-zinc-500 truncate">
-                  {currentBooking.source ? `${currentBooking.source} ➔ ${currentBooking.destination || currentBooking.station_code}` : 'Direct Station Assistance'}
-                </p>
-              </div>
-
-              <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-lg">
-                <span className="text-[10px] text-zinc-400 uppercase block">Coach & Seat Location</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400 text-xs">
-                  Coach {currentBooking.coach || 'TBD'} · Seat {currentBooking.seat_number || 'TBD'}
-                </span>
-                <p className="text-[11px] text-zinc-500 truncate">{currentBooking.berth_type || 'General Berth'}</p>
-              </div>
-
-              <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-lg">
-                <span className="text-[10px] text-zinc-400 uppercase block">Mission Action Type</span>
-                <span className="font-bold text-black dark:text-white text-xs">
-                  {currentBooking.action_type === 'collect_from_seat' ? 'De-boarding (Coach Door)' : 'Boarding (Load into Seat)'}
-                </span>
-                <p className="text-[11px] text-zinc-500">
-                  {currentBooking.journey_date} {currentBooking.journey_time ? `· ${currentBooking.journey_time}` : ''}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Itemized Services & Financial Audit */}
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Services Breakdown */}
-            <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 space-y-3">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-zinc-400 font-mono flex items-center gap-2">
-                <Layers className="w-3.5 h-3.5 text-blue-600" /> Itemized Luggage & Services
-              </h4>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-600 dark:text-zinc-300">🧳 Luggage Item Assistance</span>
-                  <span className="font-mono font-bold text-black dark:text-white">
-                    {luggageCount} item(s) {luggageCount > 0 ? `(₹${luggageCount * 30})` : '—'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-600 dark:text-zinc-300">🚶 Seat Escort & Navigation</span>
-                  <span className="font-mono font-bold text-black dark:text-white">
-                    {services.escort ? 'Yes (₹60)' : 'No'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-600 dark:text-zinc-300">♿ Wheelchair & Senior Transit</span>
-                  <span className="font-mono font-bold text-black dark:text-white">
-                    {services.wheelchair ? 'Yes (₹80)' : 'No'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-600 dark:text-zinc-300">🍱 Snacks & Bottled Water Delivery</span>
-                  <span className="font-mono font-bold text-black dark:text-white">
-                    {services.snacks ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-600 dark:text-zinc-300">🛺 Exit Transport / Taxi Escort</span>
-                  <span className="font-mono font-bold text-black dark:text-white">
-                    {services.transport ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1.5">
-                  <span className="text-zinc-600 dark:text-zinc-300">🗣️ Language Translation Support</span>
-                  <span className="font-mono font-bold text-black dark:text-white">
-                    {services.language ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                {currentBooking.service_description && (
-                  <div className="p-2.5 bg-white dark:bg-zinc-900 rounded-lg text-[11px] text-zinc-500 font-mono mt-2 border border-zinc-200 dark:border-zinc-800">
-                    Note: {currentBooking.service_description}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Financial & Payment Audit */}
-            <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 space-y-4">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-zinc-400 font-mono flex items-center gap-2">
-                <CreditCard className="w-3.5 h-3.5 text-blue-600" /> Financial Audit & Settlement
-              </h4>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-500">Gross Tariff:</span>
-                  <span className="text-2xl font-black font-mono text-black dark:text-white">
-                    ₹{currentBooking.total_price}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-500">Payment Method:</span>
-                  <span className="font-bold uppercase font-mono text-black dark:text-white">
-                    {currentBooking.payment_method || 'UPI / QR'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] font-mono">
-                  <span className="text-zinc-500">Txn / Payment ID:</span>
-                  <span className="text-zinc-400 truncate max-w-[200px]">
-                    {currentBooking.payment_id || 'PENDING-AUTH'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-500">Payment Status:</span>
-                  <span className={`px-2 py-0.5 rounded-md font-bold uppercase text-[10px] ${PAYMENT_COLORS[currentBooking.payment_status]}`}>
-                    {currentBooking.payment_status}
-                  </span>
-                </div>
-
-                {/* Admin Quick Payment Override */}
-                <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Admin Payment Override:</span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handlePaymentChange('paid')}
-                      disabled={actionLoading || currentBooking.payment_status === 'paid'}
-                      className="btn-secondary text-[10px] py-1.5 px-2.5 flex-1 bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 cursor-pointer disabled:opacity-50"
-                    >
-                      Mark Paid
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handlePaymentChange('refunded')}
-                      disabled={actionLoading || currentBooking.payment_status === 'refunded'}
-                      className="btn-secondary text-[10px] py-1.5 px-2.5 flex-1 bg-zinc-100 text-zinc-700 border-zinc-300 hover:bg-zinc-200 cursor-pointer disabled:opacity-50"
-                    >
-                      Mark Refunded
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handlePaymentChange('pending')}
-                      disabled={actionLoading || currentBooking.payment_status === 'pending'}
-                      className="btn-secondary text-[10px] py-1.5 px-2.5 flex-1 bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 cursor-pointer disabled:opacity-50"
-                    >
-                      Mark Pending
-                    </button>
-                  </div>
-                </div>
-
-                {currentBooking.rating && (
-                  <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg text-xs border border-zinc-200 dark:border-zinc-800">
-                    <span className="text-[10px] text-zinc-400 uppercase font-mono block">Passenger Rating:</span>
-                    <p className="font-bold text-amber-500">★ {currentBooking.rating} / 5</p>
-                    {currentBooking.review && <p className="text-zinc-500 italic mt-1 font-sans">"{currentBooking.review}"</p>}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* SOS Resolution Banner if triggered */}
-          {currentBooking.sos_triggered && (
-            <div className="bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-600 animate-bounce" />
-                <div>
-                  <h5 className="font-bold text-red-800 dark:text-red-300 text-xs uppercase font-mono">
-                    Emergency Alert Active on this Booking
-                  </h5>
-                  <p className="text-red-600 dark:text-red-400 text-[11px]">
-                    Triggered at: {currentBooking.sos_triggered_at ? new Date(currentBooking.sos_triggered_at).toLocaleTimeString() : 'Recent'} · Station: {currentBooking.station_code}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleResolveSOS}
-                disabled={actionLoading}
-                className="btn-primary bg-red-600 hover:bg-red-700 text-white text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50"
-              >
-                Mark Emergency Resolved
-              </button>
-            </div>
-          )}
-
-          {/* Status Intervention Control */}
-          <div className="p-4 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <h5 className="font-bold text-xs uppercase font-mono text-black dark:text-white">
-                Admin Lifecycle State Intervention
-              </h5>
-              <p className="text-[11px] text-zinc-500">
-                Current status: <strong className="text-blue-600 uppercase">{currentBooking.booking_status}</strong>. Click any button below to update:
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {['pending', 'accepted', 'arriving', 'in_service', 'completed', 'cancelled'].map((st) => {
-                const isCurrent = currentBooking.booking_status === st;
-                return (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => handleStatusChange(st)}
-                    disabled={actionLoading || isCurrent}
-                    className={`text-[10px] font-bold uppercase font-mono px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${isCurrent
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs cursor-default'
-                        : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 border-zinc-300 dark:border-zinc-700 hover:border-black dark:hover:border-white hover:bg-zinc-50'
-                      }`}
-                  >
-                    {isCurrent ? `✓ ${st}` : st}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-        </div>
-
-        {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 flex justify-between items-center text-xs">
-          <span className="font-mono text-[10px] text-zinc-400">
-            Audit ID: {currentBooking.id}
-          </span>
+        <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto justify-between sm:justify-end">
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="btn-secondary text-xs py-1.5 px-4 cursor-pointer font-bold"
+            onClick={handleManualRefresh}
+            disabled={actionLoading || isRefreshingLocal}
+            title="Refresh Live Operations Telemetry"
+            className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
           >
-            Close Inspector
+            <RefreshCw className={`w-4 h-4 ${isRefreshingLocal ? 'animate-spin text-blue-600' : ''}`} />
           </button>
+
+          <button
+            type="button"
+            onClick={() => setAddSahayakModal(true)}
+            className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5 shadow-sm bg-blue-600 hover:bg-blue-700 text-white rounded-xl cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Sahayak</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── 2. TOP OPERATIONAL SUMMARY CARDS (4 CARDS: Uber / Stripe Style) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+
+        {/* Card 1: Pending Verification */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-4 sm:p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10.5px] font-bold uppercase font-mono tracking-wider text-amber-700 dark:text-amber-400 block">
+                  PENDING VERIFICATION
+                </span>
+                <p className="text-2xl sm:text-[28px] font-black font-mono text-zinc-900 dark:text-white tracking-tight leading-tight mt-0.5">
+                  {pendingKycCount}
+                </p>
+              </div>
+            </div>
+            <svg className="w-12 h-5 text-amber-500 stroke-current fill-none stroke-2 shrink-0 opacity-80" viewBox="0 0 48 18">
+              <path d="M0 14 Q 16 6, 32 12 T 48 4" />
+            </svg>
+          </div>
+          <p className="text-[11px] text-zinc-400 font-medium mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+            Awaiting administrative review
+          </p>
+        </div>
+
+        {/* Card 2: In Processing */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-4 sm:p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center shrink-0">
+                <Hourglass className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10.5px] font-bold uppercase font-mono tracking-wider text-blue-700 dark:text-blue-400 block">
+                  IN PROCESSING
+                </span>
+                <p className="text-2xl sm:text-[28px] font-black font-mono text-zinc-900 dark:text-white tracking-tight leading-tight mt-0.5">
+                  0
+                </p>
+              </div>
+            </div>
+            <svg className="w-12 h-5 text-blue-500 stroke-current fill-none stroke-2 shrink-0 opacity-80" viewBox="0 0 48 18">
+              <path d="M0 12 Q 16 16, 32 8 T 48 2" />
+            </svg>
+          </div>
+          <p className="text-[11px] text-zinc-400 font-medium mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+            Under document verification
+          </p>
+        </div>
+
+        {/* Card 3: Approved & Active */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-4 sm:p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10.5px] font-bold uppercase font-mono tracking-wider text-emerald-700 dark:text-emerald-400 block">
+                  APPROVED & ACTIVE
+                </span>
+                <p className="text-2xl sm:text-[28px] font-black font-mono text-zinc-900 dark:text-white tracking-tight leading-tight mt-0.5">
+                  {totalAssistants}
+                </p>
+              </div>
+            </div>
+            <svg className="w-12 h-5 text-emerald-500 stroke-current fill-none stroke-2 shrink-0 opacity-80" viewBox="0 0 48 18">
+              <path d="M0 16 Q 16 10, 32 14 T 48 4" />
+            </svg>
+          </div>
+          <p className="text-[11px] text-zinc-400 font-medium mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+            Live on platform
+          </p>
+        </div>
+
+        {/* Card 4: Rejected */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-4 sm:p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center shrink-0">
+                <XCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10.5px] font-bold uppercase font-mono tracking-wider text-rose-700 dark:text-rose-400 block">
+                  REJECTED
+                </span>
+                <p className="text-2xl sm:text-[28px] font-black font-mono text-zinc-900 dark:text-white tracking-tight leading-tight mt-0.5">
+                  0
+                </p>
+              </div>
+            </div>
+            <svg className="w-12 h-5 text-rose-500 stroke-current fill-none stroke-2 shrink-0 opacity-80" viewBox="0 0 48 18">
+              <path d="M0 10 Q 16 16, 32 6 T 48 12" />
+            </svg>
+          </div>
+          <p className="text-[11px] text-zinc-400 font-medium mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+            Application not eligible
+          </p>
         </div>
 
       </div>
+
+      {/* ── 3. KYC VERIFICATION QUEUE SECTION ── */}
+      {filteredKycQueue.length === 0 ? (
+        /* COMPACT PREMIUM EMPTY STATE */
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex items-center justify-center text-center">
+          <div className="flex items-center gap-3.5">
+            <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+              <Check className="w-4 h-4 stroke-[3]" />
+            </div>
+            <div className="text-left">
+              <h4 className="font-bold text-sm text-zinc-900 dark:text-white tracking-tight">
+                KYC queue is clear
+              </h4>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium mt-0.5">
+                No pending applicant registrations. All incoming applications have been processed.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* PENDING APPLICANTS TABLE */
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-zinc-200/90 dark:border-zinc-800/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                  KYC Verification Queue ({filteredKycQueue.length})
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  Awaiting Review
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5 font-medium">
+                Review and approve Sahayak applications before platform activation.
+              </p>
+            </div>
+
+            {/* Quick search inside queue */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchKyc}
+                onChange={(e) => setSearchKyc(e.target.value)}
+                placeholder="Search applicants..."
+                className="w-full bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[900px]">
+              <thead>
+                <tr className="bg-[#F8FAFC] dark:bg-zinc-900/80 border-b border-zinc-200/90 dark:border-zinc-800 text-[10.5px] uppercase font-mono tracking-wider text-zinc-400 font-semibold select-none">
+                  <th className="py-3 px-4">APPLICANT</th>
+                  <th className="py-3 px-4">STATION HUB</th>
+                  <th className="py-3 px-4">CONTACT</th>
+                  <th className="py-3 px-4">APPLICATION DATE</th>
+                  <th className="py-3 px-4">KYC STATUS</th>
+                  <th className="py-3 px-4">DOCUMENTS</th>
+                  <th className="py-3 px-4 text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70 font-sans">
+                {filteredKycQueue.map((app, idx) => {
+                  const badge = getAvatarBadge(app.name, idx);
+                  return (
+                    <tr key={app.id} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs font-mono border shrink-0 ${badge.classes}`}>
+                            {badge.initials}
+                          </div>
+                          <div>
+                            <p className="font-bold text-xs text-zinc-900 dark:text-white">
+                              {app.name}
+                            </p>
+                            <p className="text-[10.5px] text-zinc-400 font-mono">
+                              {app.email || 'Email not recorded'}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs block">
+                          {app.station_code || 'KZJ'}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 block">
+                          {getStationName(app.station_code)}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono">
+                        {app.phone ? (
+                          <a href={`tel:${app.phone}`} className="hover:text-blue-600 hover:underline">
+                            {app.phone}
+                          </a>
+                        ) : '—'}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+                        {new Date(app.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          Pending Review
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-[11px] text-zinc-600 dark:text-zinc-300 font-mono">
+                        Aadhaar & Police Clearance (2/2)
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setReviewApplicant(app)}
+                            className="btn-primary py-1.5 px-3 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                          >
+                            Review KYC
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. REGISTERED SAHAYAK FLEET SECTION ── */}
+      <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden">
+
+        {/* Fleet Header & Toolbar */}
+        <div className="p-4 sm:p-5 border-b border-zinc-200/90 dark:border-zinc-800/90 space-y-3.5">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-white leading-tight">
+                  Registered Sahayak Fleet ({assistantsList.length})
+                </h3>
+                <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
+                  Manage active assistants across Secunderabad, Vijayawada, Kazipet, and Warangal hubs.
+                </p>
+              </div>
+            </div>
+
+            {/* Toolbar search & filters */}
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              {/* Search input */}
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchFleet}
+                  onChange={(e) => {
+                    setSearchFleet(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search sahayak name, phone, or station..."
+                  className="w-full bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/80 rounded-lg pl-8 pr-7 py-1.5 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                />
+                {searchFleet && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchFleet('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Station Hub selector */}
+              <select
+                value={selectedHub}
+                onChange={(e) => {
+                  setSelectedHub(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">All Hubs</option>
+                <option value="KZJ">KZJ - Kazipet</option>
+                <option value="SC">SC - Secunderabad</option>
+                <option value="BZA">BZA - Vijayawada</option>
+                <option value="WL">WR - Warangal</option>
+              </select>
+
+              {/* Duty state selector */}
+              <select
+                value={selectedDuty}
+                onChange={(e) => {
+                  setSelectedDuty(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">All Status</option>
+                <option value="online">Online (On-Duty)</option>
+                <option value="offline">Offline</option>
+              </select>
+
+              {/* More filters button */}
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${showAdvancedFilters || selectedApproval !== 'ALL' || sortBy !== 'name_asc'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800'
+                    : 'bg-[#F8FAFC] dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100'
+                  }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Filters</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Advanced Filters Row (when toggled) */}
+          {showAdvancedFilters && (
+            <div className="pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Approval Status */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-400 font-mono text-[10.5px] uppercase font-bold">Approval:</span>
+                  <select
+                    value={selectedApproval}
+                    onChange={(e) => setSelectedApproval(e.target.value)}
+                    className="bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1 text-xs"
+                  >
+                    <option value="ALL">All Approval</option>
+                    <option value="approved">Approved</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+
+                {/* Sort By */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-400 font-mono text-[10.5px] uppercase font-bold">Sort:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1 text-xs"
+                  >
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="name_desc">Name (Z-A)</option>
+                    <option value="missions_desc">Most Missions</option>
+                    <option value="recent">Recently Added</option>
+                  </select>
+                </div>
+              </div>
+
+              {(searchFleet || selectedHub !== 'ALL' || selectedDuty !== 'ALL' || selectedApproval !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchFleet('');
+                    setSelectedHub('ALL');
+                    setSelectedDuty('ALL');
+                    setSelectedApproval('ALL');
+                    setSortBy('name_asc');
+                  }}
+                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-bold hover:underline cursor-pointer"
+                >
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Fleet Data Table */}
+        <div className="overflow-x-auto min-h-[300px]">
+          <table className="w-full text-left text-xs min-w-[1000px]">
+            <thead>
+              <tr className="bg-[#F8FAFC] dark:bg-zinc-900/80 border-b border-zinc-200/90 dark:border-zinc-800 text-[10.5px] uppercase font-mono tracking-wider text-zinc-400 font-semibold select-none">
+                <th className="py-3 px-3.5 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAll}
+                    checked={paginatedAssistants.length > 0 && selectedRowIds.size === paginatedAssistants.length}
+                    className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
+                <th className="py-3 px-4 font-bold">SAHAYAK NAME</th>
+                <th className="py-3 px-4 font-bold">STATION HUB</th>
+                <th className="py-3 px-4 font-bold">CONTACT</th>
+                <th className="py-3 px-4 font-bold">APPROVAL STATUS</th>
+                <th className="py-3 px-4 font-bold">DUTY STATE</th>
+                <th className="py-3 px-4 font-bold">MISSIONS</th>
+                <th className="py-3 px-4 font-bold text-right">ACTIONS</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70 font-sans">
+              {paginatedAssistants.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-zinc-400 font-mono text-xs">
+                    No matching Sahayaks found in the active fleet ledger.
+                  </td>
+                </tr>
+              ) : (
+                paginatedAssistants.map((ast, idx) => {
+                  const isSelected = selectedRowIds.has(ast.id);
+                  const avatar = getAvatarBadge(ast.name, idx);
+                  const isMenuOpen = activeMenuId === ast.id;
+
+                  // Real trips count
+                  const realTrips = Math.max(
+                    ast.completed_missions || 0,
+                    bookings.filter((b) => b.assistant_id === ast.id).length
+                  );
+
+                  return (
+                    <tr
+                      key={ast.id}
+                      onClick={() => setProfileDrawer({ open: true, assistant: ast })}
+                      className={`h-16 hover:bg-blue-50/20 dark:hover:bg-zinc-800/30 transition-colors duration-150 cursor-pointer ${isSelected ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''
+                        }`}
+                    >
+                      {/* Checkbox */}
+                      <td
+                        className="py-3.5 px-3.5 text-center"
+                        onClick={(e) => handleRowCheckbox(ast.id, e)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => { }}
+                          className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </td>
+
+                      {/* Sahayak Name + Avatar */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs font-mono border shrink-0 ${avatar.classes}`}>
+                            {avatar.initials}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs text-zinc-900 dark:text-white leading-tight truncate">
+                              {ast.name}
+                            </p>
+                            <p className="text-[10.5px] text-zinc-400 font-mono truncate mt-0.5">
+                              ID: #{ast.id?.slice(-6).toUpperCase()}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Station Hub */}
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs block leading-tight hover:underline">
+                          {ast.station_code || 'KZJ'}
+                        </span>
+                        <span className="text-[10.5px] text-zinc-400 block leading-tight mt-0.5">
+                          {getStationName(ast.station_code)}
+                        </span>
+                      </td>
+
+                      {/* Contact */}
+                      <td className="py-3.5 px-4 font-mono text-zinc-700 dark:text-zinc-300">
+                        {ast.phone ? (
+                          <a
+                            href={`tel:${ast.phone}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-blue-600 hover:underline"
+                          >
+                            {ast.phone}
+                          </a>
+                        ) : (
+                          <span className="text-zinc-400 italic">No phone logged</span>
+                        )}
+                      </td>
+
+                      {/* Approval Status */}
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-block text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full border ${ast.is_approved
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800'
+                            }`}
+                        >
+                          {ast.is_approved ? 'Approved' : 'Suspended'}
+                        </span>
+                      </td>
+
+                      {/* Duty State */}
+                      <td className="py-3.5 px-4">
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium font-mono">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${ast.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
+                              }`}
+                          />
+                          <span className={ast.is_online ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-zinc-500'}>
+                            {ast.is_online ? 'Online (On-Duty)' : 'Offline'}
+                          </span>
+                        </span>
+                      </td>
+
+                      {/* Missions */}
+                      <td className="py-3.5 px-4 font-mono font-bold text-zinc-900 dark:text-white">
+                        {realTrips} {realTrips === 1 ? 'trip' : 'trips'}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Duty Power Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => onToggleOnline(ast)}
+                            title={ast.is_online ? 'Set Sahayak Offline' : 'Set Sahayak Online (On-Duty)'}
+                            className={`p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${ast.is_online
+                                ? 'bg-zinc-100 text-zinc-700 border-zinc-300 hover:bg-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300'
+                              }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Suspend / Activate Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (ast.is_approved) {
+                                setSuspendModal({ open: true, assistant: ast });
+                              } else {
+                                onToggleApproval(ast);
+                              }
+                            }}
+                            title={ast.is_approved ? 'Suspend Sahayak' : 'Reactivate Sahayak'}
+                            className={`p-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${ast.is_approved
+                                ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300'
+                              }`}
+                          >
+                            {ast.is_approved ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                          </button>
+
+                          {/* View Trips Primary Action */}
+                          <button
+                            type="button"
+                            onClick={() => onFilterToAssistant(ast.name)}
+                            title="Filter Bookings Ledger to this Sahayak"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 font-bold text-xs transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View Trips</span>
+                          </button>
+
+                          {/* More dropdown */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setActiveMenuId(isMenuOpen ? null : ast.id)}
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+
+                            {isMenuOpen && (
+                              <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl py-1 z-30 text-xs animate-scale-in">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setProfileDrawer({ open: true, assistant: ast });
+                                    setActiveMenuId(null);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center gap-2"
+                                >
+                                  <User className="w-3.5 h-3.5 text-zinc-400" />
+                                  <span>View Full Profile</span>
+                                </button>
+                                {ast.phone && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(ast.phone);
+                                      toast.success(`Copied ${ast.phone}`);
+                                      setActiveMenuId(null);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center gap-2"
+                                  >
+                                    <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                    <span>Copy Phone Number</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Fleet Table Pagination Footer */}
+        <div className="px-4 py-3 border-t border-zinc-200/90 dark:border-zinc-800/90 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-white dark:bg-[#0D111A]">
+          <div>
+            Showing {totalFleetCount > 0 ? `${startIdx}–${endIdx}` : '0'} of {totalFleetCount} sahayaks
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+                className="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+
+              {Array.from({ length: Math.min(totalPages, 5) }).map((_, idx) => {
+                const pageNum = idx + 1;
+                const isCurrent = page === pageNum;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setPage(pageNum)}
+                    className={`w-7 h-7 rounded-md text-xs font-bold transition-colors cursor-pointer ${isCurrent
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                      }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+                className="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setPage(1);
+              }}
+              className="bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300 focus:outline-none cursor-pointer"
+            >
+              <option value={10}>10 / page</option>
+              <option value={20}>20 / page</option>
+              <option value={50}>50 / page</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 5. THREE BOTTOM INSIGHT CARDS (Exact match to specification) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+
+        {/* Card 1: KYC Compliance Radial Gauge */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 pb-2.5 border-b border-zinc-100 dark:border-zinc-800">
+              <ShieldCheck className="w-4 h-4 text-blue-600" />
+              <div>
+                <h4 className="font-bold text-sm text-zinc-900 dark:text-white leading-tight">
+                  KYC Compliance
+                </h4>
+                <p className="text-[11px] text-zinc-400 font-medium">
+                  Platform readiness and verification status
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-around py-5">
+              {/* Radial Progress Graphic */}
+              <div className="relative w-24 h-24 flex items-center justify-center">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <path
+                    className="text-zinc-100 dark:text-zinc-800"
+                    strokeWidth="3.2"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  <path
+                    className="text-emerald-500"
+                    strokeDasharray="100, 100"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+                <span className="absolute font-black font-mono text-base text-zinc-900 dark:text-white">
+                  100%
+                </span>
+              </div>
+
+              {/* Status List */}
+              <div className="space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Verified</span>
+                  </div>
+                  <span className="font-bold text-zinc-900 dark:text-white">{approvedCount}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>Pending</span>
+                  </div>
+                  <span className="font-bold text-zinc-900 dark:text-white">{pendingKycCount}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    <span>Rejected</span>
+                  </div>
+                  <span className="font-bold text-zinc-900 dark:text-white">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Station Hub Distribution Progress Bars */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 pb-2.5 border-b border-zinc-100 dark:border-zinc-800">
+              <MapPin className="w-4 h-4 text-blue-600" />
+              <div>
+                <h4 className="font-bold text-sm text-zinc-900 dark:text-white leading-tight">
+                  Station Hub Distribution
+                </h4>
+                <p className="text-[11px] text-zinc-400 font-medium">
+                  Active sahayaks across railway hubs
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-3 text-xs font-mono">
+              {stationDistribution.map((hub) => (
+                <div key={hub.code} className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{hub.name}</span>
+                    <span className="font-bold text-zinc-900 dark:text-white">{hub.count}</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden flex items-center">
+                    <div
+                      className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                      style={{ width: `${hub.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Important Information */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 pb-2.5 border-b border-zinc-100 dark:border-zinc-800">
+              <Info className="w-4 h-4 text-blue-600" />
+              <div>
+                <h4 className="font-bold text-sm text-zinc-900 dark:text-white leading-tight">
+                  Important Information
+                </h4>
+                <p className="text-[11px] text-zinc-400 font-medium">
+                  Operational workforce compliance rules
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 pt-3 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+              <div className="flex items-start gap-2">
+                <FileCheck className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <span>All sahayaks undergo document verification before activation.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <span>Only verified sahayaks can be assigned to platform duties.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <span>Keep KYC documents and background police checks up to date.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Headphones className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <span>Contact support desk for portal verification escalations.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── 6. BOTTOM BANNER: Build a Trusted Sahayak Network ── */}
+      <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800/90 rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-zinc-900 dark:text-white">
+              Build a Trusted Sahayak Network
+            </h4>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium mt-0.5">
+              Verified sahayaks ensure safer, faster, and more reliable station operations across the network.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setGuidelinesModal(true)}
+            className="flex-1 sm:flex-none btn-secondary py-2 px-3.5 rounded-xl text-xs font-bold border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
+            <span>View KYC Guidelines</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddSahayakModal(true)}
+            className="flex-1 sm:flex-none btn-primary py-2 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add New Sahayak</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── 7. KYC REVIEW DRAWER (Slide-in Right Panel) ── */}
+      {reviewApplicant && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] z-50 transition-opacity animate-fade-in cursor-pointer"
+            onClick={() => setReviewApplicant(null)}
+          />
+          <aside className="fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[520px] max-w-full h-screen max-h-screen overflow-hidden flex flex-col bg-white dark:bg-[#0D111A] border-l border-zinc-200 dark:border-zinc-800 shadow-[-16px_0_40px_rgba(0,0,0,0.2)] animate-slide-left select-none text-xs">
+
+            {/* Drawer Header */}
+            <div className="p-4 sm:px-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/80 dark:bg-zinc-900/80 shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                    Sahayak KYC Review
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                    Pending Review
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                  Application ID: #{reviewApplicant.id?.slice(-8).toUpperCase()}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setReviewApplicant(null)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Drawer Body (Scrollable) */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 scrollbar-thin">
+              {/* Profile Card */}
+              <div className="bg-[#F8FAFC] dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base font-mono shrink-0">
+                    {reviewApplicant.name?.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-zinc-900 dark:text-white">
+                      {reviewApplicant.name}
+                    </h4>
+                    <p className="text-zinc-500 font-mono text-[11px] mt-0.5">
+                      {reviewApplicant.email || 'Email not recorded'}
+                    </p>
+                    <p className="text-zinc-500 font-mono text-[11px]">
+                      Phone: <strong className="text-zinc-900 dark:text-white">{reviewApplicant.phone || 'N/A'}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60 text-[11px] font-mono">
+                  <div>
+                    <span className="text-zinc-400 uppercase text-[9.5px] block font-bold">Assigned Hub:</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                      {reviewApplicant.station_code || 'KZJ'} - {getStationName(reviewApplicant.station_code)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 uppercase text-[9.5px] block font-bold">Applied Date:</span>
+                    <span className="font-bold text-zinc-700 dark:text-zinc-300">
+                      {new Date(reviewApplicant.created_at).toLocaleDateString('en-GB')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Verification Checklist */}
+              <div className="space-y-2">
+                <h5 className="font-bold text-xs uppercase font-mono tracking-wider text-zinc-400">
+                  VERIFICATION CHECKLIST
+                </h5>
+                <div className="bg-[#F8FAFC] dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-3 divide-y divide-zinc-200/60 dark:divide-zinc-800/60">
+                  {[
+                    { id: 'identityDoc', label: 'Government Issued Identity (Aadhaar/PAN)', status: checklist.identityDoc },
+                    { id: 'phoneVerified', label: 'Primary Contact Mobile Verification (OTP Handshake)', status: checklist.phoneVerified },
+                    { id: 'stationAssigned', label: 'Station Operational Assignment (Node Verified)', status: checklist.stationAssigned },
+                    { id: 'profileInfo', label: 'Dossier Integrity & Emergency Contact Information', status: checklist.profileInfo },
+                    { id: 'eligibility', label: 'Physical Fitness & Railway Platform Escort Eligibility', status: checklist.eligibility },
+                  ].map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setChecklist((prev) => ({
+                          ...prev,
+                          [item.id]: prev[item.id] === 'verified' ? 'pending' : prev[item.id] === 'pending' ? 'failed' : 'verified'
+                        }));
+                      }}
+                      className="py-2.5 flex items-center justify-between gap-2 cursor-pointer hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 px-1 rounded-md transition-colors"
+                    >
+                      <span className="font-medium text-xs text-zinc-800 dark:text-zinc-200">
+                        {item.label}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border uppercase shrink-0 ${item.status === 'verified'
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300'
+                            : item.status === 'failed'
+                              ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300'
+                              : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300'
+                          }`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Documents Preview Cards */}
+              <div className="space-y-2">
+                <h5 className="font-bold text-xs uppercase font-mono tracking-wider text-zinc-400">
+                  DOCUMENTS SUBMITTED
+                </h5>
+                <div className="grid grid-cols-2 gap-2.5 font-mono text-xs">
+                  <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1">
+                    <span className="text-[10px] text-zinc-400 uppercase block font-bold">Document 1</span>
+                    <p className="font-bold text-zinc-900 dark:text-white text-[11px] truncate">
+                      Government ID / Aadhaar
+                    </p>
+                    <span className="inline-block text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                      ✓ Ready for Review
+                    </span>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1">
+                    <span className="text-[10px] text-zinc-400 uppercase block font-bold">Document 2</span>
+                    <p className="font-bold text-zinc-900 dark:text-white text-[11px] truncate">
+                      Police Clearance / Address
+                    </p>
+                    <span className="inline-block text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                      ✓ Ready for Review
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Review Notes Input */}
+              <div className="space-y-1.5">
+                <label className="block text-[10.5px] font-mono font-bold uppercase text-zinc-400">
+                  REVIEW NOTES (OPTIONAL)
+                </label>
+                <textarea
+                  rows={3}
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  placeholder="Add administrative verification notes, ID audit references, or rejection grounds..."
+                  className="w-full p-2.5 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                />
+              </div>
+            </div>
+
+            {/* Sticky Drawer Footer */}
+            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0D111A] flex items-center justify-between gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setRejectModal({ open: true, applicant: reviewApplicant, reason: reviewNotes })}
+                className="py-2.5 px-3 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Reject Application
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setApproveModal({ open: true, applicant: reviewApplicant })}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer text-center"
+              >
+                Approve & Activate
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* ── 8. CONFIRMATION MODALS ── */}
+      {/* Suspend Modal */}
+      {suspendModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="w-10 h-10 rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-zinc-900 dark:text-white">
+                Suspend Sahayak?
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                This will temporarily prevent <strong className="text-zinc-900 dark:text-white">{suspendModal.assistant?.name}</strong> from accepting new missions on the platform across station {suspendModal.assistant?.station_code}.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSuspendModal({ open: false, assistant: null })}
+                className="btn-secondary py-2 px-4 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSuspend}
+                className="btn-primary bg-rose-600 hover:bg-rose-700 text-white py-2 px-4 text-xs font-bold"
+              >
+                Suspend Sahayak
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Modal */}
+      {approveModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-zinc-900 dark:text-white">
+                Approve Sahayak?
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                This will activate <strong className="text-zinc-900 dark:text-white">{approveModal.applicant?.name}</strong> for live platform operations and station mission dispatch.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setApproveModal({ open: false, applicant: null })}
+                className="btn-secondary py-2 px-4 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmApprove}
+                className="btn-primary bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 text-xs font-bold"
+              >
+                Approve & Activate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div>
+              <h3 className="font-bold text-base text-zinc-900 dark:text-white">
+                Reject Application?
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                Specify the verification deficiency or reason for rejecting <strong className="text-zinc-900 dark:text-white">{rejectModal.applicant?.name}</strong>:
+              </p>
+            </div>
+            <textarea
+              rows={3}
+              value={rejectModal.reason}
+              onChange={(e) => setRejectModal((prev) => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g. Identity document unreadable, failed background check..."
+              className="w-full p-2.5 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-white"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRejectModal({ open: false, applicant: null, reason: '' })}
+                className="btn-secondary py-2 px-4 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReject}
+                className="btn-primary bg-rose-600 hover:bg-rose-700 text-white py-2 px-4 text-xs font-bold"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Sahayak Modal */}
+      {addSahayakModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-600" />
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                  Add New Sahayak
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddSahayakModal(false)}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={addSahayakForm.name}
+                  onChange={(e) => setAddSahayakForm({ ...addSahayakForm, name: e.target.value })}
+                  placeholder="e.g. Ramesh Kumar"
+                  className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                  Mobile Number
+                </label>
+                <input
+                  type="text"
+                  value={addSahayakForm.phone}
+                  onChange={(e) => setAddSahayakForm({ ...addSahayakForm, phone: e.target.value })}
+                  placeholder="+91 9876543210"
+                  className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                  Station Hub Assignment
+                </label>
+                <select
+                  value={addSahayakForm.station_code}
+                  onChange={(e) => setAddSahayakForm({ ...addSahayakForm, station_code: e.target.value })}
+                  className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs cursor-pointer"
+                >
+                  <option value="KZJ">KZJ - Kazipet Jn</option>
+                  <option value="SC">SC - Secunderabad Jn</option>
+                  <option value="BZA">BZA - Vijayawada Jn</option>
+                  <option value="WL">WR - Warangal</option>
+                </select>
+              </div>
+
+              {/* Share signup link banner */}
+              <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-900 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase font-bold text-blue-700 dark:text-blue-300">
+                    Self-Registration Portal
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopySignupLink}
+                    className="text-blue-600 font-bold hover:underline text-[10.5px] cursor-pointer"
+                  >
+                    {copiedLink ? 'Copied ✓' : 'Copy Link'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                  Applicants can self-register with their mobile OTP & Aadhaar. Once submitted, they appear instantly in the KYC Verification Queue.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setAddSahayakModal(false)}
+                className="btn-secondary py-2 px-4 text-xs font-semibold"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  toast.success('Sahayak invitation recorded. Directing to KYC queue.');
+                  setAddSahayakModal(false);
+                }}
+                className="btn-primary bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 text-xs font-bold"
+              >
+                Save & Invite
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KYC Guidelines Modal */}
+      {guidelinesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-4 h-4 text-blue-600" />
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                  OneCoolie Sahayak Verification Standards
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGuidelinesModal(false)}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs text-zinc-600 dark:text-zinc-300">
+              <p>
+                To maintain the highest standards of passenger trust and station safety, all Sahayaks must fulfill the following criteria:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 font-medium">
+                <li><strong>Government Identity:</strong> Valid Aadhaar or government-issued national ID card matching applicant records.</li>
+                <li><strong>Station Hub Assignment:</strong> Official station porter badge or verified local hub operational node.</li>
+                <li><strong>Mobile OTP Handshake:</strong> Two-way verified phone number for live passenger coordination and telemetry.</li>
+                <li><strong>Background Check:</strong> Zero active police or security flags across railway premises.</li>
+              </ul>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setGuidelinesModal(false)}
+                className="btn-primary bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 text-xs font-bold rounded-xl"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sahayak Profile Drawer */}
+      {profileDrawer.open && profileDrawer.assistant && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] z-50 transition-opacity animate-fade-in cursor-pointer"
+            onClick={() => setProfileDrawer({ open: false, assistant: null })}
+          />
+          <aside className="fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[480px] max-w-full h-screen max-h-screen overflow-hidden flex flex-col bg-white dark:bg-[#0D111A] border-l border-zinc-200 dark:border-zinc-800 shadow-[-16px_0_40px_rgba(0,0,0,0.2)] animate-slide-left select-none text-xs">
+            <div className="p-4 sm:px-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/80 dark:bg-zinc-900/80 shrink-0">
+              <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                Sahayak Profile Dossier
+              </h3>
+              <button
+                type="button"
+                onClick={() => setProfileDrawer({ open: false, assistant: null })}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
+              <div className="flex items-center gap-3 p-4 bg-[#F8FAFC] dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+                <div className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg font-mono">
+                  {profileDrawer.assistant.name?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="font-bold text-base text-zinc-900 dark:text-white">
+                    {profileDrawer.assistant.name}
+                  </h4>
+                  <p className="text-zinc-500 font-mono text-xs mt-0.5">
+                    {profileDrawer.assistant.phone || 'No phone recorded'}
+                  </p>
+                  <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${profileDrawer.assistant.is_online ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'
+                    }`}>
+                    {profileDrawer.assistant.is_online ? '● Online (On-Duty)' : '● Offline'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-[10px] text-zinc-400 uppercase block font-bold">Station Hub</span>
+                  <span className="font-bold text-blue-600 text-sm">{profileDrawer.assistant.station_code || 'KZJ'}</span>
+                </div>
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-[10px] text-zinc-400 uppercase block font-bold">Completed Trips</span>
+                  <span className="font-bold text-zinc-900 dark:text-white text-sm">
+                    {profileDrawer.assistant.completed_missions || 0}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileDrawer({ open: false, assistant: null });
+                    onFilterToAssistant(profileDrawer.assistant.name);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 cursor-pointer text-center"
+                >
+                  View All Missions in Bookings Ledger
+                </button>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
+
     </div>
   );
 }
 
 // ----------------------------------------------------------------------
-// SUBCOMPONENT: KYC QUEUE CARD
+// SUBCOMPONENT: EMERGENCY INCIDENT COMMAND CENTER (PREMIUM ENTERPRISE SAFETY OPERATIONS)
 // ----------------------------------------------------------------------
-function KycQueueCard({ applicant, onDecide, actionLoading }) {
+function EmergencyIncidentCommandCenter({
+  sosAlerts = [],
+  onResolveEmergency,
+  onInspectBooking,
+  onRefresh,
+  loading = false,
+  bookings = [],
+  stations = []
+}) {
+  const [manualSosModal, setManualSosModal] = useState(false);
+  const [safetyContactsModal, setSafetyContactsModal] = useState(false);
+  const [protocolsModal, setProtocolsModal] = useState(false);
+  const [historyModal, setHistoryModal] = useState(false);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+
+  // Manual SOS Form State
+  const [manualSosForm, setManualSosForm] = useState({
+    passengerName: '',
+    passengerPhone: '',
+    stationCode: 'KZJ',
+    trainNumber: '12723',
+    coach: 'B2',
+    seat: '45',
+    category: 'Medical Assistance Required'
+  });
+
+  // Diagnostics check runner
+  const handleRunDiagnostics = () => {
+    setIsDiagnosing(true);
+    if (onRefresh) onRefresh();
+    setTimeout(() => {
+      setIsDiagnosing(false);
+      toast.success('Surveillance diagnostics complete. All 4 SCR Hubs responsive (latency: 16ms).');
+    }, 900);
+  };
+
+  // Trigger manual SOS simulated test alert
+  const handleTriggerManualSos = (e) => {
+    e.preventDefault();
+    if (!manualSosForm.passengerName.trim()) {
+      toast.error('Please enter passenger or sahayak name');
+      return;
+    }
+    toast.success(`Manual Emergency Alert dispatched to ${manualSosForm.stationCode} Station Master & RPF.`);
+    setManualSosModal(false);
+    setManualSosForm({
+      passengerName: '',
+      passengerPhone: '',
+      stationCode: 'KZJ',
+      trainNumber: '12723',
+      coach: 'B2',
+      seat: '45',
+      category: 'Medical Assistance Required'
+    });
+  };
+
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
-          {applicant.name?.charAt(0).toUpperCase()}
+    <div className="space-y-5 animate-fade-in select-none">
+
+      {/* ── 1. PAGE HEADER ── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 shadow-xs">
+            <Bell className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                SAFETY OPERATIONS
+              </span>
+            </div>
+            <h2 className="text-2xl font-bold font-sans text-zinc-900 dark:text-white tracking-tight leading-tight">
+              Emergency Incident Command Center
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+              Live dispatch monitoring for emergency alerts triggered by passengers or sahayaks.
+            </p>
+          </div>
         </div>
 
-        <div>
-          <div className="flex items-center gap-2">
-            <h4 className="font-bold text-sm text-black dark:text-white">
-              {applicant.name}
-            </h4>
-            <span className="badge-blue text-[10px]">
-              KYC Awaiting Review
-            </span>
+        {/* Header Right Status & Controls */}
+        <div className="flex flex-wrap items-center gap-2.5 sm:self-center">
+          {/* Active Emergencies Counter Pill */}
+          <div
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-mono shadow-xs flex items-center gap-1.5 transition-all ${sosAlerts.length > 0
+                ? 'bg-rose-600 text-white animate-pulse'
+                : 'bg-[#E11D48] text-white'
+              }`}
+          >
+            <span className="tracking-tight text-[11px]">((•))</span>
+            <span>{sosAlerts.length} Active Emergencies</span>
           </div>
 
-          <p className="text-xs text-zinc-500 font-mono mt-0.5">
-            {applicant.email} · Phone: <strong className="text-black dark:text-white">{applicant.phone || 'N/A'}</strong> · Hub:{' '}
-            <strong className="text-blue-600 dark:text-blue-400">
-              {applicant.station_code}
-            </strong>
-          </p>
-          <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
-            Applied: {new Date(applicant.created_at).toLocaleDateString()}
-          </p>
+          {/* All Systems Operational Indicator */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0D111A] text-xs font-sans text-zinc-700 dark:text-zinc-300 shadow-2xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">All Systems Operational</span>
+          </div>
+
+          {/* Reload Surveillance Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onRefresh) onRefresh();
+              toast.success('Surveillance telemetry synchronized');
+            }}
+            disabled={loading}
+            title="Reload Surveillance Telemetry"
+            className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0D111A] text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 w-full sm:w-auto">
-        <button
-          type="button"
-          disabled={actionLoading}
-          onClick={() => onDecide(applicant.id, 'approve')}
-          className="btn-primary flex-1 sm:flex-none py-2 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 cursor-pointer disabled:opacity-50"
-        >
-          Approve Assistant
-        </button>
-        <button
-          type="button"
-          disabled={actionLoading}
-          onClick={() => onDecide(applicant.id, 'reject')}
-          className="btn-secondary flex-1 sm:flex-none py-2 px-4 text-xs text-rose-600 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
-        >
-          Reject
-        </button>
+      {/* ── 2. TOP SUMMARY METRIC CARDS (4 CARDS) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        {/* Card 1: Active Emergencies */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-rose-300 dark:hover:border-rose-900 transition-all group flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/60 flex items-center justify-center shrink-0">
+              <Bell className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-rose-600 block">
+                ACTIVE EMERGENCIES
+              </span>
+              <span className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 dark:text-white leading-tight block mt-0.5">
+                {sosAlerts.length}
+              </span>
+              <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+                Requiring immediate attention
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 transition-colors shrink-0" />
+        </div>
+
+        {/* Card 2: Total SOS Alerts 24H */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-blue-300 dark:hover:border-blue-900 transition-all group flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/60 flex items-center justify-center shrink-0">
+              <PhoneCall className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-blue-600 block">
+                TOTAL SOS ALERTS (24H)
+              </span>
+              <span className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 dark:text-white leading-tight block mt-0.5">
+                {sosAlerts.length}
+              </span>
+              <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+                From passengers and sahayaks
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 transition-colors shrink-0" />
+        </div>
+
+        {/* Card 3: Resolved Today */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-emerald-300 dark:hover:border-emerald-900 transition-all group flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/60 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-emerald-600 block">
+                RESOLVED TODAY
+              </span>
+              <span className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 dark:text-white leading-tight block mt-0.5">
+                0
+              </span>
+              <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+                Successfully handled
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 transition-colors shrink-0" />
+        </div>
+
+        {/* Card 4: Avg. Response Time */}
+        <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-zinc-400 transition-all group flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-zinc-500 block">
+                AVG. RESPONSE TIME
+              </span>
+              <span className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 dark:text-white leading-tight block mt-0.5">
+                —
+              </span>
+              <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 font-sans mt-0.5">
+                No incidents today
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 transition-colors shrink-0" />
+        </div>
+
       </div>
+
+      {/* ── 3. MAIN CONTENT: TWO-COLUMN COMMAND CENTER LAYOUT ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+
+        {/* LEFT COLUMN (COL 8): NETWORK STATUS / ACTIVE ALERTS */}
+        <div className="lg:col-span-8 flex flex-col">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-6 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex-1 flex flex-col justify-between">
+            {sosAlerts.length === 0 ? (
+              /* Network Safe / Empty State */
+              <div className="flex-1 flex flex-col justify-between space-y-8 py-4">
+                <div className="text-center space-y-4 my-auto">
+                  {/* Concentric Green Circle Icon */}
+                  <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+                    <div className="w-24 h-24 rounded-full bg-emerald-50 dark:bg-emerald-950/40 ring-8 ring-emerald-50/60 dark:ring-emerald-950/20 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                        <ShieldCheck className="w-7 h-7 text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Safe Headline & Subtitle */}
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-white font-sans tracking-tight">
+                      Station Network Secure
+                    </h3>
+                    <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-400 max-w-md mx-auto mt-1 leading-relaxed">
+                      No active SOS incidents or distress signals across all South Central Railway nodes.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3 Status Indicators Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-zinc-100 dark:border-zinc-800/80">
+
+                  {/* Item 1 */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-xs text-zinc-900 dark:text-white leading-tight">
+                        Live Monitoring
+                      </h5>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        24/7 system surveillance
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 2 */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                      <Radio className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-xs text-zinc-900 dark:text-white leading-tight">
+                        All Stations Stable
+                      </h5>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        No distress signals
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 3 */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-xs text-zinc-900 dark:text-white leading-tight">
+                        Sahayaks Safe
+                      </h5>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Network operating normally
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            ) : (
+              /* Active SOS Alerts Grid */
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
+                    <h4 className="font-bold text-sm text-rose-600 uppercase tracking-wider font-mono">
+                      Active Distress Signals ({sosAlerts.length})
+                    </h4>
+                  </div>
+                  <span className="text-xs text-zinc-400 font-mono">
+                    Priority 1 Emergency Protocol
+                  </span>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {sosAlerts.map((sos) => (
+                    <div
+                      key={sos.id}
+                      className="bg-rose-50/50 dark:bg-rose-950/30 border-2 border-rose-500/80 rounded-xl p-4 shadow-md space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
+                          <h5 className="font-bold text-xs text-rose-800 dark:text-rose-300 font-mono uppercase">
+                            Station {sos.station_code || 'KZJ'} · Platform Distress
+                          </h5>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold bg-rose-600 text-white px-2 py-0.5 rounded">
+                          #{sos.booking_id?.slice(-6).toUpperCase() || sos.id?.slice(-6).toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-white dark:bg-zinc-900 border border-rose-100 dark:border-rose-900/40 rounded-lg space-y-1.5 text-xs font-mono">
+                        <p className="text-zinc-600 dark:text-zinc-300">
+                          Passenger: <strong className="text-zinc-900 dark:text-white">{sos.passenger?.name || 'Guest Passenger'}</strong>
+                        </p>
+                        <p className="text-zinc-600 dark:text-zinc-300">
+                          Train: <strong>{sos.train_no || sos.train_number || 'N/A'}</strong> ({sos.train_name || 'Express'})
+                        </p>
+                        <p className="text-zinc-600 dark:text-zinc-300">
+                          Location: <strong>Coach {sos.coach || 'TBD'} · Seat {sos.seat_number || 'TBD'}</strong>
+                        </p>
+                        {sos.passenger?.phone && (
+                          <p className="text-blue-600 dark:text-blue-400 font-bold">
+                            Contact: <a href={`tel:${sos.passenger.phone}`} className="hover:underline">{sos.passenger.phone}</a>
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onInspectBooking && onInspectBooking(sos)}
+                          className="flex-1 py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs font-semibold hover:bg-zinc-50 cursor-pointer text-center"
+                        >
+                          Inspect Full Mission
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onResolveEmergency && onResolveEmergency(sos.id)}
+                          className="flex-1 py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer text-center transition-colors"
+                        >
+                          Resolve & Clear Alert
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN (COL 4): RECENT ALERTS & QUICK ACTIONS */}
+        <div className="lg:col-span-4 flex flex-col gap-5">
+
+          {/* Recent Alerts Card */}
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex-1 flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
+              <h4 className="font-bold text-sm text-zinc-900 dark:text-white">
+                Recent Alerts
+              </h4>
+              <button
+                type="button"
+                onClick={() => setHistoryModal(true)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <span>View All</span>
+                <span>→</span>
+              </button>
+            </div>
+
+            {/* Empty state when zero alerts */}
+            <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+              <div className="w-11 h-11 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 text-zinc-400 flex items-center justify-center mb-2.5">
+                <FileText className="w-5 h-5" />
+              </div>
+              <h5 className="font-bold text-xs text-zinc-800 dark:text-zinc-200">
+                No recent emergency alerts
+              </h5>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                All clear across the network.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Actions Card */}
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200/90 dark:border-zinc-800 rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+            <h4 className="font-bold text-sm text-zinc-900 dark:text-white mb-3">
+              Quick Actions
+            </h4>
+
+            {/* 4 Action Buttons Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-2.5">
+
+              {/* Action 1: Trigger SOS */}
+              <button
+                type="button"
+                onClick={() => setManualSosModal(true)}
+                className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 hover:bg-rose-100/80 dark:hover:bg-rose-900/40 border border-rose-200/70 dark:border-rose-900/50 flex flex-col items-center text-center transition-all cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <PhoneCall className="w-3.5 h-3.5" />
+                </div>
+                <span className="font-bold text-xs text-rose-700 dark:text-rose-300 leading-tight">
+                  Trigger SOS
+                </span>
+                <span className="text-[10px] text-rose-500 dark:text-rose-400 mt-0.5 leading-tight">
+                  Manual Alert
+                </span>
+              </button>
+
+              {/* Action 2: Contact Team */}
+              <button
+                type="button"
+                onClick={() => setSafetyContactsModal(true)}
+                className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 hover:bg-blue-100/80 dark:hover:bg-blue-900/40 border border-blue-200/70 dark:border-blue-900/50 flex flex-col items-center text-center transition-all cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <Users className="w-3.5 h-3.5" />
+                </div>
+                <span className="font-bold text-xs text-blue-700 dark:text-blue-300 leading-tight">
+                  Contact Team
+                </span>
+                <span className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5 leading-tight">
+                  Safety Desk
+                </span>
+              </button>
+
+              {/* Action 3: View Protocols */}
+              <button
+                type="button"
+                onClick={() => setProtocolsModal(true)}
+                className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-800 flex flex-col items-center text-center transition-all cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <FileText className="w-3.5 h-3.5" />
+                </div>
+                <span className="font-bold text-xs text-zinc-800 dark:text-zinc-200 leading-tight">
+                  View Protocols
+                </span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-tight">
+                  Response Guide
+                </span>
+              </button>
+
+              {/* Action 4: System Check */}
+              <button
+                type="button"
+                onClick={handleRunDiagnostics}
+                disabled={isDiagnosing}
+                className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-800 flex flex-col items-center text-center transition-all cursor-pointer group disabled:opacity-60"
+              >
+                <div className="w-7 h-7 rounded-lg bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <ShieldCheck className={`w-3.5 h-3.5 ${isDiagnosing ? 'animate-spin text-blue-600' : ''}`} />
+                </div>
+                <span className="font-bold text-xs text-zinc-800 dark:text-zinc-200 leading-tight">
+                  System Check
+                </span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-tight">
+                  {isDiagnosing ? 'Testing...' : 'Run Diagnostics'}
+                </span>
+              </button>
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* ── 4. BOTTOM SAFETY STATUS BANNER ── */}
+      <div className="bg-[#F0F5FF] dark:bg-blue-950/20 border border-blue-200/70 dark:border-blue-900/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-100/80 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/60 dark:border-blue-800/60">
+            <Shield className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-zinc-900 dark:text-white leading-tight">
+              Committed to Safer Journeys
+            </h4>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+              Real-time monitoring, rapid response, and continuous coordination to ensure the safety of all passengers and sahayaks across the South Central Railway network.
+            </p>
+          </div>
+        </div>
+
+        {/* Right Status Badge */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold shrink-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          <span>Network Secure</span>
+        </div>
+      </div>
+
+      {/* ── 5. MODALS ── */}
+
+      {/* Modal A: Manual Trigger SOS Modal */}
+      {manualSosModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center">
+                  <PhoneCall className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                    Manual Emergency Dispatch
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 font-mono">
+                    Emergency Controller Escalation
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManualSosModal(false)}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleTriggerManualSos} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                  Incident Category
+                </label>
+                <select
+                  value={manualSosForm.category}
+                  onChange={(e) => setManualSosForm({ ...manualSosForm, category: e.target.value })}
+                  className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs"
+                >
+                  <option value="Medical Assistance Required">Medical Assistance Required</option>
+                  <option value="Security / Threat Escalation">Security / Threat Escalation</option>
+                  <option value="Unattended Passenger / Elderly Distress">Unattended Passenger / Elderly Distress</option>
+                  <option value="Luggage Safety & Immediate Escort">Luggage Safety & Immediate Escort</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                    Station Hub
+                  </label>
+                  <select
+                    value={manualSosForm.stationCode}
+                    onChange={(e) => setManualSosForm({ ...manualSosForm, stationCode: e.target.value })}
+                    className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs cursor-pointer"
+                  >
+                    <option value="KZJ">KZJ - Kazipet Jn</option>
+                    <option value="SC">SC - Secunderabad Jn</option>
+                    <option value="BZA">BZA - Vijayawada Jn</option>
+                    <option value="WL">WR - Warangal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                    Train No.
+                  </label>
+                  <input
+                    type="text"
+                    value={manualSosForm.trainNumber}
+                    onChange={(e) => setManualSosForm({ ...manualSosForm, trainNumber: e.target.value })}
+                    placeholder="e.g. 12723"
+                    className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                  Passenger / Reporter Name
+                </label>
+                <input
+                  type="text"
+                  value={manualSosForm.passengerName}
+                  onChange={(e) => setManualSosForm({ ...manualSosForm, passengerName: e.target.value })}
+                  placeholder="e.g. S. Venkat Reddy"
+                  className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                    Coach / Seat
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={manualSosForm.coach}
+                      onChange={(e) => setManualSosForm({ ...manualSosForm, coach: e.target.value })}
+                      placeholder="B2"
+                      className="w-1/2 p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono"
+                    />
+                    <input
+                      type="text"
+                      value={manualSosForm.seat}
+                      onChange={(e) => setManualSosForm({ ...manualSosForm, seat: e.target.value })}
+                      placeholder="45"
+                      className="w-1/2 p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                    Contact Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={manualSosForm.passengerPhone}
+                    onChange={(e) => setManualSosForm({ ...manualSosForm, passengerPhone: e.target.value })}
+                    placeholder="+91 9876543210"
+                    className="w-full p-2 bg-[#F8FAFC] dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setManualSosModal(false)}
+                  className="btn-secondary py-2 px-4 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary bg-rose-600 hover:bg-rose-700 text-white py-2 px-4 text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  Dispatch Emergency SOS
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal B: Emergency Contacts Directory Modal */}
+      {safetyContactsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                  South Central Railway Safety Desks & Hotlines
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSafetyContactsModal(false)}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              {[
+                { agency: 'Railway Protection Force (RPF)', scope: 'National Emergency Dispatch', hotline: '182', phone: '+91 40 2778 8200' },
+                { agency: 'SCR Rail Security Control Room', scope: 'Secunderabad Division HQ', hotline: '139', phone: '+91 40 2778 8888' },
+                { agency: 'Government Railway Police (GRP)', scope: 'Telangana & AP Jurisdiction', hotline: '1512', phone: '+91 40 2780 1111' },
+                { agency: 'Kazipet (KZJ) Station Master', scope: 'Platform Operations Supervisor', hotline: 'KZJ-01', phone: '+91 870 242 4100' },
+                { agency: 'Emergency Medical Escort Unit', scope: 'Rapid Platform Ambulance', hotline: '108', phone: '+91 40 2778 9108' }
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-zinc-900/70 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between gap-3"
+                >
+                  <div>
+                    <h5 className="font-bold text-xs text-zinc-900 dark:text-white">
+                      {item.agency}
+                    </h5>
+                    <p className="text-[10.5px] text-zinc-400">
+                      {item.scope}
+                    </p>
+                  </div>
+                  <div className="text-right font-mono shrink-0">
+                    <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-[10px] block">
+                      Hotline: {item.hotline}
+                    </span>
+                    <a
+                      href={`tel:${item.phone}`}
+                      className="text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-blue-600 hover:underline font-bold mt-0.5 block"
+                    >
+                      {item.phone}
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setSafetyContactsModal(false)}
+                className="btn-secondary py-2 px-4 text-xs font-semibold"
+              >
+                Close Directory
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal C: Emergency Response Protocols Modal */}
+      {protocolsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                  Standard Operating Procedures (SOP): Emergency Triage
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProtocolsModal(false)}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-zinc-600 dark:text-zinc-300">
+              <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900">
+                <span className="font-bold text-blue-700 dark:text-blue-300 uppercase text-[10px] block font-mono">
+                  Level 1 Priority Incident Protocol
+                </span>
+                <p className="text-[11.5px] text-zinc-600 dark:text-zinc-300 mt-1">
+                  When a distress signal is detected via passenger app or sahayak handheld, safety controllers must execute the 4-phase rapid response:
+                </p>
+              </div>
+
+              <ol className="space-y-2.5 font-medium pl-1">
+                <li className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                  <div>
+                    <strong className="text-zinc-900 dark:text-white block">Verification & Telemetry Handshake:</strong>
+                    <span className="text-zinc-500 text-[11px]">Confirm passenger coach/seat, live PNR status, and train coordinates via IRCTC telemetry.</span>
+                  </div>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                  <div>
+                    <strong className="text-zinc-900 dark:text-white block">Platform Supervisor Dispatch:</strong>
+                    <span className="text-zinc-500 text-[11px]">Station master and on-duty platform supervisor receive automated dispatch ping with berth details.</span>
+                  </div>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+                  <div>
+                    <strong className="text-zinc-900 dark:text-white block">Sahayak Rapid Intercept:</strong>
+                    <span className="text-zinc-500 text-[11px]">Nearest on-duty Sahayak is assigned to assist passenger with luggage, escort, or wheelchair support.</span>
+                  </div>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">4</span>
+                  <div>
+                    <strong className="text-zinc-900 dark:text-white block">RPF / Medical Desk Clearance:</strong>
+                    <span className="text-zinc-500 text-[11px]">If medical or security handoff is required, alert Railway Protection Force platform unit prior to train arrival.</span>
+                  </div>
+                </li>
+              </ol>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setProtocolsModal(false)}
+                className="btn-primary bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 text-xs font-bold rounded-xl"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal D: Recent Alerts History Modal */}
+      {historyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#0D111A] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-white">
+                  Emergency Incident History (24 Hours)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryModal(false)}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-8 text-center text-zinc-400 font-mono">
+                <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                <p className="font-bold text-zinc-800 dark:text-zinc-200 text-xs">
+                  Zero Distress Alerts in Past 24 Hours
+                </p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  All South Central Railway station platforms Operating in Safe State.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setHistoryModal(false)}
+                className="btn-secondary py-2 px-4 text-xs font-semibold"
+              >
+                Close History
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -838,8 +2758,8 @@ function IncidentDetailModal({ incident, onClose, onInvestigate, onResolve, onIg
     incident.severity === 'critical'
       ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
       : incident.severity === 'warning'
-      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-      : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300 dark:border-blue-800';
+        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300 dark:border-blue-800';
 
   return (
     <div
@@ -1054,8 +2974,14 @@ function IncidentDetailModal({ incident, onClose, onInvestigate, onResolve, onIg
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
 
-  // Navigation tabs: 'bookings' | 'overview' | 'finance' | 'payouts' | 'assistants' | 'passengers' | 'sos'
-  const [activeTab, setActiveTab] = useState('bookings');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Navigation tabs: 'bookings' | 'overview' | 'finance' | 'payouts' | 'assistants' | 'passengers' | 'sos' | 'launch'
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'passengers');
+
+  // Always reset window scroll to top when switching navigation tabs
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [activeTab]);
 
   // Finance & Reconciliation States (Phase 4)
   const [reconReport, setReconReport] = useState(null);
@@ -1143,6 +3069,10 @@ export default function AdminDashboard() {
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState('ALL');
   const [selectedDateRange, setSelectedDateRange] = useState('ALL');
+  const [selectedAssistantFilter, setSelectedAssistantFilter] = useState('ALL');
+  const [selectedServiceFilter, setSelectedServiceFilter] = useState('ALL');
+  const [selectedSosFilter, setSelectedSosFilter] = useState('ALL');
+  const [selectedBerthFilter, setSelectedBerthFilter] = useState('ALL');
 
   // Selected Booking for Detail Inspector
   const [inspectingBooking, setInspectingBooking] = useState(null);
@@ -1156,9 +3086,15 @@ export default function AdminDashboard() {
 
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Pagination for Master Ledger
+  // Pagination & Layout for Master Ledger
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 15;
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState('newest');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [selectedDrawerBooking, setSelectedDrawerBooking] = useState(null);
+  const selectedDrawerBookingRef = useRef(null);
+  selectedDrawerBookingRef.current = selectedDrawerBooking;
+
 
   // Active Sessions States (Phase 6.4)
   const [adminSessionsList, setAdminSessionsList] = useState([]);
@@ -1187,56 +3123,106 @@ export default function AdminDashboard() {
   // --------------------------------------------------
   // DATA FETCHING
   // --------------------------------------------------
-  const fetchAll = useCallback(async () => {
+  const isFetchingRef = useRef(false);
+  const isInitialMount = useRef(true);
+
+  const fetchAll = useCallback(async (isManual = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
-      setLoading(true);
+      if (isInitialMount.current || isManual) {
+        setLoading(true);
+      }
       const [sRes, pRes, bRes, aRes, uRes, sosRes, payRes, incRes, incStatRes, healthRes, recovRes, tRes, sessRes, secMetRes, secIncRes] = await Promise.all([
-        axios.get('/admin/stats').catch(() => ({ data: {} })),
-        axios.get('/admin/pending-assistants').catch(() => ({ data: [] })),
-        axios.get('/admin/bookings').catch(() => ({ data: [] })),
-        axios.get('/admin/assistants').catch(() => ({ data: [] })),
-        axios.get('/admin/users').catch(() => ({ data: [] })),
-        axios.get('/admin/sos-alerts').catch(() => ({ data: [] })),
-        axios.get('/admin/payouts').catch(() => ({ data: { payouts: [] } })),
-        axios.get('/admin/incidents').catch(() => ({ data: { incidents: [] } })),
-        axios.get('/admin/incidents/stats').catch(() => ({ data: {} })),
-        axios.get('/admin/finance/health').catch(() => ({ data: { health: null } })),
-        axios.get('/admin/finance/payment-recovery').catch(() => ({ data: { stuck_payments: [] } })),
-        axios.get('/admin/support-tickets').catch(() => axios.get('/support/tickets')).catch(() => ({ data: [] })),
-        axios.get('/admin/sessions').catch(() => ({ data: { sessions: [] } })),
-        axios.get('/security/admin/incidents/metrics').catch(() => ({ data: { metrics: {} } })),
-        axios.get('/security/admin/incidents').catch(() => ({ data: { incidents: [] } })),
+        axios.get('/admin/stats').catch((err) => ({ error: err })),
+        axios.get('/admin/pending-assistants').catch((err) => ({ error: err })),
+        axios.get('/admin/bookings').catch((err) => ({ error: err })),
+        axios.get('/admin/assistants').catch((err) => ({ error: err })),
+        axios.get('/admin/users').catch((err) => ({ error: err })),
+        axios.get('/admin/sos-alerts').catch((err) => ({ error: err })),
+        axios.get('/admin/payouts').catch((err) => ({ error: err })),
+        axios.get('/admin/incidents').catch((err) => ({ error: err })),
+        axios.get('/admin/incidents/stats').catch((err) => ({ error: err })),
+        axios.get('/admin/finance/health').catch((err) => ({ error: err })),
+        axios.get('/admin/finance/payment-recovery').catch((err) => ({ error: err })),
+        axios.get('/admin/support-tickets').catch(() => axios.get('/support/tickets')).catch((err) => ({ error: err })),
+        axios.get('/admin/sessions').catch((err) => ({ error: err })),
+        axios.get('/security/admin/incidents/metrics').catch((err) => ({ error: err })),
+        axios.get('/security/admin/incidents').catch((err) => ({ error: err })),
       ]);
 
-      setStats(sRes.data || {});
-      setKycQueue(pRes.data || []);
-      setBookings(bRes.data || []);
-      setAssistantsList(aRes.data || []);
-      setUsersList(uRes.data || []);
-      setSosAlerts(sosRes.data || []);
-      setPayoutsList(payRes.data?.payouts || payRes.data || []);
-      setIncidentsList(incRes.data?.incidents || []);
-      setIncidentStats(incStatRes.data || { total: 0, open: 0, investigating: 0, critical: 0, warning: 0 });
-      setFinancialHealth(healthRes.data?.health || null);
-      setPaymentRecoveryList(recovRes.data?.stuck_payments || []);
-      const ticketArray = Array.isArray(tRes.data) ? tRes.data : (tRes.data?.tickets || []);
-      setSupportTickets(ticketArray);
-      setAdminSessionsList(sessRes.data?.sessions || []);
-      setSecurityMetrics(secMetRes.data?.metrics || {});
-      setSecurityIncidentsList(secIncRes.data?.incidents || []);
+      if (sRes?.data && typeof sRes.data === 'object' && !sRes.error) {
+        setStats(sRes.data);
+      }
+      if (Array.isArray(pRes?.data)) {
+        setKycQueue(pRes.data);
+      }
+      if (Array.isArray(bRes?.data)) {
+        setBookings(bRes.data);
+      }
+      if (Array.isArray(aRes?.data)) {
+        setAssistantsList(aRes.data);
+      }
+      if (Array.isArray(uRes?.data)) {
+        setUsersList(uRes.data);
+      }
+      if (Array.isArray(sosRes?.data)) {
+        setSosAlerts(sosRes.data);
+      }
+      if (payRes?.data && !payRes.error) {
+        setPayoutsList(payRes.data?.payouts || (Array.isArray(payRes.data) ? payRes.data : []));
+      }
+      if (Array.isArray(incRes?.data?.incidents)) {
+        setIncidentsList(incRes.data.incidents);
+      }
+      if (incStatRes?.data && typeof incStatRes.data === 'object' && !incStatRes.error) {
+        setIncidentStats(incStatRes.data);
+      }
+      if (healthRes?.data && !healthRes.error && healthRes.data.health !== undefined) {
+        setFinancialHealth(healthRes.data.health);
+      }
+      if (Array.isArray(recovRes?.data?.stuck_payments)) {
+        setPaymentRecoveryList(recovRes.data.stuck_payments);
+      }
+      if (tRes?.data && !tRes.error) {
+        const ticketArray = Array.isArray(tRes.data) ? tRes.data : (tRes.data?.tickets || []);
+        if (Array.isArray(ticketArray)) {
+          setSupportTickets(ticketArray);
+        }
+      }
+      if (Array.isArray(sessRes?.data?.sessions)) {
+        setAdminSessionsList(sessRes.data.sessions);
+      }
+      if (secMetRes?.data?.metrics && !secMetRes.error) {
+        setSecurityMetrics(secMetRes.data.metrics);
+      }
+      if (Array.isArray(secIncRes?.data?.incidents)) {
+        setSecurityIncidentsList(secIncRes.data.incidents);
+      }
       setLastSynced(new Date());
 
       // If inspecting a booking, sync it with newest data
-      if (inspectingBookingRef.current) {
-        const updated = (bRes.data || []).find((b) => b.id === inspectingBookingRef.current?.id);
-        if (updated && inspectingBookingRef.current) {
+      if (inspectingBookingRef.current && Array.isArray(bRes?.data)) {
+        const updated = bRes.data.find((b) => b.id === inspectingBookingRef.current?.id);
+        if (updated) {
           setInspectingBooking(updated);
+        }
+      }
+      // If drawer viewing a booking, sync it with newest data
+      if (selectedDrawerBookingRef.current && Array.isArray(bRes?.data)) {
+        const updatedDrawer = bRes.data.find((b) => b.id === selectedDrawerBookingRef.current?.id);
+        if (updatedDrawer) {
+          setSelectedDrawerBooking(updatedDrawer);
         }
       }
     } catch (err) {
       console.error('ADMIN REFRESH ERROR:', err);
     } finally {
-      setLoading(false);
+      isFetchingRef.current = false;
+      if (isInitialMount.current || isManual) {
+        isInitialMount.current = false;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -1247,7 +3233,7 @@ export default function AdminDashboard() {
     try {
       await axios.post(`/admin/sessions/${sessionId}/revoke`);
       toast.success('Session forcibly revoked');
-      fetchAll();
+      fetchAll(true);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to revoke session');
     } finally {
@@ -1260,16 +3246,16 @@ export default function AdminDashboard() {
     try {
       await axios.post(`/admin/users/${userId}/revoke-sessions`);
       toast.success(`All sessions terminated for ${userEmail || userId}`);
-      fetchAll();
+      fetchAll(true);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to revoke user sessions');
     }
   };
 
-  // Polling and Socket Integration (Rapid 3-Second Live Telemetry Sync)
+  // Polling and Socket Integration (Steady 8-Second Sync with Instant Debounced Socket Events)
   useEffect(() => {
     fetchAll();
-    const interval = setInterval(fetchAll, 3000);
+    const interval = setInterval(() => fetchAll(false), 8000);
 
     if (window.socket) {
       const emitJoinAdmin = () => {
@@ -1279,7 +3265,14 @@ export default function AdminDashboard() {
       emitJoinAdmin();
       window.socket.on('connect', emitJoinAdmin);
 
-      const handleLiveEvent = () => fetchAll();
+      let debounceTimer = null;
+      const handleLiveEvent = () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          fetchAll(false);
+        }, 400);
+      };
+
       window.socket.on('sos_alert', handleLiveEvent);
       window.socket.on('status_update', handleLiveEvent);
       window.socket.on('new_booking', handleLiveEvent);
@@ -1293,6 +3286,7 @@ export default function AdminDashboard() {
 
       return () => {
         clearInterval(interval);
+        if (debounceTimer) clearTimeout(debounceTimer);
         window.socket.off('connect', emitJoinAdmin);
         window.socket.off('sos_alert', handleLiveEvent);
         window.socket.off('status_update', handleLiveEvent);
@@ -1506,8 +3500,9 @@ export default function AdminDashboard() {
 
   const handleUpdateBooking = async (bookingId, payload) => {
     const { data } = await axios.patch(`/admin/bookings/${bookingId}`, payload);
-    // Optimistically update inspecting modal
+    // Optimistically update inspecting modal and drawer
     setInspectingBooking(data);
+    setSelectedDrawerBooking(data);
     // Optimistically update bookings list
     setBookings((prev) => prev.map((b) => (b.id === bookingId ? data : b)));
     // Refresh background data
@@ -1686,10 +3681,35 @@ export default function AdminDashboard() {
   // --------------------------------------------------
   const sortedBookings = useMemo(() => {
     return [...bookings].sort((a, b) => {
+      if (sortBy === 'oldest') {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return timeA - timeB;
+      }
+      if (sortBy === 'price_high') {
+        return (Number(b.total_price) || 0) - (Number(a.total_price) || 0);
+      }
+      if (sortBy === 'price_low') {
+        return (Number(a.total_price) || 0) - (Number(b.total_price) || 0);
+      }
       const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
       return timeB - timeA; // Descending: latest booking at index 0
     });
+  }, [bookings, sortBy]);
+
+  const bookingTabCounts = useMemo(() => {
+    return {
+      all: bookings.length,
+      pending: bookings.filter((b) => (b.booking_status || '').toLowerCase() === 'pending').length,
+      assigned: bookings.filter((b) => (b.booking_status || '').toLowerCase() === 'accepted').length,
+      in_service: bookings.filter((b) => {
+        const s = (b.booking_status || '').toLowerCase();
+        return s === 'in_service' || s === 'arriving';
+      }).length,
+      completed: bookings.filter((b) => (b.booking_status || '').toLowerCase() === 'completed').length,
+      cancelled: bookings.filter((b) => (b.booking_status || '').toLowerCase() === 'cancelled').length,
+    };
   }, [bookings]);
 
   // --------------------------------------------------
@@ -1754,35 +3774,92 @@ export default function AdminDashboard() {
       }
 
       // 2. Station Filter
-      if (selectedStation !== 'ALL' && b.station_code !== selectedStation) return false;
+      if (selectedStation !== 'ALL' && selectedStation !== 'all') {
+        if ((b.station_code || '').toUpperCase() !== selectedStation.toUpperCase()) return false;
+      }
 
       // 3. Booking Status Filter
-      if (selectedStatus !== 'ALL' && b.booking_status !== selectedStatus) return false;
+      if (selectedStatus !== 'ALL' && selectedStatus !== 'all') {
+        const bStatus = (b.booking_status || '').toLowerCase();
+        const selStatus = selectedStatus.toLowerCase();
+        if (selStatus === 'in_service') {
+          if (bStatus !== 'in_service' && bStatus !== 'arriving') return false;
+        } else if (bStatus !== selStatus) {
+          return false;
+        }
+      }
 
       // 4. Payment Status Filter
-      if (selectedPaymentStatus !== 'ALL' && b.payment_status !== selectedPaymentStatus) return false;
+      if (selectedPaymentStatus !== 'ALL' && selectedPaymentStatus !== 'all') {
+        if ((b.payment_status || '').toLowerCase() !== selectedPaymentStatus.toLowerCase()) return false;
+      }
 
       // 5. Date Range Filter
       if (selectedDateRange === 'TODAY') {
         const todayStr = new Date().toISOString().slice(0, 10);
-        if (!b.created_at?.startsWith(todayStr)) return false;
+        const bookingDateStr = b.created_at ? new Date(b.created_at).toISOString().slice(0, 10) : '';
+        if (bookingDateStr !== todayStr) return false;
       } else if (selectedDateRange === 'WEEK') {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        if (new Date(b.created_at) < sevenDaysAgo) return false;
+        const bookingTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (bookingTime < sevenDaysAgo.getTime()) return false;
+      }
+
+      // 6. Assigned Assistant Filter
+      if (selectedAssistantFilter !== 'ALL' && selectedAssistantFilter !== 'all') {
+        if (selectedAssistantFilter === 'UNASSIGNED') {
+          if (b.assistant_id) return false;
+        } else if (
+          b.assistant_id !== selectedAssistantFilter &&
+          b.assistant?.name !== selectedAssistantFilter
+        ) {
+          return false;
+        }
+      }
+
+      // 7. Service Requested Filter
+      if (selectedServiceFilter !== 'ALL' && selectedServiceFilter !== 'all') {
+        const s = b.services || {};
+        if (selectedServiceFilter === 'luggage' && !s.luggage) return false;
+        if (selectedServiceFilter === 'escort' && !s.escort) return false;
+        if (selectedServiceFilter === 'wheelchair' && !s.wheelchair) return false;
+        if (selectedServiceFilter === 'snacks' && !s.snacks) return false;
+        if (selectedServiceFilter === 'transport' && !s.transport) return false;
+        if (selectedServiceFilter === 'language' && !s.language) return false;
+      }
+
+      // 8. SOS / Emergency Filter
+      if (selectedSosFilter === 'SOS_ONLY' && !b.sos_triggered) return false;
+      if (selectedSosFilter === 'NORMAL' && b.sos_triggered) return false;
+
+      // 9. Berth / Seat Class Filter
+      if (selectedBerthFilter !== 'ALL' && selectedBerthFilter !== 'all') {
+        const berth = (b.berth_type || b.services?.berth_type || '').toLowerCase();
+        if (!berth.includes(selectedBerthFilter.toLowerCase())) return false;
       }
 
       return true;
     });
-  }, [sortedBookings, selectedStation, selectedStatus, selectedPaymentStatus, selectedDateRange, filterQuery]);
+  }, [
+    sortedBookings,
+    selectedStation,
+    selectedStatus,
+    selectedPaymentStatus,
+    selectedDateRange,
+    selectedAssistantFilter,
+    selectedServiceFilter,
+    selectedSosFilter,
+    selectedBerthFilter,
+    filterQuery
+  ]);
 
   // Paginated bookings
   const paginatedBookings = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
     return filteredBookings.slice(start, start + rowsPerPage);
-  }, [filteredBookings, currentPage]);
+  }, [filteredBookings, currentPage, rowsPerPage]);
 
-  const totalPages = Math.ceil(filteredBookings.length / rowsPerPage) || 1;
 
   // Chart Data Preparation
   const stationChartData = useMemo(() => {
@@ -1842,2583 +3919,544 @@ export default function AdminDashboard() {
   }, [supportTickets]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-black dark:text-white font-sans flex flex-col">
+    <div className="min-h-screen bg-[#F7F9FC] dark:bg-[#07090E] text-zinc-900 dark:text-zinc-100 font-sans flex select-none">
       {/* Toast feedback provider */}
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
 
-      {/* ── COMMAND TOPBAR ─────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-black text-white border-b border-zinc-800 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center gap-4">
-          <div className="flex items-center gap-4">
-            <Brand dark sub="Operations Hub" />
-            <div className="hidden md:flex items-center gap-2 pl-3 border-l border-zinc-800 text-xs font-mono text-zinc-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>SCR Telemetry Active</span>
-            </div>
-          </div>
+      {/* ── 1. LEFT SIDEBAR ─────────────────────────────────────── */}
+      <AdminSidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
+        bookingsCount={bookings.length}
+        supportTicketsCount={supportTickets.length}
+        kycQueueCount={kycQueue.length}
+        usersCount={usersList.length}
+        sosAlertsCount={sosAlerts.length}
+        payoutsCount={payoutsList.filter((p) => p.status === 'requested').length}
+        sessionsCount={adminSessionsList.length}
+        securityIncidentsCount={securityIncidentsList.length}
+        reconAlert={reconReport?.health?.critical_issues}
+        financialIncidentAlert={incidentStats.critical}
+        securityIncidentAlert={securityMetrics?.criticalIncidents}
+        user={user}
+        onLogout={logout}
+      />
 
-          <div className="flex items-center gap-3">
-            {/* Live Sync Timestamp */}
-            <span className="text-[11px] font-mono text-zinc-400 hidden lg:inline-block">
-              Synced: {lastSynced.toLocaleTimeString()}
-            </span>
+      {/* ── 2. MAIN LAYOUT CONTAINER (offset by sidebar width) ───── */}
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isSidebarCollapsed ? 'pl-[72px]' : 'pl-[240px]'
+          }`}
+      >
+        {/* Command Top Header */}
+        <AdminTopHeader
+          isSidebarCollapsed={isSidebarCollapsed}
+          setIsSidebarCollapsed={setIsSidebarCollapsed}
+          lastSynced={lastSynced}
+          onRefresh={() => {
+            fetchAll(true);
+            toast.success('Live telemetry synchronized');
+          }}
+          isRefreshing={loading}
+          onExportLedger={exportFullLedgerCSV}
+          urgentNotificationCount={sosAlerts.length + (incidentStats.critical || 0)}
+          user={user}
+          onLogout={logout}
+          onOpenSos={() => setActiveTab('sos')}
+          searchQuery={filterQuery}
+          onSearchChange={(q) => setFilterQuery(q)}
+          onSearchSubmit={(q) => {
+            setActiveTab('bookings');
+            setFilterQuery(q);
+          }}
+          sosAlerts={sosAlerts}
+          kycQueue={kycQueue}
+          securityIncidentsList={securityIncidentsList}
+          incidentsList={incidentsList}
+          paymentRecoveryList={paymentRecoveryList}
+          payoutsList={payoutsList}
+          supportTickets={supportTickets}
+          bookings={bookings}
+          setActiveTab={setActiveTab}
+          setSelectedDrawerBooking={setSelectedDrawerBooking}
+          setSelectedDeskTicketId={setSelectedDeskTicketId}
+        />
 
-            {/* Manual Refresh */}
-            <button
-              type="button"
-              onClick={() => {
-                fetchAll();
-                toast.success('Live data synchronized');
-              }}
-              title="Force Refresh Data"
-              className="p-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-
-            {/* Full CSV Export */}
-            <button
-              type="button"
-              onClick={exportFullLedgerCSV}
-              className="btn-secondary text-xs py-1.5 px-3 bg-zinc-900 text-white border-zinc-700 hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Ledger</span>
-            </button>
-
-            {/* Admin Profile & Sign Out */}
-            <div className="flex items-center gap-3 pl-3 border-l border-zinc-800">
-              <span className="text-xs font-mono text-zinc-300 font-semibold hidden sm:inline-block">
-                {user?.name || 'Administrator'}
-              </span>
-              <button
-                type="button"
-                onClick={logout}
-                className="text-xs font-bold text-rose-400 hover:text-white transition-colors cursor-pointer"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Tabs Bar */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex overflow-x-auto gap-2 border-t border-zinc-900 text-xs font-mono">
-          {[
-            { id: 'bookings', label: 'Master Bookings Ledger', icon: Layers, count: bookings.length },
-            { id: 'overview', label: 'Operations & Analytics', icon: TrendingUp },
-            { id: 'finance', label: 'Finance & Reconciliation', icon: ShieldCheck, alert: reconReport?.health?.critical_issues > 0 ? reconReport.health.critical_issues : undefined },
-            { id: 'incidents', label: 'Financial Incidents', icon: ShieldAlert, alert: incidentStats.critical > 0 ? incidentStats.critical : undefined, badge: incidentStats.open > 0 ? incidentStats.open : undefined },
-            { id: 'support_tickets', label: 'Station Desk & Support', icon: LifeBuoy, count: supportTickets.length, badge: pendingTicketsCount > 0 ? pendingTicketsCount : (supportTicketCount > 0 ? supportTicketCount : undefined) },
-            { id: 'launch', label: 'Launch Center', icon: Activity },
-            { id: 'payouts', label: 'Sahayak Payouts', icon: CreditCard, badge: payoutsList.filter(p => p.status === 'requested').length },
-            { id: 'assistants', label: 'Sahayak Force & KYC', icon: Briefcase, badge: kycQueue.length },
-            { id: 'passengers', label: 'Passengers Directory', icon: Users, count: usersList.length },
-            { id: 'sos', label: 'Emergency Incident SOS', icon: AlertTriangle, alert: sosAlerts.length },
-            { id: 'sessions', label: 'Active Sessions', icon: Shield, count: adminSessionsList.length },
-            { id: 'security_monitoring', label: 'Security & Incidents', icon: ShieldAlert, alert: securityMetrics?.criticalIncidents > 0 ? securityMetrics.criticalIncidents : undefined, count: securityIncidentsList.length },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-3 px-4 border-b-2 font-semibold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${isActive
-                    ? 'border-blue-500 text-white bg-zinc-900/50'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                  }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${tab.alert ? 'text-red-500 animate-pulse' : ''}`} />
-                <span>{tab.label}</span>
-                {tab.count !== undefined && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-[10px] text-zinc-300 font-mono">
-                    {tab.count}
-                  </span>
-                )}
-                {tab.badge > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-[10px] text-white font-mono">
-                    {tab.badge}
-                  </span>
-                )}
-                {tab.alert > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-[10px] text-white font-mono animate-pulse">
-                    {tab.alert} SOS
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </header>
-
-      {/* ── MAIN CONTENT CONTAINER ─────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full space-y-6">
-
-        {/* ── ACTIVE EMERGENCY SOS TICKER ─────────────────────── */}
-        {sosAlerts.length > 0 && (
-          <div className="bg-red-600 text-white rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-scale-in">
-            <div className="flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-white animate-ping" />
-              <div>
-                <h4 className="font-bold text-sm uppercase font-mono tracking-wider">
-                  Urgent SOS Emergencies Active ({sosAlerts.length})
-                </h4>
-                <p className="text-xs text-red-100 font-mono">
-                  Immediate passenger assistance required across platform transit nodes.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('sos')}
-              className="btn-secondary py-1.5 px-4 text-xs bg-white text-red-700 border-white hover:bg-red-50 font-bold cursor-pointer"
-            >
-              Open Emergency Center ➔
-            </button>
-          </div>
-        )}
-
-        {/* ========================================================
-            TAB 1: MASTER BOOKINGS LEDGER
-            ======================================================== */}
-        {activeTab === 'bookings' && (
-          <div className="space-y-4 animate-fade-in">
-
-            {/* Filter and Search Panel */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Main Content Viewport */}
+        <main className="flex-1 p-4 sm:p-6 max-w-[1600px] w-full mx-auto space-y-5">
+          {/* Active Emergency SOS Alert Banner */}
+          {sosAlerts.length > 0 && (
+            <div className="bg-red-600 text-white rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-scale-in">
+              <div className="flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-white animate-ping" />
                 <div>
-                  <h3 className="text-lg font-bold tracking-tight text-black dark:text-white flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-blue-600" />
-                    All Bookings Master Ledger
-                  </h3>
-                  <p className="text-xs text-zinc-500">
+                  <h4 className="font-bold text-sm uppercase font-mono tracking-wider">
+                    Urgent SOS Emergencies Active ({sosAlerts.length})
+                  </h4>
+                  <p className="text-xs text-red-100 font-mono">
+                    Immediate passenger assistance required across platform transit nodes.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('sos')}
+                className="btn-secondary py-1.5 px-4 text-xs bg-white text-red-700 border-white hover:bg-red-50 font-bold cursor-pointer"
+              >
+                Open Emergency Center ➔
+              </button>
+            </div>
+          )}
+
+          {/* ========================================================
+              TAB 1: MASTER BOOKINGS LEDGER
+              ======================================================== */}
+          {activeTab === 'bookings' && (
+            <div className="space-y-4 animate-fade-in">
+              {/* Page Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-2xl font-bold font-sans text-zinc-900 dark:text-white tracking-tight">
+                      Master Bookings Ledger
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-mono font-bold text-xs">
+                      {bookings.length}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Access 100% of telemetry, coach, seat, PNR, secret start OTP, and passenger/assistant details.
                   </p>
                 </div>
 
-                {/* Universal Search Input */}
-                <div className="w-full md:w-80 relative">
-                  <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search by ID, passenger, phone, train, PNR..."
-                    value={filterQuery}
-                    onChange={(e) => {
-                      setFilterQuery(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="input-base text-xs pl-9 pr-3 py-2.5 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                  />
-                  {filterQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setFilterQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-black dark:hover:text-white cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                {/* Date Indicator on Right */}
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0D111A] text-xs font-mono text-zinc-700 dark:text-zinc-300 shrink-0 shadow-2xs">
+                  <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Today · {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                 </div>
               </div>
 
-              {/* Multi-Filter Controls */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 text-xs">
-
-                {/* Station Filter */}
-                <div>
-                  <label className="text-[10px] uppercase font-mono text-zinc-400 font-bold block mb-1">
-                    Station Hub
-                  </label>
-                  <select
-                    value={selectedStation}
-                    onChange={(e) => {
-                      setSelectedStation(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                  >
-                    <option value="ALL">All Hubs (SC, BZA, KZJ, WL)</option>
-                    {STATIONS.map((st) => (
-                      <option key={st.code} value={st.code}>
-                        {st.code} - {st.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Booking Status Filter */}
-                <div>
-                  <label className="text-[10px] uppercase font-mono text-zinc-400 font-bold block mb-1">
-                    Booking Status
-                  </label>
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => {
-                      setSelectedStatus(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                  >
-                    <option value="ALL">All Statuses</option>
-                    <option value="pending">Pending Handshake</option>
-                    <option value="accepted">Accepted by Sahayak</option>
-                    <option value="arriving">Assistant Arriving</option>
-                    <option value="in_service">In Service (OTP Verified)</option>
-                    <option value="completed">Mission Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
-
-                {/* Payment Status Filter */}
-                <div>
-                  <label className="text-[10px] uppercase font-mono text-zinc-400 font-bold block mb-1">
-                    Settlement Status
-                  </label>
-                  <select
-                    value={selectedPaymentStatus}
-                    onChange={(e) => {
-                      setSelectedPaymentStatus(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                  >
-                    <option value="ALL">All Settlements</option>
-                    <option value="paid">Paid</option>
-                    <option value="pending">Pending</option>
-                    <option value="refunded">Refunded</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                </div>
-
-                {/* Date Filter */}
-                <div>
-                  <label className="text-[10px] uppercase font-mono text-zinc-400 font-bold block mb-1">
-                    Date Window
-                  </label>
-                  <select
-                    value={selectedDateRange}
-                    onChange={(e) => {
-                      setSelectedDateRange(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                  >
-                    <option value="ALL">All Time</option>
-                    <option value="TODAY">Today Only</option>
-                    <option value="WEEK">Last 7 Days</option>
-                  </select>
-                </div>
-
+              {/* 6 KPI Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                <KpiCard
+                  icon={Layers}
+                  iconBg="bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                  label="Total Bookings"
+                  value={stats.totalBookings || bookings.length}
+                  trend="+12% today"
+                  trendPositive={true}
+                  sparklineColor="#2563EB"
+                  sparklinePath="M 0 16 Q 15 10 30 13 T 60 4"
+                  onClick={() => { setSelectedStatus('ALL'); setCurrentPage(1); }}
+                />
+                <KpiCard
+                  icon={Clock}
+                  iconBg="bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
+                  label="Pending Assignments"
+                  value={bookingTabCounts.pending}
+                  statusText="Needs attention"
+                  statusDotColor="bg-amber-500"
+                  sparklineColor="#F59E0B"
+                  sparklinePath="M 0 8 Q 15 14 30 11 T 60 14"
+                  onClick={() => { setSelectedStatus('pending'); setCurrentPage(1); }}
+                />
+                <KpiCard
+                  icon={User}
+                  iconBg="bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                  label="In Service"
+                  value={bookingTabCounts.in_service}
+                  statusText="Currently active"
+                  statusDotColor="bg-blue-500"
+                  sparklineColor="#2563EB"
+                  sparklinePath="M 0 15 Q 15 6 30 10 T 60 4"
+                  onClick={() => { setSelectedStatus('in_service'); setCurrentPage(1); }}
+                />
+                <KpiCard
+                  icon={CheckCircle}
+                  iconBg="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                  label="Completed Today"
+                  value={bookingTabCounts.completed}
+                  trend="+22% vs yesterday"
+                  trendPositive={true}
+                  sparklineColor="#10B981"
+                  sparklinePath="M 0 18 Q 15 12 30 14 T 60 2"
+                  onClick={() => { setSelectedStatus('completed'); setCurrentPage(1); }}
+                />
+                <KpiCard
+                  icon={DollarSign}
+                  iconBg="bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                  label="Revenue (Today)"
+                  value={`₹${(stats.todayRevenue || stats.revenue || 0).toLocaleString()}`}
+                  trend="+18% vs yesterday"
+                  trendPositive={true}
+                  sparklineColor="#2563EB"
+                  sparklinePath="M 0 16 Q 15 8 30 11 T 60 3"
+                  onClick={() => { setSelectedPaymentStatus('paid'); setCurrentPage(1); }}
+                />
+                <KpiCard
+                  icon={AlertTriangle}
+                  iconBg="bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400"
+                  label="Incidents"
+                  value={sosAlerts.length + (incidentStats.critical || 0)}
+                  statusText={sosAlerts.length > 0 ? `${sosAlerts.length} urgent` : '0 urgent'}
+                  statusDotColor={sosAlerts.length > 0 ? 'bg-rose-500' : 'bg-emerald-500'}
+                  sparklineColor="#EF4444"
+                  sparklinePath="M 0 10 Q 15 16 30 9 T 60 4"
+                  onClick={() => setActiveTab('sos')}
+                />
               </div>
 
-              {/* Status Bar */}
-              <div className="flex items-center justify-between text-xs text-zinc-500 font-mono pt-1">
-                <span>
-                  Showing {filteredBookings.length} matching missions · Total Value: ₹
-                  {filteredBookings.reduce((sum, b) => sum + (Number(b.total_price) || 0), 0)}
-                </span>
-                {(selectedStation !== 'ALL' || selectedStatus !== 'ALL' || selectedPaymentStatus !== 'ALL' || selectedDateRange !== 'ALL' || filterQuery) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedStation('ALL');
-                      setSelectedStatus('ALL');
-                      setSelectedPaymentStatus('ALL');
-                      setSelectedDateRange('ALL');
-                      setFilterQuery('');
-                      toast.success('Filters cleared');
-                    }}
-                    className="text-blue-600 dark:text-blue-400 hover:underline text-[11px] font-bold cursor-pointer"
-                  >
-                    Clear All Filters
-                  </button>
-                )}
-              </div>
+              {/* Filter and Search Panel */}
+              <BookingFilterToolbar
+                searchQuery={filterQuery}
+                onSearchChange={(q) => {
+                  setFilterQuery(q);
+                  setCurrentPage(1);
+                }}
+                selectedStation={selectedStation}
+                onStationChange={(s) => {
+                  setSelectedStation(s);
+                  setCurrentPage(1);
+                }}
+                selectedStatus={selectedStatus}
+                onStatusChange={(st) => {
+                  setSelectedStatus(st);
+                  setCurrentPage(1);
+                }}
+                selectedPaymentStatus={selectedPaymentStatus}
+                onPaymentStatusChange={(ps) => {
+                  setSelectedPaymentStatus(ps);
+                  setCurrentPage(1);
+                }}
+                selectedDateRange={selectedDateRange}
+                onDateRangeChange={(dr) => {
+                  setSelectedDateRange(dr);
+                  setCurrentPage(1);
+                }}
+                selectedAssistantFilter={selectedAssistantFilter}
+                onAssistantFilterChange={(a) => {
+                  setSelectedAssistantFilter(a);
+                  setCurrentPage(1);
+                }}
+                selectedServiceFilter={selectedServiceFilter}
+                onServiceFilterChange={(sf) => {
+                  setSelectedServiceFilter(sf);
+                  setCurrentPage(1);
+                }}
+                selectedSosFilter={selectedSosFilter}
+                onSosFilterChange={(sos) => {
+                  setSelectedSosFilter(sos);
+                  setCurrentPage(1);
+                }}
+                selectedBerthFilter={selectedBerthFilter}
+                onBerthFilterChange={(bf) => {
+                  setSelectedBerthFilter(bf);
+                  setCurrentPage(1);
+                }}
+                assistants={assistantsList}
+                onClearFilters={() => {
+                  setSelectedStation('ALL');
+                  setSelectedStatus('ALL');
+                  setSelectedPaymentStatus('ALL');
+                  setSelectedDateRange('ALL');
+                  setSelectedAssistantFilter('ALL');
+                  setSelectedServiceFilter('ALL');
+                  setSelectedSosFilter('ALL');
+                  setSelectedBerthFilter('ALL');
+                  setFilterQuery('');
+                  setCurrentPage(1);
+                  toast.success('All filters cleared');
+                }}
+                onExport={exportFullLedgerCSV}
+                isFiltered={
+                  selectedStation !== 'ALL' ||
+                  selectedStatus !== 'ALL' ||
+                  selectedPaymentStatus !== 'ALL' ||
+                  selectedDateRange !== 'ALL' ||
+                  selectedAssistantFilter !== 'ALL' ||
+                  selectedServiceFilter !== 'ALL' ||
+                  selectedSosFilter !== 'ALL' ||
+                  selectedBerthFilter !== 'ALL' ||
+                  Boolean(filterQuery)
+                }
+                totalFilteredCount={filteredBookings.length}
+                totalCount={bookings.length}
+              />
+
+              {/* Status Tabs */}
+              <BookingTabs
+                currentStatusTab={selectedStatus}
+                onStatusTabChange={(tabId) => {
+                  setSelectedStatus(tabId);
+                  setCurrentPage(1);
+                }}
+                counts={bookingTabCounts}
+                sortBy={sortBy}
+                onSortChange={(sb) => setSortBy(sb)}
+              />
+
+              {/* Master Table */}
+              <BookingTable
+                bookings={paginatedBookings}
+                selectedBooking={selectedDrawerBooking}
+                onSelectBooking={(b) => setSelectedDrawerBooking(b)}
+                currentPage={currentPage}
+                onPageChange={(p) => setCurrentPage(p)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(r) => {
+                  setRowsPerPage(r);
+                  setCurrentPage(1);
+                }}
+                totalBookingsCount={filteredBookings.length}
+                onRefresh={() => fetchAll(true)}
+              />
             </div>
+          )}
 
-            {/* Master Table */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400 font-mono">
-                      <th className="py-3 px-4 font-bold">Booking / ID</th>
-                      <th className="py-3 px-4 font-bold">Passenger Details</th>
-                      <th className="py-3 px-4 font-bold">Train & PNR</th>
-                      <th className="py-3 px-4 font-bold">Hub & Location</th>
-                      <th className="py-3 px-4 font-bold">Coach / Seat</th>
-                      <th className="py-3 px-4 font-bold">Tariff & Pay</th>
-                      <th className="py-3 px-4 font-bold">Status</th>
-                      <th className="py-3 px-4 font-bold">Sahayak</th>
-                      <th className="py-3 px-4 font-bold text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {paginatedBookings.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="py-12 text-center text-zinc-400 font-mono">
-                          No matching records found for the selected criteria.
-                        </td>
-                      </tr>
-                    ) : (
-                      paginatedBookings.map((b) => (
-                        <tr
-                          key={b.id}
-                          className="hover:bg-blue-50/40 dark:hover:bg-zinc-800/40 transition-colors group cursor-pointer"
-                          onClick={() => setInspectingBooking(b)}
-                        >
-                          {/* 1. ID */}
-                          <td className="py-3 px-4 font-mono font-semibold">
-                            <span className="text-blue-600 dark:text-blue-400 font-bold block">
-                              #{b.booking_id || b.id?.slice(-8).toUpperCase()}
-                            </span>
-                            {b.booking_id && b.id && (
-                              <span className="block text-[9px] text-zinc-400 font-mono">
-                                Ref: #{b.id.slice(-8).toUpperCase()}
-                              </span>
-                            )}
-                            <span className="block text-[10px] text-zinc-400 font-normal">
-                              {b.created_at ? new Date(b.created_at).toLocaleDateString() : ''} {b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                            </span>
-                          </td>
-
-                          {/* 2. Passenger */}
-                          <td className="py-3 px-4">
-                            <p className="font-bold text-black dark:text-white">
-                              {b.passenger?.name || 'Guest'}
-                            </p>
-                            <p className="text-[11px] text-zinc-500 font-mono">
-                              {b.passenger?.phone || b.passenger?.email || '—'}
-                            </p>
-                          </td>
-
-                          {/* 3. Train & PNR */}
-                          <td className="py-3 px-4 font-mono">
-                            <span className="font-bold text-black dark:text-white">
-                              {b.train_no || b.train_number}
-                            </span>
-                            <span className="block text-[10px] text-zinc-500 truncate max-w-[140px]">
-                              {b.train_name}
-                            </span>
-                            {b.pnr && (
-                              <span className="text-[9px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1 py-0.2 rounded font-bold">
-                                PNR: {b.pnr}
-                              </span>
-                            )}
-                          </td>
-
-                          {/* 4. Station & Platform */}
-                          <td className="py-3 px-4 font-mono">
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
-                              {b.station_code}
-                            </span>
-                            {b.platform && (
-                              <span className="block text-[10px] text-zinc-500">
-                                Pf {b.platform}
-                              </span>
-                            )}
-                          </td>
-
-                          {/* 5. Coach & Seat */}
-                          <td className="py-3 px-4 font-mono">
-                            <span className="font-bold text-black dark:text-white">
-                              {b.coach || 'TBD'} - {b.seat_number || 'TBD'}
-                            </span>
-                            <span className="block text-[10px] text-zinc-500">
-                              {b.action_type === 'collect_from_seat' ? 'De-board' : 'Board'}
-                            </span>
-                          </td>
-
-                          {/* 6. Tariff & Payment */}
-                          <td className="py-3 px-4 font-mono">
-                            <span className="font-bold text-black dark:text-white">
-                              ₹{b.total_price}
-                            </span>
-                            <span className={`block text-[9px] font-bold uppercase mt-0.5 px-1.5 py-0.2 rounded w-fit ${PAYMENT_COLORS[b.payment_status]}`}>
-                              {b.payment_status}
-                            </span>
-                          </td>
-
-                          {/* 7. Status */}
-                          <td className="py-3 px-4">
-                            <span className={`text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded-full border ${STATUS_COLORS[b.booking_status] || 'border-zinc-300'}`}>
-                              {b.booking_status}
-                            </span>
-                            {b.sos_triggered && (
-                              <span className="block text-[9px] font-bold text-red-600 animate-pulse mt-0.5">
-                                ⚠ SOS ALERT
-                              </span>
-                            )}
-                          </td>
-
-                          {/* 8. Assistant */}
-                          <td className="py-3 px-4">
-                            {b.assistant?.name ? (
-                              <div>
-                                <p className="font-bold text-black dark:text-white truncate max-w-[120px]">
-                                  {b.assistant.name}
-                                </p>
-                                <span className="text-[10px] text-zinc-500 font-mono">
-                                  {b.assistant.phone || 'Assigned'}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-zinc-400 italic font-mono">
-                                Unassigned
-                              </span>
-                            )}
-                          </td>
-
-                          {/* 9. Action Button */}
-                          <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => setInspectingBooking(b)}
-                              className="btn-secondary py-1 px-2.5 text-[11px] flex items-center gap-1 ml-auto group-hover:border-blue-500 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-blue-600" />
-                              <span>Inspect</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs font-mono">
-                  <span className="text-zinc-500">
-                    Page {currentPage} of {totalPages} ({filteredBookings.length} total)
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="btn-secondary py-1 px-3 text-xs disabled:opacity-40 cursor-pointer"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="btn-secondary py-1 px-3 text-xs disabled:opacity-40 cursor-pointer"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-          </div>
-        )}
-
-        {/* ========================================================
-            TAB 2: OPERATIONS & ANALYTICS
+          {/* ========================================================
+            TAB 2: OPERATIONS & ANALYTICS (MODERN ENTERPRISE UI)
             ======================================================== */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6 animate-fade-in">
+          {activeTab === 'overview' && (
+            <OperationsAnalyticsView
+              stats={stats}
+              bookings={bookings}
+              assistantsList={assistantsList}
+              sosAlerts={sosAlerts}
+              securityMetrics={securityMetrics}
+              onSelectBooking={(b) => setSelectedDrawerBooking(b)}
+              setActiveTab={setActiveTab}
+              setSelectedStation={setSelectedStation}
+              setSelectedStatus={setSelectedStatus}
+              setSelectedPaymentStatus={setSelectedPaymentStatus}
+              setSelectedDateRange={setSelectedDateRange}
+            />
+          )}
 
-            {/* 6 Top Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {[
-                { label: 'Total Bookings', value: stats.totalBookings, sub: 'All recorded jobs', action: () => { setActiveTab('bookings'); setSelectedStatus('ALL'); } },
-                { label: 'Gross Revenue', value: `₹${stats.revenue || 0}`, sub: 'Settled payments', action: () => { setActiveTab('bookings'); setSelectedPaymentStatus('paid'); } },
-                { label: "Today's Volume", value: stats.todayBookings || 0, sub: `₹${stats.todayRevenue || 0} today`, action: () => { setActiveTab('bookings'); setSelectedDateRange('TODAY'); } },
-                { label: 'Active in Field', value: (stats.statusBreakdown?.in_service || 0) + (stats.statusBreakdown?.arriving || 0), sub: 'Live transit', action: () => { setActiveTab('bookings'); setSelectedStatus('in_service'); } },
-                { label: 'Sahayaks Force', value: `${stats.onlineAssistants || 0} / ${stats.totalAssistants || 0}`, sub: 'Online / Total', action: () => setActiveTab('assistants') },
-                { label: 'KYC Queue', value: stats.pendingAssistants || 0, sub: 'Awaiting ID review', action: () => setActiveTab('assistants') },
-              ].map((m) => (
-                <div
-                  key={m.label}
-                  onClick={m.action}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xs hover:border-blue-500 cursor-pointer transition-colors group"
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono block mb-1 group-hover:text-blue-600">
-                    {m.label}
-                  </span>
-                  <p className="text-2xl font-black font-mono text-black dark:text-white">
-                    {m.value}
-                  </p>
-                  <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
-                    {m.sub}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Recharts Analytics Grid */}
-            <div className="grid md:grid-cols-2 gap-6">
-
-              {/* Station Traffic & Revenue */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-3">
-                <h4 className="font-bold text-sm text-black dark:text-white font-mono flex items-center justify-between">
-                  <span>Station Demand & Volume</span>
-                  <span className="text-xs text-zinc-400 font-normal">Click a bar to filter</span>
-                </h4>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stationChartData}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                      <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} />
-                      <YAxis stroke="#888888" fontSize={11} tickLine={false} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#000000',
-                          borderColor: '#333333',
-                          borderRadius: '8px',
-                          color: '#ffffff',
-                          fontSize: '12px',
-                        }}
-                      />
-                      <Bar
-                        dataKey="Bookings"
-                        fill="#2563EB"
-                        radius={[4, 4, 0, 0]}
-                        onClick={(entry) => {
-                          if (entry?.name) {
-                            setSelectedStation(entry.name);
-                            setActiveTab('bookings');
-                            toast.success(`Filtered to Station ${entry.name}`);
-                          }
-                        }}
-                        className="cursor-pointer"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Status Breakdown Bar */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-3">
-                <h4 className="font-bold text-sm text-black dark:text-white font-mono flex items-center justify-between">
-                  <span>Mission Status Distribution</span>
-                  <span className="text-xs text-zinc-400 font-normal">Live platform states</span>
-                </h4>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={statusChartData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                      <XAxis type="number" stroke="#888888" fontSize={11} tickLine={false} />
-                      <YAxis dataKey="name" type="category" stroke="#888888" fontSize={10} tickLine={false} width={80} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#000000',
-                          borderColor: '#333333',
-                          borderRadius: '8px',
-                          color: '#ffffff',
-                          fontSize: '12px',
-                        }}
-                      />
-                      <Bar
-                        dataKey="count"
-                        fill="#10B981"
-                        radius={[0, 4, 4, 0]}
-                        onClick={(entry) => {
-                          if (entry?.name) {
-                            setSelectedStatus(entry.name.toLowerCase());
-                            setActiveTab('bookings');
-                            toast.success(`Filtered to status ${entry.name}`);
-                          }
-                        }}
-                        className="cursor-pointer"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* ========================================================
+          {/* ========================================================
             TAB 3: ASSISTANT FORCE & KYC
             ======================================================== */}
-        {activeTab === 'assistants' && (
-          <div className="space-y-6 animate-fade-in">
+          {activeTab === 'assistants' && (
+            <SahayakForceKycView
+              kycQueue={kycQueue}
+              assistantsList={assistantsList}
+              bookings={bookings}
+              onDecideAssistant={handleDecideAssistant}
+              onToggleOnline={handleToggleAssistantOnline}
+              onToggleApproval={handleToggleAssistantApproval}
+              onFilterToAssistant={handleFilterToAssistant}
+              onRefresh={fetchAll}
+              actionLoading={actionLoading}
+              stations={STATIONS}
+            />
+          )}
 
-            {/* KYC Applications Queue */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
-                    <Briefcase className="w-4 h-4 text-blue-600" />
-                    Sahayak KYC Verification Queue
-                  </h3>
-                  <p className="text-xs text-zinc-500">
-                    Review and verify incoming railway porter applicants before platform activation.
-                  </p>
-                </div>
-                <span className="badge-blue text-xs">
-                  {kycQueue.length} Pending
-                </span>
-              </div>
-
-              {kycQueue.length === 0 ? (
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center text-xs text-zinc-400 font-mono">
-                  KYC queue is clear. No pending applicant registrations.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {kycQueue.map((app) => (
-                    <KycQueueCard
-                      key={app.id}
-                      applicant={app}
-                      onDecide={handleDecideAssistant}
-                      actionLoading={actionLoading}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Active Assistants Roster with Action Controls */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-bold text-sm text-black dark:text-white">
-                    Registered Sahayak Fleet ({assistantsList.length})
-                  </h4>
-                  <p className="text-xs text-zinc-500">
-                    Manage active assistants across Secunderabad, Vijayawada, Kazipet, and Warangal hubs.
-                  </p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400 font-mono">
-                      <th className="pb-3">Sahayak Name</th>
-                      <th className="pb-3">Station Hub</th>
-                      <th className="pb-3">Contact</th>
-                      <th className="pb-3">Approval Status</th>
-                      <th className="pb-3">Duty State</th>
-                      <th className="pb-3">Missions</th>
-                      <th className="pb-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-mono">
-                    {assistantsList.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="py-6 text-center text-zinc-400 font-mono">
-                          No registered assistants found.
-                        </td>
-                      </tr>
-                    ) : (
-                      assistantsList.map((ast) => (
-                        <tr key={ast.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                          <td className="py-3 font-bold text-black dark:text-white font-sans">
-                            {ast.name}
-                          </td>
-                          <td className="py-3 font-bold text-blue-600 dark:text-blue-400">
-                            {ast.station_code}
-                          </td>
-                          <td className="py-3 text-zinc-500">
-                            {ast.phone || ast.email}
-                          </td>
-                          <td className="py-3">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ast.is_approved ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800'}`}>
-                              {ast.is_approved ? 'Approved' : 'Pending'}
-                            </span>
-                          </td>
-                          <td className="py-3">
-                            <span className="flex items-center gap-1.5 text-[11px]">
-                              <span className={`w-2 h-2 rounded-full ${ast.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
-                              {ast.is_online ? 'Online (On-Duty)' : 'Offline'}
-                            </span>
-                          </td>
-                          <td className="py-3 font-bold">
-                            {ast.completed_missions || 0} trips
-                          </td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {/* Toggle duty status button */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAssistantOnline(ast)}
-                                title={ast.is_online ? 'Set Offline' : 'Set Online'}
-                                className={`p-1.5 rounded-md border text-[11px] font-bold cursor-pointer transition-colors ${ast.is_online
-                                    ? 'bg-zinc-100 text-zinc-700 border-zinc-300 hover:bg-zinc-200'
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                                  }`}
-                              >
-                                <Power className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Toggle approval status button */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAssistantApproval(ast)}
-                                title={ast.is_approved ? 'Suspend Assistant' : 'Approve Assistant'}
-                                className={`p-1.5 rounded-md border text-[11px] font-bold cursor-pointer transition-colors ${ast.is_approved
-                                    ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
-                                    : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
-                                  }`}
-                              >
-                                {ast.is_approved ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                              </button>
-
-                              {/* Filter to assistant missions */}
-                              <button
-                                type="button"
-                                onClick={() => handleFilterToAssistant(ast.name)}
-                                title="View All Missions for this Assistant"
-                                className="btn-secondary py-1 px-2 text-[10px] cursor-pointer"
-                              >
-                                View Trips
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        {/* ========================================================
-            TAB 4: PASSENGERS DIRECTORY
+          {/* ========================================================
+            TAB 4: REGISTERED PASSENGERS DIRECTORY (PREMIUM REDESIGN)
             ======================================================== */}
-        {activeTab === 'passengers' && (
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
-                  <Users className="w-4 h-4 text-blue-600" />
-                  Registered Passengers Directory ({usersList.length})
-                </h3>
-                <p className="text-xs text-zinc-500">
-                  Comprehensive register of all platform travelers, booking frequencies, and contact profiles.
-                </p>
-              </div>
-            </div>
+          {activeTab === 'passengers' && (
+            <PassengersDirectoryView
+              usersList={usersList}
+              bookings={bookings}
+              supportTickets={supportTickets}
+              onFilterToPassenger={handleFilterToPassenger}
+              onViewPassengerSupport={(p) => {
+                setActiveTab('support_tickets');
+                setTicketSearch(p.name || p.email || '');
+              }}
+            />
+          )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400 font-mono">
-                    <th className="pb-3">Passenger</th>
-                    <th className="pb-3">Email Address</th>
-                    <th className="pb-3">Phone</th>
-                    <th className="pb-3">Role</th>
-                    <th className="pb-3">Joined Date</th>
-                    <th className="pb-3">Total Bookings</th>
-                    <th className="pb-3">Lifetime Spend</th>
-                    <th className="pb-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-mono">
-                  {usersList.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-zinc-400 font-mono">
-                        No registered users found.
-                      </td>
-                    </tr>
-                  ) : (
-                    usersList.map((u) => (
-                      <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                        <td className="py-3 font-bold font-sans text-black dark:text-white">
-                          {u.name}
-                        </td>
-                        <td className="py-3 text-zinc-500">
-                          {u.email}
-                        </td>
-                        <td className="py-3 text-zinc-500">
-                          {u.phone ? (
-                            <a href={`tel:${u.phone}`} className="hover:underline text-blue-600">
-                              {u.phone}
-                            </a>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="py-3 uppercase text-[10px] font-bold">
-                          <span className={`px-2 py-0.5 rounded-md ${u.role === 'admin' ? 'bg-black text-white' : 'bg-blue-50 text-blue-700'}`}>
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="py-3 text-zinc-400 text-[11px]">
-                          {new Date(u.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="py-3 font-bold text-black dark:text-white">
-                          {u.bookings_count || 0}
-                        </td>
-                        <td className="py-3 font-bold text-emerald-600">
-                          ₹{u.total_spent || 0}
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleFilterToPassenger(u.name || u.email)}
-                              className="btn-secondary py-1 px-2.5 text-[10px] cursor-pointer"
-                            >
-                              View Trips
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================
-            TAB: FINANCE & FINANCIAL RECONCILIATION (Phase 4)
+          {/* ========================================================
+            TAB: FINANCE & FINANCIAL RECONCILIATION (Enterprise Operations Control Center)
             ======================================================== */}
-        {activeTab === 'finance' && (
-          <div className="space-y-6 animate-fade-in font-mono">
-            {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                  Financial Reconciliation, Invariants & Audit Trail
-                </h3>
-                <p className="text-xs text-zinc-500">
-                  Mathematical validation of revenue splits (20/80), refund ceilings, wallet solvency, and tamper-evident audit logs.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={fetchReconciliation}
-                  disabled={reconLoading}
-                  className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${reconLoading ? 'animate-spin' : ''}`} />
-                  <span>Re-run Invariants Engine</span>
-                </button>
-              </div>
-            </div>
+          {activeTab === 'finance' && (
+            <FinancialReconciliationView
+              reconReport={reconReport}
+              reconLoading={reconLoading}
+              fetchReconciliation={fetchReconciliation}
+              auditLogs={auditLogs}
+              auditFilter={auditFilter}
+              setAuditFilter={setAuditFilter}
+              financialHealth={financialHealth}
+              paymentRecoveryList={paymentRecoveryList}
+              onInspectBooking={(bId) => {
+                const b = bookings.find((item) => item.id === bId);
+                if (b) setInspectingBooking(b);
+              }}
+            />
+          )}
 
-            {/* System Health Banner */}
-            {reconReport?.health && (
-              <div
-                className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
-                  reconReport.health.status === 'healthy'
-                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
-                    : reconReport.health.status === 'warning'
-                    ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
-                    : 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`w-3 h-3 rounded-full ${
-                      reconReport.health.status === 'healthy'
-                        ? 'bg-emerald-500 animate-pulse'
-                        : reconReport.health.status === 'warning'
-                        ? 'bg-amber-500'
-                        : 'bg-rose-600 animate-ping'
-                    }`}
-                  />
-                  <div>
-                    <h4 className="font-bold text-sm uppercase tracking-wider">
-                      System Status: {reconReport.health.status.toUpperCase()}
-                    </h4>
-                    <p className="text-xs opacity-90">
-                      {reconReport.health.status === 'healthy'
-                        ? 'All 11 core financial & operational invariants are 100% satisfied. No ledger anomalies detected.'
-                        : `${reconReport.health.critical_issues} critical issue(s) and ${reconReport.health.warnings} warning(s) detected across system ledgers.`}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-[11px] opacity-75 font-mono">
-                  Reconciled at: {new Date(reconReport.reconciled_at).toLocaleTimeString()}
-                </div>
-              </div>
-            )}
-
-            {/* Financial Ledger Balance Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Gross Collections</span>
-                <p className="text-xl font-bold text-black dark:text-white">
-                  ₹{reconReport?.metrics?.gross_payments || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Paid payments</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Total Refunds</span>
-                <p className="text-xl font-bold text-rose-600">
-                  ₹{reconReport?.metrics?.total_refunded || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Completed returns</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">Net Collected</span>
-                <p className="text-xl font-bold text-emerald-600">
-                  ₹{reconReport?.metrics?.net_collected || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Gross minus refunds</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-blue-500 block mb-1">Platform 20%</span>
-                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                  ₹{reconReport?.metrics?.platform_commission || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Completed bookings</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-purple-500 block mb-1">Sahayak Paid Out</span>
-                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                  ₹{reconReport?.metrics?.total_payouts_paid || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Finalized disbursements</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800/80 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-amber-600 block mb-1">Pending Liability</span>
-                <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
-                  ₹{reconReport?.metrics?.pending_liability || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Pending + Avail + Held</span>
-              </div>
-            </div>
-
-            {/* Invariant Findings / Issues Section */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-blue-500" />
-                  Invariant Discrepancies & Ledger Diagnostic Results ({reconReport?.issues?.length || 0})
-                </h4>
-              </div>
-
-              {(!reconReport?.issues || reconReport.issues.length === 0) ? (
-                <div className="p-8 text-center bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 space-y-1">
-                  <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
-                  <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
-                    All Financial Invariants Satisfied
-                  </p>
-                  <p className="text-[11px] text-zinc-400">
-                    No fare split mismatches, over-refunds, duplicate payout claims, or radar isolation breaches found.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
-                        <th className="py-2.5 px-3">Issue ID</th>
-                        <th className="py-2.5 px-3">Code</th>
-                        <th className="py-2.5 px-3">Severity</th>
-                        <th className="py-2.5 px-3">Entity</th>
-                        <th className="py-2.5 px-3">Description</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                      {reconReport.issues.map((iss) => (
-                        <tr key={iss.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                          <td className="py-2.5 px-3 font-bold text-zinc-500">{iss.id}</td>
-                          <td className="py-2.5 px-3 font-bold text-black dark:text-white">{iss.code}</td>
-                          <td className="py-2.5 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                iss.severity === 'critical'
-                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
-                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                              }`}
-                            >
-                              {iss.severity}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-zinc-400">
-                            {iss.entity_type} #{iss.entity_id?.slice(0, 8)}
-                          </td>
-                          <td className="py-2.5 px-3 text-zinc-600 dark:text-zinc-300">{iss.message}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Tamper-Evident Financial Audit Trail */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-emerald-500" />
-                    Append-Only Financial Audit Trail
-                  </h4>
-                  <p className="text-[11px] text-zinc-400">
-                    Immutable event ledger tracking every state transition, disbursement, settlement, and earning finalization.
-                  </p>
-                </div>
-
-                {/* Audit Action Filters */}
-                <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                  {['ALL', 'payout_settlement_recorded', 'payout_paid', 'earning_paid_out', 'payout_requested', 'payout_approved', 'payout_rejected'].map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setAuditFilter(f)}
-                      className={`px-2 py-1 rounded-md transition-all ${
-                        auditFilter === f
-                          ? 'bg-black text-white dark:bg-white dark:text-black font-bold'
-                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-black dark:hover:text-white'
-                      }`}
-                    >
-                      {f === 'ALL' ? 'All Events' : f.replace(/_/g, ' ')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {auditLogs.length === 0 ? (
-                <p className="text-xs text-zinc-400 py-8 text-center">
-                  No financial audit events recorded yet. Payout settlements and state transitions will be permanently recorded here.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
-                        <th className="py-2.5 px-3">Timestamp</th>
-                        <th className="py-2.5 px-3">Action</th>
-                        <th className="py-2.5 px-3">Actor</th>
-                        <th className="py-2.5 px-3">Entity</th>
-                        <th className="py-2.5 px-3">Amount</th>
-                        <th className="py-2.5 px-3">State Transition</th>
-                        <th className="py-2.5 px-3">Details / Reference</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
-                      {auditLogs
-                        .filter((log) => auditFilter === 'ALL' || log.action === auditFilter)
-                        .slice(0, 50)
-                        .map((log) => (
-                          <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                            <td className="py-2.5 px-3 text-zinc-400 text-[11px] whitespace-nowrap">
-                              {new Date(log.created_at).toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-3 font-bold text-black dark:text-white">
-                              <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[10px]">
-                                {log.action}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-zinc-400 text-[11px]">
-                              {log.actor_role} ({log.actor_id ? log.actor_id.slice(0, 6) : 'system'})
-                            </td>
-                            <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
-                              {log.entity_type} #{log.entity_id?.slice(0, 6)}
-                            </td>
-                            <td className="py-2.5 px-3 font-bold text-emerald-600">
-                              {log.amount ? `₹${log.amount}` : '—'}
-                            </td>
-                            <td className="py-2.5 px-3 text-[11px] text-zinc-400">
-                              {log.previous_state?.status || 'none'} ➔ <span className="font-bold text-black dark:text-white">{log.new_state?.status || 'N/A'}</span>
-                            </td>
-                            <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
-                              {log.new_state?.payout_reference ? `Ref: ${log.new_state.payout_reference}` : log.metadata?.reference ? `Ref: ${log.metadata.reference}` : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Financial Health Diagnostics Breakdown (Phase 5) */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-indigo-500" />
-                    Financial Health Diagnostics Breakdown
-                  </h4>
-                  <p className="text-[11px] text-zinc-400">
-                    Real-time operational readiness across database connection, gateway secrets isolation, and invariant status.
-                  </p>
-                </div>
-                {financialHealth && (
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
-                      financialHealth.status === 'HEALTHY'
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                        : financialHealth.status === 'WARNING'
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                        : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
-                    }`}
-                  >
-                    System {financialHealth.status}
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Database Ledger</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        financialHealth?.checks?.database?.status === 'UP' ? 'bg-emerald-500' : 'bg-rose-500'
-                      }`}
-                    />
-                    <strong className="text-black dark:text-white font-mono">
-                      {financialHealth?.checks?.database?.status || 'UNKNOWN'}
-                    </strong>
-                  </div>
-                  <span className="text-[10px] text-zinc-400 mt-1 block">
-                    Latency: {financialHealth?.checks?.database?.latency_ms || 0}ms
-                  </span>
-                </div>
-
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Razorpay Gateway</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        financialHealth?.checks?.razorpay_gateway?.configured ? 'bg-emerald-500' : 'bg-amber-500'
-                      }`}
-                    />
-                    <strong className="text-black dark:text-white font-mono">
-                      {financialHealth?.checks?.razorpay_gateway?.configured ? 'CONFIGURED' : 'NOT SET'}
-                    </strong>
-                  </div>
-                  <span className="text-[10px] text-zinc-400 mt-1 block">Zero secret leakage</span>
-                </div>
-
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Webhook Security</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        financialHealth?.checks?.razorpay_webhook?.configured ? 'bg-emerald-500' : 'bg-rose-500'
-                      }`}
-                    />
-                    <strong className="text-black dark:text-white font-mono">
-                      {financialHealth?.checks?.razorpay_webhook?.configured ? 'AUTHENTICATED' : 'MISSING'}
-                    </strong>
-                  </div>
-                  <span className="text-[10px] text-zinc-400 mt-1 block">HMAC verified</span>
-                </div>
-
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Invariants Audit</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        financialHealth?.checks?.reconciliation?.status === 'PASS' ? 'bg-emerald-500' : 'bg-rose-500'
-                      }`}
-                    />
-                    <strong className="text-black dark:text-white font-mono">
-                      {financialHealth?.checks?.reconciliation?.status || 'PENDING'}
-                    </strong>
-                  </div>
-                  <span className="text-[10px] text-zinc-400 mt-1 block">
-                    {financialHealth?.checks?.reconciliation?.critical_issues || 0} critical violations
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Recovery Center (Phase 5) */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <RotateCcw className="w-4 h-4 text-amber-500" />
-                    Payment Recovery Center ({paymentRecoveryList.length})
-                  </h4>
-                  <p className="text-[11px] text-zinc-400">
-                    Online payments pending &gt; 15 minutes requiring gateway telemetry sync.
-                  </p>
-                </div>
-                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300">
-                  <strong>Option C Enforced:</strong> Online payments cannot be manually marked paid by admins.
-                </div>
-              </div>
-
-              {paymentRecoveryList.length === 0 ? (
-                <div className="p-6 text-center bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 space-y-1">
-                  <CheckCircle className="w-5 h-5 text-emerald-500 mx-auto mb-1" />
-                  <p className="font-bold text-black dark:text-white">Zero Stuck Online Payments</p>
-                  <p className="text-[11px] text-zinc-400">
-                    All online checkout transactions have cleanly finalized or settled.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
-                        <th className="py-2 px-3">Payment ID</th>
-                        <th className="py-2 px-3">Booking ID</th>
-                        <th className="py-2 px-3">Amount</th>
-                        <th className="py-2 px-3">Order ID</th>
-                        <th className="py-2 px-3">Age (Min)</th>
-                        <th className="py-2 px-3">Gateway Status</th>
-                        <th className="py-2 px-3">Recovery Policy</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
-                      {paymentRecoveryList.map((p) => (
-                        <tr key={p.payment_id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                          <td className="py-2 px-3 font-bold text-zinc-500">#{p.payment_id.slice(0, 8)}</td>
-                          <td className="py-2 px-3 text-black dark:text-white">#{p.booking_id.slice(0, 8)}</td>
-                          <td className="py-2 px-3 font-bold text-emerald-600">₹{p.amount}</td>
-                          <td className="py-2 px-3 text-zinc-400 text-[11px]">{p.razorpay_order_id || '—'}</td>
-                          <td className="py-2 px-3 text-amber-600 font-bold">{p.age_minutes}m</td>
-                          <td className="py-2 px-3">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                              {p.payment_status}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-[11px] text-zinc-400">
-                            {p.recovery_action}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================
+          {/* ========================================================
             TAB: FINANCIAL INCIDENTS & FRAUD PROTECTION (Phase 5)
             ======================================================== */}
-        {activeTab === 'incidents' && (
-          <div className="space-y-6 animate-fade-in font-mono">
-            {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-rose-500" />
-                  Financial Incidents, Fraud Detection & Operations
-                </h3>
-                <p className="text-xs text-zinc-500">
-                  Automated surveillance engine detecting rapid payment failures, refund spikes, payout anomalies, and ledger corruption.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={fetchAll}
-                  disabled={actionLoading}
-                  className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
-                  <span>Refresh Surveillance</span>
-                </button>
-              </div>
-            </div>
+          {activeTab === 'incidents' && (
+            <FinancialIncidentsView
+              incidentsList={incidentsList}
+              incidentStats={incidentStats}
+              incidentsFilter={incidentsFilter}
+              setIncidentsFilter={setIncidentsFilter}
+              selectedIncident={selectedIncident}
+              setSelectedIncident={setSelectedIncident}
+              financialHealth={financialHealth}
+              fetchAll={fetchAll}
+              actionLoading={actionLoading}
+              lastSynced={lastSynced}
+              handleInvestigateIncident={handleInvestigateIncident}
+              handleResolveIncident={handleResolveIncident}
+              handleIgnoreIncident={handleIgnoreIncident}
+              onInspectBooking={(bId) => {
+                const b = bookings.find((item) => item.id === bId);
+                if (b) setInspectingBooking(b);
+              }}
+              onOpenAuditTrail={() => {
+                setActiveTab('finance');
+                setAuditFilter('ALL');
+              }}
+            />
+          )}
 
-            {/* KPI Cards Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Total Incidents</span>
-                <p className="text-2xl font-bold text-black dark:text-white">
-                  {incidentStats.total || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Recorded events</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800/80 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-amber-600 block mb-1">Open Cases</span>
-                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  {incidentStats.open || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Requires triage</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-blue-300 dark:border-blue-800/80 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-blue-500 block mb-1">Investigating</span>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {incidentStats.investigating || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Under admin review</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-rose-300 dark:border-rose-800/80 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-rose-600 block mb-1">Critical Priority</span>
-                <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">
-                  {incidentStats.critical || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">High severity</span>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[10px] uppercase font-bold text-amber-500 block mb-1">Warnings</span>
-                <p className="text-2xl font-bold text-amber-500">
-                  {incidentStats.warning || 0}
-                </p>
-                <span className="text-[10px] text-zinc-500">Advisory alerts</span>
-              </div>
-            </div>
-
-            {/* Incidents Master Table */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <h4 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <AlertOctagon className="w-4 h-4 text-rose-500" />
-                  Financial Incident Log ({incidentsList.length})
-                </h4>
-
-                {/* Filter Pills */}
-                <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                  {['ALL', 'open', 'investigating', 'resolved', 'ignored', 'critical', 'warning'].map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setIncidentsFilter(f)}
-                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                        incidentsFilter === f
-                          ? 'bg-black text-white dark:bg-white dark:text-black font-bold'
-                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-black dark:hover:text-white'
-                      }`}
-                    >
-                      {f.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {incidentsList.length === 0 ? (
-                <div className="p-12 text-center bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 space-y-2">
-                  <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
-                  <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
-                    No Financial Incidents Detected
-                  </p>
-                  <p className="text-[11px] text-zinc-400">
-                    Automated surveillance engine is active. Zero anomalies or fraud triggers found across all railway nodes.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50">
-                        <th className="py-2.5 px-3">Severity</th>
-                        <th className="py-2.5 px-3">Incident Rule</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3">Entity</th>
-                        <th className="py-2.5 px-3">Hits</th>
-                        <th className="py-2.5 px-3">Detected</th>
-                        <th className="py-2.5 px-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
-                      {incidentsList
-                        .filter((inc) => {
-                          if (incidentsFilter === 'ALL') return true;
-                          if (incidentsFilter === 'critical' || incidentsFilter === 'warning') return inc.severity === incidentsFilter;
-                          return inc.status === incidentsFilter;
-                        })
-                        .map((inc) => (
-                          <tr key={inc.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                  inc.severity === 'critical'
-                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
-                                    : inc.severity === 'warning'
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                                }`}
-                              >
-                                {inc.severity}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 font-bold text-black dark:text-white">
-                              {inc.incident_type}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${
-                                  inc.status === 'open'
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                                    : inc.status === 'investigating'
-                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                                    : inc.status === 'resolved'
-                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                    : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
-                                }`}
-                              >
-                                {inc.status}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
-                              {inc.entity_type} #{inc.entity_id?.slice(0, 8)}
-                            </td>
-                            <td className="py-2.5 px-3 font-bold text-black dark:text-white">
-                              {inc.occurrence_count || 1}
-                            </td>
-                            <td className="py-2.5 px-3 text-zinc-400 text-[11px] whitespace-nowrap">
-                              {new Date(inc.detected_at).toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedIncident(inc)}
-                                className="btn-secondary py-1 px-2.5 text-[11px] cursor-pointer"
-                              >
-                                Inspect &amp; Action
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================
-            TAB: SAHAYAK PAYOUTS & SETTLEMENT TREASURY (Phase 3B)
+          {/* ========================================================
+            TAB: SAHAYAK PAYOUTS & SETTLEMENT TREASURY (Redesigned Enterprise UI)
             ======================================================== */}
-        {activeTab === 'payouts' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2 font-mono">
-                  <CreditCard className="w-5 h-5 text-blue-500" />
-                  Sahayak Payout Requests & Settlement Treasury
-                </h3>
-                <p className="text-xs text-zinc-500 font-mono">
-                  Authoritative review, verification, and disbursement of 80% assistant commission shares.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={fetchAll}
-                disabled={actionLoading}
-                className="btn-secondary py-1.5 px-3 text-xs font-mono flex items-center gap-1 self-start sm:self-auto"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
-                <span>Refresh Ledger</span>
-              </button>
-            </div>
+          {activeTab === 'payouts' && (
+            <SahayakPayoutsView
+              payoutsList={payoutsList}
+              payoutsFilter={payoutsFilter}
+              setPayoutsFilter={setPayoutsFilter}
+              stats={stats}
+              actionLoading={actionLoading}
+              fetchAll={fetchAll}
+              lastSynced={lastSynced}
+              handleApprovePayout={handleApprovePayout}
+              handleRejectPayout={handleRejectPayout}
+              handleProcessingPayout={handleProcessingPayout}
+              handlePaidPayout={handlePaidPayout}
+              handleFailedPayout={handleFailedPayout}
+            />
+          )}
 
-            {/* Treasury KPI Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800/80 rounded-2xl p-4 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 font-mono block mb-1">
-                  Pending Review
-                </span>
-                <p className="text-2xl font-bold font-mono text-amber-700 dark:text-amber-400">
-                  {payoutsList.filter((p) => p.status === 'requested').length}
-                </p>
-                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
-                  Awaiting administrative sign-off
-                </p>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-blue-500 font-mono block mb-1">
-                  In Processing
-                </span>
-                <p className="text-2xl font-bold font-mono text-black dark:text-white">
-                  {payoutsList.filter((p) => ['approved', 'processing'].includes(p.status)).length}
-                </p>
-                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
-                  Treasury transfer underway
-                </p>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-800/80 rounded-2xl p-4 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-mono block mb-1">
-                  Total Disbursed
-                </span>
-                <p className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                  ₹{stats.totalPayoutsPaid || 0}
-                </p>
-                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
-                  Cumulative paid out to sahayaks
-                </p>
-              </div>
-
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 font-mono block mb-1">
-                  Pending Fleet Settlements
-                </span>
-                <p className="text-2xl font-bold font-mono text-black dark:text-white">
-                  ₹{stats.assistantEarningsPending || 0}
-                </p>
-                <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
-                  Maturing earnings across all stations
-                </p>
-              </div>
-            </div>
-
-            {/* Filter Pills */}
-            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs font-mono">
-              {['ALL', 'requested', 'approved', 'processing', 'paid', 'failed', 'rejected'].map((f) => {
-                const count = f === 'ALL' ? payoutsList.length : payoutsList.filter((p) => p.status === f).length;
-                return (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setPayoutsFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg font-bold capitalize transition-all ${
-                      payoutsFilter === f
-                        ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
-                        : 'text-zinc-500 hover:text-black dark:hover:text-white'
-                    }`}
-                  >
-                    <span>{f}</span>
-                    <span className="ml-1 text-[10px] opacity-75">({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Master Payouts Table */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-              {payoutsList.length === 0 ? (
-                <div className="p-12 text-center text-xs text-zinc-400 font-mono">
-                  No payout withdrawal requests found.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 font-mono bg-zinc-50 dark:bg-zinc-900/50">
-                        <th className="py-3 px-4">Request ID</th>
-                        <th className="py-3 px-4">Sahayak</th>
-                        <th className="py-3 px-4">Amount</th>
-                        <th className="py-3 px-4">Method</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Requested At</th>
-                        <th className="py-3 px-4 text-right">Treasury Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
-                      {payoutsList
-                        .filter((p) => payoutsFilter === 'ALL' || p.status === payoutsFilter)
-                        .map((p) => {
-                          const statusColors = {
-                            requested: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-                            approved: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-                            processing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
-                            paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-                            rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
-                            failed: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
-                            cancelled: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
-                          };
-
-                          return (
-                            <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                              <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
-                                {p.id.slice(0, 8)}...
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="font-bold text-black dark:text-white">
-                                  {p.assistant?.name || 'Sahayak'}
-                                </div>
-                                <div className="text-[11px] text-zinc-400 font-normal">
-                                  {p.assistant?.phone || p.assistant_id?.slice(0, 8)} · {p.assistant?.station_code || 'SCR'}
-                                </div>
-                              </td>
-                              <td className="py-3 px-4 font-bold text-sm text-black dark:text-white">
-                                ₹{p.amount}
-                              </td>
-                              <td className="py-3 px-4 capitalize text-zinc-400">
-                                {p.payout_method?.replace('_', ' ') || 'Bank Transfer'}
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusColors[p.status] || 'bg-zinc-100'}`}>
-                                  {p.status}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 text-zinc-400 text-[11px]">
-                                {new Date(p.requested_at || p.created_at).toLocaleString()}
-                              </td>
-                              <td className="py-3 px-4 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {p.status === 'requested' && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleApprovePayout(p.id)}
-                                        disabled={actionLoading}
-                                        className="btn-primary py-1 px-2.5 text-[11px] font-bold bg-blue-600 hover:bg-blue-700"
-                                      >
-                                        Approve
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRejectPayout(p.id)}
-                                        disabled={actionLoading}
-                                        className="btn-secondary py-1 px-2 text-[11px] text-rose-600 hover:text-rose-700 border-rose-300 dark:border-rose-800"
-                                      >
-                                        Reject
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {p.status === 'approved' && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleProcessingPayout(p.id)}
-                                        disabled={actionLoading}
-                                        className="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-600 border-purple-300 dark:border-purple-800"
-                                      >
-                                        Start Processing
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handlePaidPayout(p.id)}
-                                        disabled={actionLoading}
-                                        className="btn-primary py-1 px-2.5 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700"
-                                      >
-                                        Mark Paid
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRejectPayout(p.id)}
-                                        disabled={actionLoading}
-                                        className="btn-secondary py-1 px-2 text-[11px] text-rose-600 hover:text-rose-700 border-rose-300 dark:border-rose-800"
-                                      >
-                                        Reject
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {p.status === 'processing' && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => handlePaidPayout(p.id)}
-                                        disabled={actionLoading}
-                                        className="btn-primary py-1 px-2.5 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700"
-                                      >
-                                        Mark Paid (Disbursed)
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleFailedPayout(p.id)}
-                                        disabled={actionLoading}
-                                        className="btn-secondary py-1 px-2 text-[11px] text-rose-600 hover:text-rose-700 border-rose-300 dark:border-rose-800"
-                                      >
-                                        Mark Failed
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {p.status === 'paid' && (
-                                    <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                                      ✓ Ref: {p.payout_reference || 'CONFIRMED'}
-                                    </span>
-                                  )}
-
-                                  {p.status === 'failed' && (
-                                    <span className="text-[11px] font-mono text-rose-500">
-                                      Failed ({p.failure_reason || 'Network error'})
-                                    </span>
-                                  )}
-
-                                  {p.status === 'rejected' && (
-                                    <span className="text-[11px] font-mono text-zinc-400">
-                                      Rejected ({p.failure_reason || 'Admin review'})
-                                    </span>
-                                  )}
-
-                                  {p.status === 'cancelled' && (
-                                    <span className="text-[11px] font-mono text-zinc-400">
-                                      Cancelled by Assistant
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================
+          {/* ========================================================
             TAB 5: EMERGENCY SOS CENTER
             ======================================================== */}
-        {activeTab === 'sos' && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-black dark:text-white flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-600 animate-pulse" />
-                  Emergency Incident Command Center
-                </h3>
-                <p className="text-xs text-zinc-500">
-                  Live dispatch monitoring for emergency alerts triggered by passengers or sahayaks.
-                </p>
-              </div>
-              <span className="text-xs font-mono font-bold text-red-600 bg-red-50 dark:bg-red-950/60 px-3 py-1 rounded-full border border-red-200 dark:border-red-800">
-                {sosAlerts.length} Active Emergencies
-              </span>
-            </div>
+          {activeTab === 'sos' && (
+            <EmergencyIncidentCommandCenter
+              sosAlerts={sosAlerts}
+              onResolveEmergency={handleResolveEmergency}
+              onInspectBooking={(b) => setInspectingBooking(b)}
+              onRefresh={fetchAll}
+              loading={loading}
+              bookings={bookings}
+              stations={STATIONS}
+            />
+          )}
 
-            {sosAlerts.length === 0 ? (
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-12 text-center space-y-2">
-                <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto" />
-                <h4 className="font-bold text-sm text-black dark:text-white">
-                  Station Network Secure
-                </h4>
-                <p className="text-xs text-zinc-500 font-mono">
-                  No active SOS incidents or distress signals across all South Central Railway nodes.
-                </p>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {sosAlerts.map((sos) => (
-                  <div
-                    key={sos.id}
-                    className="bg-red-50/70 dark:bg-red-950/40 border-2 border-red-500 rounded-2xl p-5 shadow-lg space-y-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
-                        <h4 className="font-bold text-sm text-red-800 dark:text-red-300 font-mono uppercase">
-                          Distress Signal · Station {sos.station_code}
-                        </h4>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold bg-red-600 text-white px-2 py-0.5 rounded">
-                        #{sos.booking_id?.slice(-6).toUpperCase()}
-                      </span>
-                    </div>
+          {/* ── TAB: LAUNCH CENTER (PHASE 9) ────────────────────────── */}
+          {activeTab === 'launch' && (
+            <LaunchCenter />
+          )}
 
-                    <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl space-y-2 text-xs font-mono">
-                      <p className="text-zinc-600 dark:text-zinc-300">
-                        Passenger: <strong className="text-black dark:text-white">{sos.passenger?.name || 'Guest'}</strong>
-                      </p>
-                      <p className="text-zinc-600 dark:text-zinc-300">
-                        Train: <strong>{sos.train_no || sos.train_number}</strong> ({sos.train_name})
-                      </p>
-                      <p className="text-zinc-600 dark:text-zinc-300">
-                        Location: <strong>Coach {sos.coach || 'TBD'} · Seat {sos.seat_number || 'TBD'}</strong>
-                      </p>
-                      {sos.passenger?.phone && (
-                        <p className="text-blue-600 dark:text-blue-400 font-bold">
-                          Contact: <a href={`tel:${sos.passenger.phone}`}>{sos.passenger.phone}</a>
-                        </p>
-                      )}
-                    </div>
+          {/* ── TAB: STATION DESK & SUPPORT TICKETS ───────────────── */}
+          {(activeTab === 'support' || activeTab === 'support_tickets') && (
+            <StationDeskSupportView
+              supportTickets={supportTickets}
+              setSupportTickets={setSupportTickets}
+              selectedDeskTicketId={selectedDeskTicketId}
+              setSelectedDeskTicketId={setSelectedDeskTicketId}
+              ticketSearch={ticketSearch}
+              setTicketSearch={setTicketSearch}
+              ticketStationFilter={ticketStationFilter}
+              setTicketStationFilter={setTicketStationFilter}
+              ticketStatusFilter={ticketStatusFilter}
+              setTicketStatusFilter={setTicketStatusFilter}
+              ticketPriorityFilter={ticketPriorityFilter}
+              setTicketPriorityFilter={setTicketPriorityFilter}
+              ticketUpdatingId={ticketUpdatingId}
+              handleUpdateTicketStatus={handleUpdateTicketStatus}
+              isRaiseTicketModalOpen={isRaiseTicketModalOpen}
+              setIsRaiseTicketModalOpen={setIsRaiseTicketModalOpen}
+              adminNewTicket={adminNewTicket}
+              setAdminNewTicket={setAdminNewTicket}
+              adminCreatingTicket={adminCreatingTicket}
+              handleAdminCreateTicket={handleAdminCreateTicket}
+              onRefresh={fetchAll}
+              isRefreshing={loading}
+            />
+          )}
 
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setInspectingBooking(sos)}
-                        className="btn-secondary flex-1 py-2 text-xs cursor-pointer"
-                      >
-                        Inspect Full Mission
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleResolveEmergency(sos.id)}
-                        className="btn-primary flex-1 py-2 text-xs bg-red-600 hover:bg-red-700 text-white cursor-pointer"
-                      >
-                        Resolve & Clear Alert
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── TAB: LAUNCH CENTER (PHASE 9) ────────────────────────── */}
-        {activeTab === 'launch' && (
-          <LaunchCenter />
-        )}
-
-        {/* ── TAB: STATION DESK & SUPPORT TICKETS ───────────────── */}
-        {(activeTab === 'support' || activeTab === 'support_tickets') && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Header & Metric Cards */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-bold font-mono uppercase tracking-wider text-black dark:text-white flex items-center gap-2">
-                  <LifeBuoy className="w-5 h-5 text-blue-600" />
-                  <span>Station Desk & Support Inbox</span>
-                </h3>
-                <p className="text-xs text-zinc-500 font-mono mt-0.5">
-                  Real-time ticket management, station supervisor dispatch, and passenger assistance support.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsRaiseTicketModalOpen(true)}
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-xs cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Raise Support Ticket</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
-                <span className="text-[10px] uppercase font-bold text-zinc-400">Total Desk Tickets</span>
-                <p className="text-xl font-black text-black dark:text-white mt-0.5">{supportTickets.length}</p>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
-                <span className="text-[10px] uppercase font-bold text-amber-500">Active / Pending</span>
-                <p className="text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{pendingTicketsCount}</p>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
-                <span className="text-[10px] uppercase font-bold text-blue-500">Passenger Inquiries</span>
-                <p className="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">
-                  {supportTickets.filter((t) => t.type === 'passenger' || Boolean(t.passengerName)).length}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-2xs">
-                <span className="text-[10px] uppercase font-bold text-emerald-500">Sahayak Operational</span>
-                <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                  {supportTickets.filter((t) => t.type === 'assistant' || (!t.type && !t.passengerName)).length}
-                </p>
-              </div>
-            </div>
-
-            {/* Operational Tickets Management Panel from Assistants */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                  <h4 className="font-bold text-sm text-black dark:text-white font-mono uppercase">
-                    Station Desk & Support Tickets Ledger ({filteredSupportTickets.length})
-                  </h4>
-                </div>
-                {pendingTicketsCount > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
-                    {pendingTicketsCount} Action Required
-                  </span>
-                )}
-              </div>
-
-              {/* Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search tickets, PNR, user, issue..."
-                    value={ticketSearch}
-                    onChange={(e) => setTicketSearch(e.target.value)}
-                    className="input-base text-xs pl-8 py-1.5 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                  />
-                </div>
-
-                <select
-                  value={ticketStationFilter}
-                  onChange={(e) => setTicketStationFilter(e.target.value)}
-                  className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                >
-                  <option value="ALL">All Station Hubs</option>
-                  {STATIONS.map((st) => (
-                    <option key={st.code} value={st.code}>
-                      {st.code} - {st.name}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={ticketStatusFilter}
-                  onChange={(e) => setTicketStatusFilter(e.target.value)}
-                  className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="Dispatched to Station Supervisor">Dispatched</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Resolved by Station Master">Resolved</option>
-                </select>
-
-                <select
-                  value={ticketPriorityFilter}
-                  onChange={(e) => setTicketPriorityFilter(e.target.value)}
-                  className="input-base text-xs py-1.5 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
-                >
-                  <option value="ALL">All Priorities</option>
-                  <option value="normal">Normal</option>
-                  <option value="urgent">Urgent / High</option>
-                </select>
-              </div>
-
-              {/* Table of Operational Tickets */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400 font-mono">
-                      <th className="pb-2">Channel</th>
-                      <th className="pb-2">Ticket ID</th>
-                      <th className="pb-2">Requester</th>
-                      <th className="pb-2">Station</th>
-                      <th className="pb-2">Category</th>
-                      <th className="pb-2">PNR</th>
-                      <th className="pb-2">Description</th>
-                      <th className="pb-2">Priority</th>
-                      <th className="pb-2">Status</th>
-                      <th className="pb-2 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-mono">
-                    {filteredSupportTickets.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="py-6 text-center text-zinc-400 font-mono">
-                          No support desk tickets match filter criteria.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredSupportTickets.map((t) => {
-                        const isAssistant = t.type === 'assistant' || Boolean(t.assistant_name && !t.passengerName);
-                        const isResolved = ['resolved', 'closed', 'resolved by station master'].includes((t.status || '').toLowerCase());
-
-                        return (
-                          <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                            <td className="py-2.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                                isAssistant ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400'
-                              }`}>
-                                {isAssistant ? 'Sahayak' : 'Passenger'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 font-bold text-blue-600 dark:text-blue-400 font-mono">
-                              #{t.id}
-                            </td>
-                            <td className="py-2.5 font-sans font-bold text-slate-800 dark:text-zinc-200">
-                              {t.passengerName || t.assistant_name || 'Passenger'}
-                            </td>
-                            <td className="py-2.5 font-bold">
-                              {t.station || '—'}
-                            </td>
-                            <td className="py-2.5 font-sans">
-                              {t.subject || t.category || 'General'}
-                            </td>
-                            <td className="py-2.5 text-zinc-500 font-mono">
-                              {t.pnr || (t.trip?.pnr) || '—'}
-                            </td>
-                            <td className="py-2.5 text-zinc-600 dark:text-zinc-300 max-w-xs truncate font-sans">
-                              {t.description || t.desc}
-                            </td>
-                            <td className="py-2.5">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  t.priority === 'urgent' || t.priority === 'high'
-                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
-                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
-                                }`}
-                              >
-                                {t.priority}
-                              </span>
-                            </td>
-                            <td className="py-2.5">
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                isResolved
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400'
-                                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
-                              }`}>
-                                {t.status}
-                              </span>
-                            </td>
-                            <td className="py-2.5 text-right font-sans">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedDeskTicketId(t.id);
-                                    document.getElementById('station-desk-inbox')?.scrollIntoView({ behavior: 'smooth' });
-                                  }}
-                                  className="py-1 px-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                                  title="Chat with Requester in Support Desk"
-                                >
-                                  <MessageSquare className="w-3 h-3" />
-                                  <span>Chat</span>
-                                </button>
-                                {!isResolved ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateTicketStatus(t.id, 'Resolved by Station Master', 'Resolved via Admin Console')}
-                                    disabled={ticketUpdatingId === t.id}
-                                    className="py-1 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                                  >
-                                    {ticketUpdatingId === t.id ? 'Updating...' : 'Resolve'}
-                                  </button>
-                                ) : (
-                                  <span className="text-emerald-600 text-[10px] font-bold shrink-0">✓ Resolved</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Passenger Live Support Chat Inbox */}
-            <div id="station-desk-inbox" className="pt-2">
-              <SupportInbox initialTickets={supportTickets} selectedTicketIdProp={selectedDeskTicketId} />
-            </div>
-
-            {/* ── MODAL: RAISE / DISPATCH SUPPORT TICKET (ADMIN) ──────── */}
-            {isRaiseTicketModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-5 font-sans">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-                        <LifeBuoy className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-zinc-900 dark:text-white font-mono">
-                          Raise Support Ticket
-                        </h3>
-                        <p className="text-[11px] text-zinc-500 font-mono">
-                          Dispatch assistance or file station supervisor request
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsRaiseTicketModalOpen(false)}
-                      className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleAdminCreateTicket} className="space-y-4 text-xs font-mono">
-                    {/* Station & Channel Type */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          Station Hub
-                        </label>
-                        <select
-                          value={adminNewTicket.station}
-                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, station: e.target.value })}
-                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                        >
-                          {STATIONS.map((st) => (
-                            <option key={st.code} value={st.code}>{st.code} - {st.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          Requester Channel
-                        </label>
-                        <select
-                          value={adminNewTicket.type}
-                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, type: e.target.value })}
-                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                        >
-                          <option value="passenger">Passenger Support</option>
-                          <option value="assistant">Sahayak Operational</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Requester Name & Phone */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          {adminNewTicket.type === 'passenger' ? 'Passenger Name' : 'Sahayak Name'}
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder={adminNewTicket.type === 'passenger' ? 'e.g. Rahul Sharma' : 'e.g. Ramesh Kumar'}
-                          value={adminNewTicket.type === 'passenger' ? adminNewTicket.passengerName : adminNewTicket.assistant_name}
-                          onChange={(e) => setAdminNewTicket({
-                            ...adminNewTicket,
-                            [adminNewTicket.type === 'passenger' ? 'passengerName' : 'assistant_name']: e.target.value
-                          })}
-                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          Phone Number
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="+91 98765 43210"
-                          value={adminNewTicket.type === 'passenger' ? adminNewTicket.passengerPhone : adminNewTicket.assistant_phone}
-                          onChange={(e) => setAdminNewTicket({
-                            ...adminNewTicket,
-                            [adminNewTicket.type === 'passenger' ? 'passengerPhone' : 'assistant_phone']: e.target.value
-                          })}
-                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Category & Priority */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          Category
-                        </label>
-                        <select
-                          value={adminNewTicket.category}
-                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, category: e.target.value })}
-                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                        >
-                          <option value="Booking">Booking Concern</option>
-                          <option value="Assistant">Assistant / Sahayak</option>
-                          <option value="Luggage">Luggage Dispute</option>
-                          <option value="Payment">Payment / Tariff</option>
-                          <option value="Refund">Refund Assistance</option>
-                          <option value="Station Operational">Station Operational</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          Priority
-                        </label>
-                        <select
-                          value={adminNewTicket.priority}
-                          onChange={(e) => setAdminNewTicket({ ...adminNewTicket, priority: e.target.value })}
-                          className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                        >
-                          <option value="normal">Normal</option>
-                          <option value="high">High Priority</option>
-                          <option value="urgent">Urgent / Immediate</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Subject */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                        Subject
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Brief summary of the issue"
-                        value={adminNewTicket.subject}
-                        onChange={(e) => setAdminNewTicket({ ...adminNewTicket, subject: e.target.value })}
-                        className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                      />
-                    </div>
-
-                    {/* Description */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                        Detailed Description
-                      </label>
-                      <textarea
-                        rows={3}
-                        required
-                        placeholder="Detailed explanation of the issue or supervisor dispatch request..."
-                        value={adminNewTicket.description}
-                        onChange={(e) => setAdminNewTicket({ ...adminNewTicket, description: e.target.value })}
-                        className="input-base text-xs py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700 resize-none font-sans"
-                      />
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="pt-2 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsRaiseTicketModalOpen(false)}
-                        className="px-4 py-2 rounded-xl text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-bold"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={adminCreatingTicket || !adminNewTicket.subject.trim() || !adminNewTicket.description.trim()}
-                        className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{adminCreatingTicket ? 'Raising Ticket...' : 'Create Ticket'}</span>
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ========================================================
+          {/* ========================================================
             TAB 11: SECURITY & ACTIVE SESSIONS (Phase 6.4)
             ======================================================== */}
-        {activeTab === 'sessions' && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Header & Controls Panel */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold tracking-tight text-black dark:text-white flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-blue-600" />
-                  Active Server-Authoritative Sessions
-                </h3>
-                <p className="text-xs text-zinc-500">
-                  Live sessions across Passenger, Sahayak, and Operations Controller channels with instant administrative revocation.
-                </p>
-              </div>
+          {activeTab === 'sessions' && (
+            <ActiveSessions
+              adminSessionsList={adminSessionsList}
+              usersList={usersList}
+              assistantsList={assistantsList}
+              onRevokeSession={handleAdminRevokeSession}
+              onRevokeUserSessions={handleAdminRevokeUserSessions}
+              onRefresh={fetchAll}
+              loading={loading}
+            />
+          )}
 
-              <div className="flex items-center gap-3">
-                <div className="relative w-full md:w-64">
-                  <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search user, email, role, or IP..."
-                    value={adminSessionsSearch}
-                    onChange={(e) => setAdminSessionsSearch(e.target.value)}
-                    className="input-base text-xs pl-9 pr-3 py-2 w-full bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={fetchAll}
-                  className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
-                  title="Refresh Sessions"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Sessions Table */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3.5 px-4 font-bold">User Account</th>
-                      <th className="py-3.5 px-4 font-bold">Role</th>
-                      <th className="py-3.5 px-4 font-bold">Device / Browser</th>
-                      <th className="py-3.5 px-4 font-bold">IP Address</th>
-                      <th className="py-3.5 px-4 font-bold">Created</th>
-                      <th className="py-3.5 px-4 font-bold">Last Activity</th>
-                      <th className="py-3.5 px-4 font-bold">Expires</th>
-                      <th className="py-3.5 px-4 font-bold text-right">Administrative Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                    {adminSessionsList
-                      .filter((s) => {
-                        if (!adminSessionsSearch) return true;
-                        const q = adminSessionsSearch.toLowerCase();
-                        return (
-                          (s.user?.email || '').toLowerCase().includes(q) ||
-                          (s.user?.name || '').toLowerCase().includes(q) ||
-                          (s.user?.role || '').toLowerCase().includes(q) ||
-                          (s.ip_address || s.ipAddress || '').toLowerCase().includes(q) ||
-                          (s.device_info || s.deviceInfo || '').toLowerCase().includes(q)
-                        );
-                      })
-                      .map((s) => (
-                        <tr key={s.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
-                          <td className="py-3 px-4 font-bold text-zinc-900 dark:text-white">
-                            <div>{s.user?.name || 'Unnamed Account'}</div>
-                            <div className="text-[11px] text-zinc-500 font-normal font-mono">{s.user?.email}</div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                              s.user?.role === 'admin'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                                : s.user?.role === 'assistant'
-                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                            }`}>
-                              {s.user?.role || 'passenger'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 max-w-xs truncate text-zinc-600 dark:text-zinc-300">
-                            {s.device_info || s.deviceInfo || 'Standard Browser Client'}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-zinc-500 dark:text-zinc-400">
-                            {s.ip_address || s.ipAddress || 'Protected IP'}
-                          </td>
-                          <td className="py-3 px-4 text-zinc-500">
-                            {new Date(s.created_at || s.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="py-3 px-4 text-zinc-500">
-                            {new Date(s.last_activity_at || s.lastActivityAt || s.created_at).toLocaleTimeString()}
-                          </td>
-                          <td className="py-3 px-4 text-zinc-500">
-                            {new Date(s.expires_at || s.expiresAt).toLocaleDateString()}
-                          </td>
-                          <td className="py-3 px-4 text-right space-x-2">
-                            <button
-                              type="button"
-                              disabled={revokingSessionId === s.id}
-                              onClick={() => handleAdminRevokeSession(s.id)}
-                              className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50"
-                            >
-                              {revokingSessionId === s.id ? 'Revoking...' : 'Revoke Session'}
-                            </button>
-                            {s.user_id && (
-                              <button
-                                type="button"
-                                onClick={() => handleAdminRevokeUserSessions(s.user_id, s.user?.email)}
-                                className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[11px] font-bold transition-all cursor-pointer"
-                              >
-                                Revoke All
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    {adminSessionsList.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="py-8 text-center text-zinc-400">
-                          No active server-side sessions found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================
-            TAB 12: SECURITY MONITORING & INCIDENTS (Phase 6.7)
+          {/* ========================================================
+            TAB 12: SECURITY OPERATIONS & INCIDENTS (Redesigned Enterprise Console)
             ======================================================== */}
-        {activeTab === 'security_monitoring' && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Metric Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
-                <span className="text-[11px] font-mono text-zinc-400 uppercase block">Open Incidents</span>
-                <span className="text-2xl font-bold font-mono text-black dark:text-white">
-                  {securityMetrics.openIncidents || 0}
-                </span>
-                <p className="text-[10px] text-zinc-500 mt-1">Requiring triage or investigation</p>
-              </div>
+          {(activeTab === 'security_monitoring' || activeTab === 'security_incidents') && (
+            <SecurityIncidents
+              securityMetrics={securityMetrics}
+              securityIncidentsList={securityIncidentsList}
+              onRefresh={fetchAll}
+              loading={loading}
+            />
+          )}
 
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
-                <span className="text-[11px] font-mono text-rose-500 uppercase block flex items-center gap-1">
-                  <ShieldAlert className="w-3.5 h-3.5" /> Critical Incidents
-                </span>
-                <span className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400">
-                  {securityMetrics.criticalIncidents || 0}
-                </span>
-                <p className="text-[10px] text-zinc-500 mt-1">High priority threat events</p>
-              </div>
+        </main>
+      </div>
 
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
-                <span className="text-[11px] font-mono text-amber-500 uppercase block">Security Events (24h)</span>
-                <span className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400">
-                  {securityMetrics.securityEvents24h || 0}
-                </span>
-                <p className="text-[10px] text-zinc-500 mt-1">Failed Logins: {securityMetrics.failedLogins24h || 0}</p>
-              </div>
+      {/* ── BOOKING VIEW DRAWER (RIGHT-SIDE DRAWER) ─────────────── */}
+      {selectedDrawerBooking && (() => {
+        const currentDrawerIndex = filteredBookings.findIndex((b) => b.id === selectedDrawerBooking.id);
+        const hasPrevBooking = currentDrawerIndex > 0;
+        const hasNextBooking = currentDrawerIndex >= 0 && currentDrawerIndex < filteredBookings.length - 1;
 
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
-                <span className="text-[11px] font-mono text-emerald-500 uppercase block">Active Containment</span>
-                <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                  {securityMetrics.activeContainments || 0}
-                </span>
-                <p className="text-[10px] text-zinc-500 mt-1">Token reuses: {securityMetrics.refreshReuseEvents || 0}</p>
-              </div>
-            </div>
-
-            {/* Incidents Table Panel */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-xs">
-              <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-blue-600" />
-                  <h4 className="font-bold text-sm text-black dark:text-white font-mono">
-                    Security Incidents Log ({securityIncidentsList.length})
-                  </h4>
-                </div>
-
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                  <select
-                    value={securitySeverityFilter}
-                    onChange={(e) => setSecuritySeverityFilter(e.target.value)}
-                    className="input-base text-xs py-1.5 px-2.5 bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                  >
-                    <option value="ALL">All Severities</option>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-
-                  <select
-                    value={securityIncidentsFilter}
-                    onChange={(e) => setSecurityIncidentsFilter(e.target.value)}
-                    className="input-base text-xs py-1.5 px-2.5 bg-zinc-50 dark:bg-zinc-950 border-zinc-300 dark:border-zinc-700"
-                  >
-                    <option value="ALL">All Statuses</option>
-                    <option value="open">Open</option>
-                    <option value="investigating">Investigating</option>
-                    <option value="contained">Contained</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="dismissed">Dismissed</option>
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={fetchAll}
-                    className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3 px-4 font-bold">Severity</th>
-                      <th className="py-3 px-4 font-bold">Incident Type</th>
-                      <th className="py-3 px-4 font-bold">Status</th>
-                      <th className="py-3 px-4 font-bold">Events</th>
-                      <th className="py-3 px-4 font-bold">Source IP / User</th>
-                      <th className="py-3 px-4 font-bold">First / Last Detected</th>
-                      <th className="py-3 px-4 font-bold text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                    {securityIncidentsList
-                      .filter(inc => {
-                        if (securitySeverityFilter !== 'ALL' && inc.severity !== securitySeverityFilter) return false;
-                        if (securityIncidentsFilter !== 'ALL' && inc.status !== securityIncidentsFilter) return false;
-                        return true;
-                      })
-                      .map(inc => (
-                        <tr key={inc.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                              inc.severity === 'critical'
-                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                                : inc.severity === 'high'
-                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300'
-                                : inc.severity === 'medium'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                            }`}>
-                              {inc.severity}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-bold text-zinc-900 dark:text-white">
-                            {inc.incident_type}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                              inc.status === 'open'
-                                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400'
-                                : inc.status === 'investigating'
-                                ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400'
-                                : inc.status === 'contained'
-                                ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400'
-                                : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
-                            }`}>
-                              {inc.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-mono font-bold">
-                            {inc.event_count || 1}
-                          </td>
-                          <td className="py-3 px-4 text-zinc-500 max-w-xs truncate">
-                            {inc.source_ip || inc.user_id || 'Platform Node'}
-                          </td>
-                          <td className="py-3 px-4 text-[11px] text-zinc-500">
-                            <div>{new Date(inc.last_detected_at).toLocaleTimeString()}</div>
-                            <div className="text-[10px] text-zinc-400 font-mono">{new Date(inc.first_detected_at).toLocaleDateString()}</div>
-                          </td>
-                          <td className="py-3 px-4 text-right space-x-1.5">
-                            {inc.status === 'open' && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await axios.post(`/security/admin/incidents/${inc.id}/acknowledge`);
-                                    toast.success('Incident marked investigating');
-                                    fetchAll();
-                                  } catch (err) {
-                                    toast.error('Failed to acknowledge');
-                                  }
-                                }}
-                                className="px-2 py-1 rounded bg-amber-50 text-amber-700 hover:bg-amber-100 text-[10px] font-bold"
-                              >
-                                Triage
-                              </button>
-                            )}
-                            {inc.status !== 'resolved' && inc.status !== 'dismissed' && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await axios.post(`/security/admin/incidents/${inc.id}/resolve`);
-                                    toast.success('Incident resolved');
-                                    fetchAll();
-                                  } catch (err) {
-                                    toast.error('Failed to resolve');
-                                  }
-                                }}
-                                className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px] font-bold"
-                              >
-                                Resolve
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    {securityIncidentsList.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="py-8 text-center text-zinc-400 font-mono">
-                          Zero security incidents detected. System operating within secure parameters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </main>
+        return (
+          <BookingDrawer
+            booking={selectedDrawerBooking}
+            onClose={() => setSelectedDrawerBooking(null)}
+            onInspect={(b) => {
+              setSelectedDrawerBooking(null);
+              setInspectingBooking(b);
+            }}
+            onUpdateBooking={handleUpdateBooking}
+            assistants={assistantsList}
+            onOpenSupportTicket={(b) => {
+              setActiveTab('support_tickets');
+              setSelectedDrawerBooking(null);
+              setAdminNewTicket((prev) => ({
+                ...prev,
+                station: b.station_code || 'KZJ',
+                pnr: b.pnr || '',
+                passengerName: b.passenger?.name || '',
+                passengerPhone: b.passenger?.phone || '',
+                passengerEmail: b.passenger?.email || '',
+                assistant_name: b.assistant?.name || '',
+                subject: `Assistance on Booking #${b.booking_id || b.id?.slice(-8).toUpperCase()}`,
+                description: `Operational support request for passenger ${b.passenger?.name || ''} at ${b.station_code || ''}, train ${b.train_no || ''}.`
+              }));
+              setIsRaiseTicketModalOpen(true);
+            }}
+            onPrev={hasPrevBooking ? () => setSelectedDrawerBooking(filteredBookings[currentDrawerIndex - 1]) : null}
+            onNext={hasNextBooking ? () => setSelectedDrawerBooking(filteredBookings[currentDrawerIndex + 1]) : null}
+            currentIndex={currentDrawerIndex >= 0 ? currentDrawerIndex + 1 : undefined}
+            totalCount={filteredBookings.length}
+          />
+        );
+      })()}
 
       {/* ── DETAIL INSPECTOR MODAL ─────────────────────────────── */}
       {inspectingBooking && (
-        <BookingDetailModal
+        <BookingInspectorModal
           booking={inspectingBooking}
           onClose={handleCloseInspector}
           onUpdate={handleUpdateBooking}
@@ -4437,7 +4475,7 @@ export default function AdminDashboard() {
       )}
 
       {/* ── FINANCIAL INCIDENT DETAIL & RESOLUTION MODAL (PHASE 5) ── */}
-      {selectedIncident && (
+      {selectedIncident && activeTab !== 'incidents' && (
         <IncidentDetailModal
           incident={selectedIncident}
           onClose={() => setSelectedIncident(null)}

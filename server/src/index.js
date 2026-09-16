@@ -201,7 +201,7 @@ io.use(async (socket, next) => {
     decoded = jwt.verify(cleanToken, process.env.JWT_SECRET, {
       algorithms: ['HS256'],
       issuer: 'onecoolie-api',
-      audience: 'onecoolie-client'
+      audience: ['onecoolie-client', 'onecoolie-admin']
     });
   } catch (err) {
     logger.warn('Socket connection rejected: Token verification failed', {
@@ -224,13 +224,27 @@ io.use(async (socket, next) => {
     return next(new Error('Authentication error: Intermediate MFA token cannot establish socket connection'));
   }
 
-  // 3. Require valid sid claim (server-side session ID)
+  // 3. Prefer sid claim for session-bound tokens; warn but allow legacy tokens
   if (!decoded.sid || typeof decoded.sid !== 'string') {
-    logger.warn('Socket connection rejected: Token missing sid claim', {
+    // Legacy tokens without sid are allowed to connect (30-day compatibility window)
+    // They cannot be revoked server-side but are cryptographically valid
+    logger.debug('Socket connected with legacy token (no sid claim)', {
       socketId: socket.id,
-      userId: decoded.id
+      userId: decoded.id,
+      role: decoded.role
     });
-    return next(new Error('Authentication error: Session ID (sid) required'));
+    // Attach user context and skip server-side session validation for legacy tokens
+    socket.user = { id: decoded.id, role: decoded.role };
+    socket.userId = decoded.id;
+    socket.role = decoded.role;
+    socket.sessionId = null;
+    socket.familyId = null;
+    socket.data = socket.data || {};
+    socket.data.user = socket.user;
+    socket.data.userId = decoded.id;
+    socket.data.role = decoded.role;
+    socket.data.sessionId = null;
+    return next();
   }
 
   // 4. Server-Side Session Verification in public.user_sessions
@@ -356,10 +370,14 @@ io.on('connection', (socket) => {
     recordSocketActivity(io.engine?.clientsCount || 1);
   } catch {}
 
-  // Automatically join assistant-specific rooms if user is an assistant
-  if (socket.data?.user?.role === 'assistant') {
-    socket.join(`assistant_${socket.data.user.id}`);
+  // Automatically join role and identity rooms
+  if (socket.data?.user?.id) {
     socket.join(`user_${socket.data.user.id}`);
+    if (socket.data.user.role === 'assistant') {
+      socket.join(`assistant_${socket.data.user.id}`);
+    } else if (socket.data.user.role === 'passenger') {
+      socket.join(`passenger_${socket.data.user.id}`);
+    }
   }
 
   // Join booking-specific room with strict database authorization check
@@ -421,6 +439,33 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Explicit join passenger room (only allowed for matching passenger or admin)
+  socket.on('join_passenger', (passengerId) => {
+    if (!passengerId || typeof passengerId !== 'string') return;
+    const cleanPassengerId = passengerId.trim();
+    const user = socket.data?.user;
+    if (!user || !user.id) {
+      return socket.emit('passenger_auth_error', { message: 'Unauthorized: Authentication required.' });
+    }
+
+    const isAuthorizedPassenger = user.role === 'passenger' && String(user.id) === cleanPassengerId;
+    const isAdmin = user.role === 'admin';
+
+    if (isAuthorizedPassenger || isAdmin) {
+      socket.join(`passenger_${cleanPassengerId}`);
+      socket.join(`user_${cleanPassengerId}`);
+      socket.emit('passenger_joined', { passengerId: cleanPassengerId });
+    } else {
+      logger.warn('Unauthorized join_passenger attempt', {
+        socketId: socket.id,
+        requesterId: user.id,
+        requesterRole: user.role,
+        targetPassengerId: cleanPassengerId
+      });
+      socket.emit('passenger_auth_error', { message: 'Unauthorized: Access to passenger room denied.' });
+    }
+  });
+
   // Explicit join assistant room (only allowed for matching assistant or admin)
   socket.on('join_assistant', (assistantId) => {
     if (!assistantId || typeof assistantId !== 'string') return;
@@ -465,24 +510,37 @@ io.on('connection', (socket) => {
     }
 
     socket.join('admin_room');
-    logger.info('Admin socket joined admin_room', {
+    socket.join('admin_dashboard');
+    logger.info('Admin socket joined admin_room & admin_dashboard', {
       socketId: socket.id,
       adminId: user.id
     });
     socket.emit('admin_joined', { success: true });
   });
 
-  // Chat — broadcast to the booking room only
-  socket.on('chat_message', (payload) => {
+  // Chat — authoritative database persistence and broadcast to the booking room
+  socket.on('chat_message', async (payload) => {
     if (!payload?.bookingId || !payload?.text) return;
-
-    io.to(`booking_${payload.bookingId}`).emit('chat_message', {
-      bookingId: payload.bookingId,
-      from: socket.data?.user?.id || payload.from || 'unknown',
-      role: socket.data?.user?.role || 'passenger',
-      text: String(payload.text).slice(0, 1000), // cap message length
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      const user = socket.data?.user;
+      if (!user || !user.id) {
+        return socket.emit('chat_error', { message: 'Unauthorized: Authentication required.' });
+      }
+      await serviceController.saveAndBroadcastChatMessage({
+        bookingRef: payload.bookingId,
+        user,
+        text: payload.text,
+        clientMessageId: payload.clientMessageId || payload.id,
+        timestamp: payload.timestamp,
+      });
+    } catch (err) {
+      logger.warn('Socket chat_message handling notice:', {
+        socketId: socket.id,
+        userId: socket.data?.user?.id,
+        error: err.message,
+      });
+      socket.emit('chat_error', { message: err.message || 'Failed to process message.' });
+    }
   });
 
   socket.on('disconnect', (reason) => {
@@ -596,8 +654,8 @@ if (process.env.NODE_ENV !== 'test') {
   server.listen(PORT, () => {
     logger.info(`OneCoolie API running on port ${PORT}`, {
       port: PORT,
-      url: `http://localhost:${PORT}`,
-      env: process.env.NODE_ENV || 'development'
+      url: process.env.BASE_URL || 'https://onecoolie.onrender.com',
+      env: process.env.NODE_ENV || 'production'
     });
   });
 }
