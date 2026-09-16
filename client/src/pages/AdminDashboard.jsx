@@ -5,7 +5,7 @@ import Brand from '../components/Brand';
 import LaunchCenter from '../components/LaunchCenter';
 import SupportInbox from '../components/support/SupportInbox';
 import axios from '../api/axios';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -3090,7 +3090,12 @@ export default function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [sortBy, setSortBy] = useState('newest');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
   const [selectedDrawerBooking, setSelectedDrawerBooking] = useState(null);
   const selectedDrawerBookingRef = useRef(null);
   selectedDrawerBookingRef.current = selectedDrawerBooking;
@@ -3920,9 +3925,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] dark:bg-[#07090E] text-zinc-900 dark:text-zinc-100 font-sans flex select-none">
-      {/* Toast feedback provider */}
-      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-
       {/* ── 1. LEFT SIDEBAR ─────────────────────────────────────── */}
       <AdminSidebar
         activeTab={activeTab}
@@ -3944,10 +3946,11 @@ export default function AdminDashboard() {
         onLogout={logout}
       />
 
-      {/* ── 2. MAIN LAYOUT CONTAINER (offset by sidebar width) ───── */}
+      {/* ── 2. MAIN LAYOUT CONTAINER (offset by sidebar width on desktop, 0 on mobile) ───── */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isSidebarCollapsed ? 'pl-[72px]' : 'pl-[240px]'
-          }`}
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
+          isSidebarCollapsed ? 'pl-0 md:pl-[72px]' : 'pl-0 md:pl-[230px]'
+        }`}
       >
         {/* Command Top Header */}
         <AdminTopHeader
@@ -3956,7 +3959,7 @@ export default function AdminDashboard() {
           lastSynced={lastSynced}
           onRefresh={() => {
             fetchAll(true);
-            toast.success('Live telemetry synchronized');
+            toast.success('Live telemetry synchronized', { id: 'admin-telemetry-sync' });
           }}
           isRefreshing={loading}
           onExportLedger={exportFullLedgerCSV}
@@ -3984,7 +3987,7 @@ export default function AdminDashboard() {
         />
 
         {/* Main Content Viewport */}
-        <main className="flex-1 p-4 sm:p-6 max-w-[1600px] w-full mx-auto space-y-5">
+        <main className="flex-1 p-3 sm:p-6 max-w-[1600px] w-full mx-auto space-y-4 sm:space-y-5 overflow-x-hidden">
           {/* Active Emergency SOS Alert Banner */}
           {sosAlerts.length > 0 && (
             <div className="bg-red-600 text-white rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-scale-in">
