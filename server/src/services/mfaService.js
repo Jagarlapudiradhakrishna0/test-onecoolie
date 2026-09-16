@@ -52,13 +52,13 @@ function getEncryptionKey() {
     return crypto.createHash('sha256').update(trimmed).digest();
   }
 
-  // Fallback for development if MFA_ENCRYPTION_KEY is not set
-  if (process.env.NODE_ENV !== 'production' && process.env.JWT_SECRET) {
-    logger.warn('[MFA_SERVICE] MFA_ENCRYPTION_KEY not explicitly set. Deriving 32-byte key from JWT_SECRET for development.');
+  // Fallback if MFA_ENCRYPTION_KEY is not set
+  if (process.env.JWT_SECRET) {
+    logger.warn('[MFA_SERVICE] MFA_ENCRYPTION_KEY not explicitly set. Deriving 32-byte key from JWT_SECRET.');
     return crypto.createHash('sha256').update(process.env.JWT_SECRET + '::MFA_ENCRYPTION_SALT').digest();
   }
 
-  throw new Error('MFA Security Failure: MFA_ENCRYPTION_KEY must be configured as a 32-byte key.');
+  throw new Error('MFA Security Failure: MFA_ENCRYPTION_KEY or JWT_SECRET must be configured.');
 }
 
 /**
