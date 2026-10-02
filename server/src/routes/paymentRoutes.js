@@ -11,6 +11,7 @@ const {
   previewPrice,
   createOrder,
   verifyPayment,
+  confirmTestPayment,
   handleWebhook,
   getPaymentStatus,
   getBookingRefunds,
@@ -31,6 +32,9 @@ router.post('/create-order', paymentOrderLimiter, protect, createOrder);
 
 // Protected Razorpay payment verification (Phase 2B/2C & 5)
 router.post('/verify', paymentVerifyLimiter, protect, verifyPayment);
+
+// Development/Test payment verification (strictly disabled in production)
+router.post('/test-confirm', paymentVerifyLimiter, protect, confirmTestPayment);
 
 // Protected payment recovery & status check (Phase 2C)
 router.get('/:bookingId/status', protect, getPaymentStatus);

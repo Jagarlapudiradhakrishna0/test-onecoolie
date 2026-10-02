@@ -102,12 +102,16 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    // 4. Check Razorpay Gateway configuration
-    if (!isRazorpayConfigured()) {
+    // 4. Check Payment Gateway configuration & Payment Mode
+    const razorpayAvailable = isRazorpayConfigured();
+    const paymentMode = (process.env.PAYMENT_MODE || (process.env.NODE_ENV === 'production' ? 'production' : 'test')).toLowerCase();
+    const isTestMode = paymentMode === 'test';
+
+    if (!razorpayAvailable && paymentMode === 'production') {
       return res.status(503).json({
         success: false,
         stage: 'RAZORPAY_CONFIGURATION_FAILURE',
-        message: 'Razorpay payment gateway is not configured on this server. Please contact support or select Cash on Service.'
+        message: 'Online payment gateway is not configured on this production server. Please contact support or select Cash on Service.'
       });
     }
 
@@ -131,7 +135,7 @@ exports.createOrder = async (req, res) => {
 
       if (existingBookings && existingBookings.length > 0) {
         const existingBooking = existingBookings[0];
-        // Check if an existing payment record with a valid Razorpay order already exists
+        // Check if an existing payment record with a valid order already exists
         const { data: existingPayment } = await supabase
           .from('payments')
           .select('*')
@@ -157,12 +161,15 @@ exports.createOrder = async (req, res) => {
               currency: existingPayment.currency,
               status: existingPayment.status
             },
-            razorpay: {
+            payment_mode: paymentMode,
+            isTestMode,
+            test_order_id: isTestMode ? existingPayment.gateway_order_id : null,
+            razorpay: razorpayAvailable ? {
               key_id: process.env.RAZORPAY_KEY_ID,
               order_id: existingPayment.gateway_order_id,
               amount: formatRazorpayAmount(existingPayment.amount),
               currency: existingPayment.currency || 'INR'
-            },
+            } : null,
             idempotent: true
           });
         }
@@ -200,85 +207,91 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    // 8. Create Razorpay order via official SDK
-    const razorpay = getRazorpayClient();
-    let razorpayOrder;
+    // 8. Create Gateway order (Razorpay official SDK or Dev Test Order)
+    let razorpayOrder = null;
+    let testOrderId = null;
 
-    try {
-      razorpayOrder = await razorpay.orders.create({
-        amount: amountInPaise,
-        currency: 'INR',
-        receipt: String(booking.booking_id || '').slice(0, 40),
-        notes: {
-          booking_id: String(booking.id || ''),
-          passenger_id: String(req.user.id || ''),
-          payment_id: String(paymentRecord?.id || '')
+    if (razorpayAvailable) {
+      const razorpay = getRazorpayClient();
+      try {
+        razorpayOrder = await razorpay.orders.create({
+          amount: amountInPaise,
+          currency: 'INR',
+          receipt: String(booking.booking_id || '').slice(0, 40),
+          notes: {
+            booking_id: String(booking.id || ''),
+            passenger_id: String(req.user.id || ''),
+            payment_id: String(paymentRecord?.id || '')
+          }
+        });
+      } catch (razorpayErr) {
+        const rzpStatus = razorpayErr?.statusCode || razorpayErr?.status || 502;
+        const rzpDesc =
+          razorpayErr?.error?.description ||
+          razorpayErr?.description ||
+          razorpayErr?.error?.message ||
+          razorpayErr?.message ||
+          'Gateway order initialization failed';
+        const rzpCode = razorpayErr?.error?.code || 'RAZORPAY_GATEWAY_ERROR';
+
+        console.error('RAZORPAY_ORDER_CREATION_FAILURE DETAILS:', {
+          stage: 'RAZORPAY_ORDER_CREATION_FAILURE',
+          statusCode: rzpStatus,
+          code: rzpCode,
+          description: rzpDesc,
+          booking_id: booking?.id,
+          amount_paise: amountInPaise
+        });
+
+        // Safe rollback on failure: mark payment as failed and booking as cancelled
+        if (paymentRecord?.id) {
+          await supabase
+            .from('payments')
+            .update({
+              status: 'failed',
+              failure_reason: `Gateway error: ${rzpDesc}`
+            })
+            .eq('id', paymentRecord.id);
         }
-      });
-    } catch (razorpayErr) {
-      const rzpStatus = razorpayErr?.statusCode || razorpayErr?.status || 502;
-      const rzpDesc =
-        razorpayErr?.error?.description ||
-        razorpayErr?.description ||
-        razorpayErr?.error?.message ||
-        razorpayErr?.message ||
-        'Gateway order initialization failed';
-      const rzpCode = razorpayErr?.error?.code || 'RAZORPAY_GATEWAY_ERROR';
-
-      // Safe structured server log without credentials
-      console.error('RAZORPAY_ORDER_CREATION_FAILURE DETAILS:', {
-        stage: 'RAZORPAY_ORDER_CREATION_FAILURE',
-        statusCode: rzpStatus,
-        code: rzpCode,
-        description: rzpDesc,
-        booking_id: booking?.id,
-        amount_paise: amountInPaise,
-        hasKeyId: Boolean(process.env.RAZORPAY_KEY_ID),
-        keyPrefix: process.env.RAZORPAY_KEY_ID ? `${process.env.RAZORPAY_KEY_ID.substring(0, 8)}...` : 'NONE',
-        hasSecret: Boolean(process.env.RAZORPAY_KEY_SECRET)
-      });
-
-      // Safe rollback on failure: mark payment as failed and booking as cancelled
-      if (paymentRecord?.id) {
         await supabase
-          .from('payments')
+          .from('bookings')
           .update({
-            status: 'failed',
-            failure_reason: `Gateway error: ${rzpDesc}`
+            booking_status: 'cancelled',
+            payment_status: 'failed'
           })
-          .eq('id', paymentRecord.id);
-      }
-      await supabase
-        .from('bookings')
-        .update({
-          booking_status: 'cancelled',
-          payment_status: 'failed'
-        })
-        .eq('id', booking.id);
+          .eq('id', booking.id);
 
-      return res.status(502).json({
-        success: false,
-        stage: 'RAZORPAY_ORDER_CREATION_FAILURE',
-        code: rzpCode,
-        gateway_reason: rzpDesc,
-        message: 'Unable to initialize online payment order with gateway. Please try again or select Cash on Service.'
-      });
+        return res.status(502).json({
+          success: false,
+          stage: 'RAZORPAY_ORDER_CREATION_FAILURE',
+          code: rzpCode,
+          gateway_reason: rzpDesc,
+          message: 'Unable to initialize online payment order with gateway. Please try again or select Cash on Service.'
+        });
+      }
+    } else {
+      // Development / Test mode with simulated unique test order ID
+      testOrderId = `order_test_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     }
 
     // 9. Update ONECOOLIE payment record with gateway order details
     try {
       if (paymentRecord?.id) {
+        const orderIdToSave = razorpayOrder ? razorpayOrder.id : testOrderId;
+        const gatewayToSave = razorpayOrder ? 'razorpay' : 'test_upi';
+
         const { error: updateErr } = await supabase
           .from('payments')
           .update({
-            payment_gateway: 'razorpay',
-            gateway_order_id: razorpayOrder.id,
+            payment_gateway: gatewayToSave,
+            gateway_order_id: orderIdToSave,
             status: 'pending',
             metadata: {
               ...(paymentRecord.metadata || {}),
-              razorpay_order_id: razorpayOrder.id,
-              razorpay_amount: razorpayOrder.amount,
-              razorpay_created_at: razorpayOrder.created_at
+              gateway_order_id: orderIdToSave,
+              amount_paise: amountInPaise,
+              test_mode: !razorpayAvailable,
+              created_at: new Date().toISOString()
             },
             updated_at: new Date().toISOString()
           })
@@ -310,12 +323,15 @@ exports.createOrder = async (req, res) => {
         currency: 'INR',
         status: 'pending'
       },
-      razorpay: {
+      payment_mode: paymentMode,
+      isTestMode: isTestMode,
+      test_order_id: testOrderId,
+      razorpay: razorpayOrder ? {
         key_id: process.env.RAZORPAY_KEY_ID,
         order_id: razorpayOrder.id,
         amount: razorpayOrder.amount,
         currency: razorpayOrder.currency
-      }
+      } : null
     });
 
   } catch (error) {
@@ -1018,17 +1034,21 @@ exports.getPaymentStatus = async (req, res) => {
       .order('created_at', { ascending: false })
       .maybeSingle();
 
+    const formattedBooking = formatBooking(booking, { includeOTP: true });
+
     return res.json({
       success: true,
       booking_id: booking.booking_id,
       booking_uuid: booking.id,
+      status: payment ? payment.status : booking.payment_status,
       payment_status: payment ? payment.status : booking.payment_status,
       payment_method: payment ? payment.payment_method : booking.payment_method,
       amount: payment ? Number(payment.amount) : Number(booking.total_price),
       currency: payment ? payment.currency : 'INR',
       booking_status: booking.booking_status,
       gateway_order_id: payment?.gateway_order_id || null,
-      failure_reason: payment?.failure_reason || null
+      failure_reason: payment?.failure_reason || null,
+      booking: formattedBooking
     });
 
   } catch (err) {
@@ -1199,13 +1219,149 @@ exports.notifyPaymentVerified = (booking) => {
     const io = getIO();
     if (io && booking) {
       const { formatBooking } = require('../utils/bookingFormatter');
-      const formatted = formatBooking(booking, { includeOTP: false });
-      // Now visible on assistant fleet radar
-      io.emit('new_booking', formatted);
-      io.emit('status_update', formatted);
+      const assistantFormatted = formatBooking(booking, { includeOTP: false });
+      const passengerFormatted = formatBooking(booking, { includeOTP: true });
+
+      // 1. Visible on assistant fleet radar
+      io.emit('new_booking', assistantFormatted);
+      io.emit('status_update', assistantFormatted);
+
+      // 2. Real-time payment verification event for passenger
+      if (booking.passenger_id) {
+        io.to(`passenger_${booking.passenger_id}`).emit('payment:success', {
+          bookingId: booking.id,
+          booking_id: booking.booking_id,
+          payment_status: 'paid',
+          booking: passengerFormatted
+        });
+        io.to(`passenger_${booking.passenger_id}`).emit('payment_verified', {
+          bookingId: booking.id,
+          booking_id: booking.booking_id,
+          payment_status: 'paid',
+          booking: passengerFormatted
+        });
+      }
+
+      // Also emit global payment:success
+      io.emit('payment:success', {
+        bookingId: booking.id,
+        booking_id: booking.booking_id,
+        payment_status: 'paid',
+        booking: passengerFormatted
+      });
     }
   } catch (err) {
     console.warn('Phase 2 broadcast hook notice:', err.message);
+  }
+};
+
+/**
+ * POST /api/payments/test-confirm
+ *
+ * Development-only test payment verification endpoint.
+ * Strictly forbidden in production (PAYMENT_MODE=production).
+ * Verifies authenticated passenger ownership, atomically marks payment and booking as paid,
+ * and emits payment:success and new_booking socket events.
+ */
+exports.confirmTestPayment = async (req, res) => {
+  try {
+    const paymentMode = (process.env.PAYMENT_MODE || (process.env.NODE_ENV === 'production' ? 'production' : 'test')).toLowerCase();
+    if (paymentMode === 'production') {
+      return res.status(403).json({
+        success: false,
+        code: 'TEST_MODE_DISABLED',
+        message: 'Test payment confirmation is strictly disabled in production.'
+      });
+    }
+
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+
+    const { booking_id, test_transaction_ref } = req.body;
+    if (!booking_id) {
+      return res.status(400).json({ message: 'Missing booking_id.' });
+    }
+
+    const { booking, error: resolveErr } = await resolveBooking(supabase, booking_id);
+    if (resolveErr || !booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    // Ownership check: must be the passenger who created the booking (or admin)
+    if (req.user.role !== 'admin' && booking.passenger_id !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to verify payment for this booking.' });
+    }
+
+    // Check if already paid (idempotency)
+    if (booking.payment_status === 'paid') {
+      const formatted = formatBooking(booking, { includeOTP: true });
+      return res.json({
+        success: true,
+        idempotent: true,
+        message: 'Payment already verified.',
+        booking: formatted
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const testPaymentId = `pay_test_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+
+    // Update payment record in database
+    let updatedPayment = null;
+    const { data: pData } = await supabase
+      .from('payments')
+      .update({
+        status: 'paid',
+        payment_gateway: 'test_upi',
+        gateway_payment_id: testPaymentId,
+        metadata: {
+          test_mode: true,
+          test_transaction_ref: test_transaction_ref || `TEST-TXN-${Date.now()}`,
+          verified_at: nowIso
+        },
+        updated_at: nowIso
+      })
+      .eq('booking_id', booking.id)
+      .select()
+      .maybeSingle();
+
+    updatedPayment = pData;
+
+    // Update booking payment_status to 'paid' (booking_status remains 'pending' awaiting assistant assignment)
+    const { data: updatedBooking, error: bUpdateErr } = await supabase
+      .from('bookings')
+      .update({
+        payment_status: 'paid',
+        payment_method: 'upi',
+        payment_id: updatedPayment?.id || booking.payment_id,
+        updated_at: nowIso
+      })
+      .eq('id', booking.id)
+      .select('*, passenger:passenger_id(id, name, email, phone)')
+      .single();
+
+    if (bUpdateErr) {
+      console.error('TEST PAYMENT BOOKING UPDATE ERROR:', bUpdateErr);
+      return res.status(500).json({ message: 'Failed to update booking status.' });
+    }
+
+    // Emit live events (new_booking to assistants, payment:success to passenger)
+    exports.notifyPaymentVerified(updatedBooking || booking);
+
+    const formatted = formatBooking(updatedBooking || booking, { includeOTP: true });
+
+    return res.json({
+      success: true,
+      message: 'Test payment verified successfully. Booking is now available for station assistants.',
+      booking: formatted,
+      payment: updatedPayment,
+      idempotent: false
+    });
+
+  } catch (err) {
+    console.error('CONFIRM TEST PAYMENT SERVER ERROR:', err);
+    return res.status(500).json({ message: 'Server error during test payment confirmation.' });
   }
 };
 

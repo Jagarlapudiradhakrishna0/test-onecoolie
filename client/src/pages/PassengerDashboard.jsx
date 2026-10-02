@@ -422,34 +422,65 @@ export default function PassengerDashboard() {
 
   // Restore active payment session if user returns from another tab/app after page reload
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem('onecoolie_active_payment');
-      if (raw) {
+    let isMounted = true;
+    const checkActivePaymentSession = async () => {
+      try {
+        const raw = sessionStorage.getItem('onecoolie_active_payment');
+        if (!raw) return;
         const saved = JSON.parse(raw);
-        if (saved && saved.active && saved.expireAt && saved.expireAt > Date.now()) {
-          if (saved.bookingMode) setBookingMode(saved.bookingMode);
-          if (saved.pnrInput) setPnrInput(saved.pnrInput);
-          if (saved.pnrVerifiedData) setPnrVerifiedData(saved.pnrVerifiedData);
-          if (saved.selectedTrain) setSelectedTrain(saved.selectedTrain);
-          if (saved.journeyDate) setJourneyDate(saved.journeyDate);
-          if (saved.journeyTime) setJourneyTime(saved.journeyTime);
-          if (saved.station) setStation(saved.station);
-          if (saved.coach) setCoach(saved.coach);
-          if (saved.seatNumber) setSeatNumber(saved.seatNumber);
-          if (saved.berthType) setBerthType(saved.berthType);
-          if (saved.actionType) setActionType(saved.actionType);
-          if (saved.services) setServices(saved.services);
-          if (saved.luggageCounts) setLuggageCounts(saved.luggageCounts);
+        if (!saved || !saved.active || !saved.expireAt || saved.expireAt <= Date.now()) {
+          sessionStorage.removeItem('onecoolie_active_payment');
+          return;
+        }
+
+        if (saved.bookingMode) setBookingMode(saved.bookingMode);
+        if (saved.pnrInput) setPnrInput(saved.pnrInput);
+        if (saved.pnrVerifiedData) setPnrVerifiedData(saved.pnrVerifiedData);
+        if (saved.selectedTrain) setSelectedTrain(saved.selectedTrain);
+        if (saved.journeyDate) setJourneyDate(saved.journeyDate);
+        if (saved.journeyTime) setJourneyTime(saved.journeyTime);
+        if (saved.station) setStation(saved.station);
+        if (saved.coach) setCoach(saved.coach);
+        if (saved.seatNumber) setSeatNumber(saved.seatNumber);
+        if (saved.berthType) setBerthType(saved.berthType);
+        if (saved.actionType) setActionType(saved.actionType);
+        if (saved.services) setServices(saved.services);
+        if (saved.luggageCounts) setLuggageCounts(saved.luggageCounts);
+
+        // Check backend payment status if we have a real bookingId
+        if (saved.bookingId) {
+          try {
+            const { data } = await axios.get(`/payments/${saved.bookingId}/status`);
+            if (!isMounted) return;
+            if (data?.status === 'paid' && data?.booking) {
+              // Payment already completed and verified by server!
+              sessionStorage.removeItem('onecoolie_active_payment');
+              setPayOpen(false);
+              playConfirmationSound();
+              setConfirmedBooking(data.booking);
+              toast.success('Your payment was verified successfully!');
+              fetchBookings();
+              return;
+            }
+          } catch (statusErr) {
+            console.warn('Could not verify existing payment on reload:', statusErr?.message);
+          }
+        }
+
+        if (isMounted) {
           setBookingStep(4);
           setPayOpen(true);
-        } else {
-          sessionStorage.removeItem('onecoolie_active_payment');
         }
+      } catch (e) {
+        console.error('Failed to restore active payment session:', e);
       }
-    } catch (e) {
-      console.error('Failed to restore active payment session:', e);
-    }
-  }, []);
+    };
+
+    checkActivePaymentSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchBookings]);
 
   const playConfirmationSound = () => {
     try {

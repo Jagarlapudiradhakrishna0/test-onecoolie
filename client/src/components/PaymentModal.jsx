@@ -42,10 +42,17 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
   const [timeLeft, setTimeLeft] = useState(899); // 14:59 (15 minutes)
   const [qrKey, setQrKey] = useState(0);
   const [bookingRef, setBookingRef] = useState('OC386022');
+  const [activeBooking, setActiveBooking] = useState(null);
+  const [isTestMode, setIsTestMode] = useState(false);
+  const [initializingOrder, setInitializingOrder] = useState(false);
+  const [paymentVerified, setPaymentVerified] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
 
   // Load or restore active session when modal opens
   useEffect(() => {
     if (open) {
+      setPaymentVerified(false);
+      setPaymentError(null);
       try {
         const raw = sessionStorage.getItem('onecoolie_active_payment');
         if (raw) {
@@ -53,6 +60,8 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
           if (saved && saved.active && saved.expireAt && saved.expireAt > Date.now()) {
             setBookingRef(saved.bookingRef || 'OC386022');
             setPaymentStep(saved.paymentStep || 'online');
+            if (saved.activeBooking) setActiveBooking(saved.activeBooking);
+            if (saved.isTestMode !== undefined) setIsTestMode(Boolean(saved.isTestMode));
             const remaining = Math.max(0, Math.floor((saved.expireAt - Date.now()) / 1000));
             setTimeLeft(remaining);
             return;
@@ -67,6 +76,8 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
       setBookingRef(`OC${randNum}`);
       setTimeLeft(899);
       setPaymentStep('select');
+      setActiveBooking(null);
+      setIsTestMode(false);
     }
   }, [open]);
 
@@ -114,6 +125,81 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
     };
   }, [open, paymentStep]);
 
+  // Real-Time Socket.IO Listener and Controlled Polling when on Online Payment
+  useEffect(() => {
+    if (!open || paymentStep !== 'online' || !activeBooking?.id || paymentVerified) return;
+
+    let pollCount = 0;
+    const maxPolls = 30; // 90 seconds (every 3 seconds)
+    let pollTimer = null;
+    let isSubscribed = true;
+
+    const onComplete = async (bookingData) => {
+      if (!isSubscribed) return;
+      setPaymentVerified(true);
+      toast.success('Payment verified! Confirming booking...');
+      try {
+        sessionStorage.removeItem('onecoolie_active_payment');
+      } catch (e) { }
+      setTimeout(async () => {
+        if (isSubscribed) {
+          await onPaid('online', bookingData || activeBooking);
+        }
+      }, 700);
+    };
+
+    // 1. Socket.IO Real-Time Listener
+    const handleSocketPayment = (payload) => {
+      const bId = payload?.bookingId || payload?.booking_id || payload?.booking?.id || payload?.booking?.booking_id;
+      if (bId && (String(bId) === String(activeBooking.id) || String(bId) === String(activeBooking.booking_id))) {
+        onComplete(payload.booking || activeBooking);
+      }
+    };
+
+    if (typeof window !== 'undefined' && window.socket) {
+      window.socket.on('payment:success', handleSocketPayment);
+      window.socket.on('payment_verified', handleSocketPayment);
+    }
+
+    // 2. Controlled Polling Fallback (every 3s up to 90s)
+    const checkPaymentStatus = async () => {
+      if (!isSubscribed || paymentVerified) return true;
+      try {
+        const { data } = await axios.get(`/payments/${activeBooking.id}/status`);
+        if (data?.payment_status === 'paid') {
+          onComplete(data.booking || activeBooking);
+          return true;
+        } else if (data?.payment_status === 'failed') {
+          setPaymentError(data.failure_reason || 'Payment was not completed. Please retry.');
+          return true;
+        }
+      } catch (err) {
+        // Silently continue polling on temporary network hiccups
+      }
+      return false;
+    };
+
+    const runPoll = async () => {
+      if (!isSubscribed || pollCount >= maxPolls) return;
+      pollCount++;
+      const finished = await checkPaymentStatus();
+      if (!finished && isSubscribed && pollCount < maxPolls) {
+        pollTimer = setTimeout(runPoll, 3000);
+      }
+    };
+
+    pollTimer = setTimeout(runPoll, 3000);
+
+    return () => {
+      isSubscribed = false;
+      if (pollTimer) clearTimeout(pollTimer);
+      if (typeof window !== 'undefined' && window.socket) {
+        window.socket.off('payment:success', handleSocketPayment);
+        window.socket.off('payment_verified', handleSocketPayment);
+      }
+    };
+  }, [open, paymentStep, activeBooking?.id, paymentVerified]);
+
   if (!open) return null;
 
   const formattedAmount = Number(total || 0).toFixed(2);
@@ -125,22 +211,94 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
   const gPayUri = `tez://upi/pay?pa=${UPI_MERCHANT_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${formattedAmount}&cu=INR&tn=${transactionNote}&mode=02`;
   const paytmUri = `paytmmp://pay?pa=${UPI_MERCHANT_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${formattedAmount}&cu=INR&tn=${transactionNote}&mode=02`;
 
-  const handleSelectOnline = () => {
+  const handleSelectOnline = async () => {
     setPaymentStep('online');
+    setInitializingOrder(true);
+    setPaymentError(null);
     const expireTimestamp = Date.now() + 899 * 1000;
     setTimeLeft(899);
+
     try {
-      const sessionData = {
-        active: true,
-        paymentStep: 'online',
-        bookingRef,
-        expireAt: expireTimestamp,
-        total,
-        ...(bookingData || {})
+      const orderPayload = {
+        train_no: bookingData?.selectedTrain?.train_no || bookingData?.selectedTrain?.train_number || '12727',
+        train_name: bookingData?.selectedTrain?.train_name || 'Godavari Express',
+        station_code: bookingData?.station || 'KZJ',
+        journey_date: bookingData?.journeyDate || new Date().toISOString().split('T')[0],
+        journey_time: bookingData?.journeyTime || '10:00',
+        services: {
+          ...(bookingData?.services || {}),
+          platform: bookingData?.selectedTrain?.platform || '2',
+          luggage: bookingData?.luggageTotalCount || 0,
+          luggageCounts: bookingData?.luggageCounts || { small: 0, medium: 0, large: 0 },
+          luggage_details: bookingData?.luggageSummaryLabel || '',
+        },
+        payment_method: 'online',
+        coach: bookingData?.coach || 'S1',
+        seat_number: bookingData?.seatNumber || '1',
+        berth_type: bookingData?.berthType || 'LB',
+        action_type: bookingData?.actionType || 'load_to_seat',
+        pnr: bookingData?.pnrInput || '',
+        platform: bookingData?.selectedTrain?.platform || '2',
       };
-      sessionStorage.setItem('onecoolie_active_payment', JSON.stringify(sessionData));
-    } catch (e) {
-      console.error(e);
+
+      const { data: orderRes } = await axios.post('/payments/create-order', orderPayload);
+
+      if (orderRes && orderRes.booking) {
+        setActiveBooking(orderRes.booking);
+        setBookingRef(orderRes.booking.booking_id || bookingRef);
+        setIsTestMode(Boolean(orderRes.isTestMode));
+
+        sessionStorage.setItem('onecoolie_active_payment', JSON.stringify({
+          active: true,
+          paymentStep: 'online',
+          bookingId: orderRes.booking.id,
+          bookingRef: orderRes.booking.booking_id || bookingRef,
+          activeBooking: orderRes.booking,
+          isTestMode: Boolean(orderRes.isTestMode),
+          expireAt: expireTimestamp,
+          total,
+          ...(bookingData || {})
+        }));
+      }
+    } catch (err) {
+      console.warn('Online order initialization note:', err.message);
+      // Even if order init reports an issue, keep UI stable and allow retry
+      setPaymentError(err.response?.data?.message || 'Unable to connect to payment server. Please retry.');
+    } finally {
+      setInitializingOrder(false);
+    }
+  };
+
+  const handleTestPaymentConfirm = async () => {
+    if (!activeBooking?.id) {
+      toast.error('Booking order not yet initialized. Please wait a moment.');
+      return;
+    }
+    setProcessing(true);
+    setPaymentError(null);
+    try {
+      const { data } = await axios.post('/payments/test-confirm', {
+        booking_id: activeBooking.id,
+        test_transaction_ref: `TEST-${Date.now()}`
+      });
+
+      if (data.success) {
+        setPaymentVerified(true);
+        toast.success('Test payment verified successfully!');
+        try {
+          sessionStorage.removeItem('onecoolie_active_payment');
+        } catch (e) { }
+        setTimeout(async () => {
+          await onPaid('online', data.booking || activeBooking);
+        }, 600);
+      }
+    } catch (err) {
+      console.error('Test payment confirmation error:', err);
+      const msg = err.response?.data?.message || 'Test payment confirmation failed';
+      setPaymentError(msg);
+      toast.error(msg);
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -311,6 +469,41 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
           } bg-white rounded-[26px] sm:rounded-[32px] border border-slate-200/90 shadow-[0_25px_70px_-15px_rgba(7,26,61,0.22)] p-5 sm:p-7 relative animate-scale-in text-zinc-900 my-auto overflow-hidden transition-all duration-200`}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Realtime / Polling Verified Success Transition Overlay */}
+        {paymentVerified && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-center space-y-3 animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto border-2 border-emerald-300 animate-scale-in">
+              <Check className="w-8 h-8 stroke-[3]" />
+            </div>
+            <h3 className="text-xl font-black text-slate-900">Payment Verified!</h3>
+            <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+              Transaction verified by payment provider. Confirming your station assistance booking...
+            </p>
+          </div>
+        )}
+
+        {/* Order Initialization Loader */}
+        {initializingOrder && (
+          <div className="absolute inset-0 bg-white/90 backdrop-blur-xs z-40 flex flex-col items-center justify-center p-6 text-center space-y-3 animate-fade-in">
+            <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-xs font-bold text-slate-700">Connecting to secure payment network...</p>
+          </div>
+        )}
+
+        {/* Payment Error Banner if any */}
+        {paymentError && (
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center justify-between gap-2 animate-fade-in">
+            <span>{paymentError}</span>
+            <button
+              type="button"
+              onClick={() => setPaymentError(null)}
+              className="text-rose-500 hover:text-rose-800 font-bold px-2 py-0.5 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* ── Top Header Bar ────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3.5 mb-5">
           {/* Left: Brand Logo + Back Button (if on step 2) */}
@@ -625,6 +818,47 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 </a>
               </div>
 
+              {/* Live Status indicator */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50/70 border border-blue-200/60 text-xs text-blue-950">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+                  <span className="font-bold">Waiting for UPI completion...</span>
+                </div>
+                <span className="text-[10px] text-blue-700 bg-white px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
+                  Auto-detecting
+                </span>
+              </div>
+
+              {/* Development Test Mode Panel (strictly hidden in production) */}
+              {isTestMode && (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-left animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-full">
+                      🧪 Development Test Mode Active
+                    </span>
+                    <span className="text-[10px] text-amber-700 font-mono">
+                      #{bookingRef}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-snug">
+                    Testing UPI payment? Click below to verify payment via the backend development verification endpoint.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleTestPaymentConfirm}
+                    disabled={processing}
+                    className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {processing ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Simulate Verified Payment (Dev Only)</span>
+                  </button>
+                </div>
+              )}
+
               {/* Action Button: Launch Razorpay Checkout */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-xl p-2 text-center font-medium">
@@ -788,6 +1022,47 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     </div>
                   </div>
                 </div>
+
+                {/* Live Status indicator */}
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50/70 border border-blue-200/60 text-xs text-blue-950">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+                    <span className="font-bold">Waiting for UPI completion...</span>
+                  </div>
+                  <span className="text-[10px] text-blue-700 bg-white px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
+                    Auto-detecting
+                  </span>
+                </div>
+
+                {/* Development Test Mode Panel (strictly hidden in production) */}
+                {isTestMode && (
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-left animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-full">
+                        🧪 Development Test Mode Active
+                      </span>
+                      <span className="text-[10px] text-amber-700 font-mono">
+                        #{bookingRef}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 leading-snug">
+                      Testing UPI payment? Click below to verify payment via the backend development verification endpoint.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleTestPaymentConfirm}
+                      disabled={processing}
+                      className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                    >
+                      {processing ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>Simulate Verified Payment (Dev Only)</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Primary Action Button: "Proceed to Pay with Razorpay" */}
                 <div className="space-y-2">
