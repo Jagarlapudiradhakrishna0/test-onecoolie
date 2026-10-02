@@ -6,52 +6,12 @@ import {
   useLocation
 } from 'react-router-dom';
 
-import { useContext, lazy, Suspense, Component } from 'react';
+import { useContext, lazy, Suspense } from 'react';
 
 import { AuthContext } from './context/AuthContext';
 
 import OfflineBanner from './components/OfflineBanner';
 import TrainLoader from './components/TrainLoader';
-import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx';
-
-// ChunkErrorBoundary: catches ChunkLoadError / dynamic import failures
-// that occur when a user has a stale cached chunk after a new deployment.
-// Automatically reloads the page once to pick up the new deployment.
-class ChunkErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(error) {
-    const isChunkError =
-      error?.name === 'ChunkLoadError' ||
-      error?.message?.includes('Failed to fetch dynamically imported module') ||
-      error?.message?.includes('error loading dynamically imported module') ||
-      error?.message?.includes('Importing a module script failed');
-    if (isChunkError) {
-      // Reload once — this picks up the latest deployment chunks
-      if (!sessionStorage.getItem('chunk_reload_attempted')) {
-        sessionStorage.setItem('chunk_reload_attempted', '1');
-        window.location.reload();
-      }
-    }
-    return { hasError: true };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ textAlign: 'center', maxWidth: 400 }}>
-            <p style={{ fontWeight: 700, color: '#18181B', marginBottom: 8 }}>Updating OneCoolie…</p>
-            <p style={{ fontSize: 13, color: '#71717A', marginBottom: 24 }}>A newer version is available. Reloading to apply the update.</p>
-            <button onClick={() => window.location.reload()} style={{ padding: '10px 24px', borderRadius: 9999, background: '#18181B', color: '#fff', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Reload Now</button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 // Lazy-loaded routes for code-splitting & optimal bundle performance (Phase 7)
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -185,16 +145,15 @@ export default function App() {
       )}
 
       <BrowserRouter>
-        <ChunkErrorBoundary>
-          <Suspense
-            fallback={
-              <TrainLoader
-                text="Loading OneCoolie..."
-                subtext="Connecting to station dispatch network..."
-              />
-            }
-          >
-            <Routes>
+        <Suspense
+          fallback={
+            <TrainLoader
+              text="Loading OneCoolie..."
+              subtext="Connecting to station dispatch network..."
+            />
+          }
+        >
+          <Routes>
 
             {/* Public Home */}
             <Route
@@ -333,8 +292,7 @@ export default function App() {
             />
 
           </Routes>
-          </Suspense>
-        </ChunkErrorBoundary>
+        </Suspense>
       </BrowserRouter>
     </>
   );

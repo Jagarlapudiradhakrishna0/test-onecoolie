@@ -74,6 +74,11 @@ window.socket.on('session-revoked', (data) => {
   }
 });
 
+// Clear the chunk-reload guard on successful app boot so each new deployment
+// gets a fresh auto-reload attempt. This runs only when the app loads cleanly
+// (not inside an error boundary), so it cannot cause a reload loop.
+GlobalErrorBoundary.clearChunkReloadFlag();
+
 ReactDOM.createRoot(
   document.getElementById('root')
 ).render(
