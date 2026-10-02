@@ -164,7 +164,48 @@ exports.getMyBookings = async (req, res) => {
       formatBooking(b, { includeOTP: true })
     );
 
-    return res.json(result);
+    const isOngoingStatus = (status, journeyDate) => {
+      const s = (status || '').toLowerCase();
+      if (s === 'completed' || s === 'cancelled') return false;
+      if (['in_service', 'reached', 'arriving', 'accepted', 'assigned'].includes(s)) return true;
+      if (['pending', 'confirmed'].includes(s)) {
+        const today = new Date().toISOString().slice(0, 10);
+        const jDate = (journeyDate || '').slice(0, 10);
+        if (jDate && jDate === today) return true;
+      }
+      return false;
+    };
+
+    const total = result.length;
+    let ongoing = 0;
+    let upcoming = 0;
+    let completed = 0;
+
+    for (const b of result) {
+      const s = (b.booking_status || b.status || '').toLowerCase();
+      if (s === 'completed') {
+        completed++;
+      } else if (isOngoingStatus(s, b.journey_date)) {
+        ongoing++;
+      } else if (s !== 'cancelled') {
+        upcoming++;
+      }
+    }
+
+    if (req.query.format === 'array') {
+      return res.json(result);
+    }
+
+    return res.json({
+      success: true,
+      trips: result,
+      counts: {
+        total,
+        ongoing,
+        upcoming,
+        completed
+      }
+    });
 
   } catch (error) {
     console.error(

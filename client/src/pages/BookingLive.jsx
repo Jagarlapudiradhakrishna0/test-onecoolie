@@ -52,7 +52,10 @@ export default function BookingLive() {
 
   useEffect(() => {
     axios.get('/bookings/my-bookings')
-      .then((res) => setAllBookings(res.data || []))
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.trips || []);
+        setAllBookings(list);
+      })
       .catch(() => {});
   }, []);
 

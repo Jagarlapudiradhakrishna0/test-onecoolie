@@ -51,6 +51,7 @@ import {
   Headphones,
   Copy,
   Home,
+  RefreshCw,
 } from 'lucide-react';
 import TrainSearch from '../components/TrainSearch';
 import StationSelectionCard from '../components/journey/StationSelectionCard';
@@ -136,96 +137,7 @@ const SERVICE_META = [
 
 const ACTIVE_STATUSES = ['pending', 'accepted', 'arriving', 'reached', 'in_service', 'assigned'];
 
-const DEFAULT_SAMPLE_TRIPS = [
-  {
-    id: 'RM-VT834-VB',
-    booking_id: 'RM-VT834-VB',
-    train_no: '20834',
-    train_name: 'Vande Bharat Express',
-    station_code: 'SC',
-    station_name: 'Secunderabad',
-    destination: 'Visakhapatnam',
-    journey_date: '2026-09-06',
-    journey_time: '15:00',
-    coach: 'S4',
-    seat_number: '42',
-    berth_type: 'Lower',
-    action_type: 'load_to_seat',
-    booking_status: 'pending',
-    total_price: 70,
-    services: { luggage: 1 },
-    created_at: '2026-09-06T14:28:00Z',
-    accepted_at: null,
-    arrived_at: null,
-    completed_at: null,
-  },
-  {
-    id: 'RM-MT0X8PRQ-I4VUB',
-    booking_id: 'RM-MT0X8PRQ-I4VUB',
-    train_no: '17013',
-    train_name: 'Kazipet Express',
-    station_code: 'HDP',
-    station_name: 'Hadaspar (Pune)',
-    destination: 'Kazipet',
-    journey_date: '2026-09-12',
-    journey_time: '08:10',
-    coach: 'S3',
-    seat_number: '23',
-    berth_type: 'Lower',
-    action_type: 'collect_from_seat',
-    booking_status: 'completed',
-    total_price: 30,
-    services: { luggage: 1 },
-    created_at: '2026-09-12T08:00:00Z',
-    accepted_at: '2026-09-12T08:10:00Z',
-    arrived_at: '2026-09-12T09:05:00Z',
-    completed_at: '2026-09-12T09:45:00Z',
-  },
-  {
-    id: 'RM-22692-BLR',
-    booking_id: 'RM-22692-BLR',
-    train_no: '22692',
-    train_name: 'Bangalore Rajdhani',
-    station_code: 'SBC',
-    station_name: 'KSR Bengaluru',
-    destination: 'Hazrat Nizamuddin',
-    journey_date: '2026-09-08',
-    journey_time: '20:00',
-    coach: 'B2',
-    seat_number: '18',
-    berth_type: 'Lower',
-    action_type: 'load_to_seat',
-    booking_status: 'pending',
-    total_price: 80,
-    services: { luggage: 2 },
-    created_at: '2026-09-05T19:40:00Z',
-    accepted_at: '2026-09-05T20:00:00Z',
-    arrived_at: null,
-    completed_at: null,
-  },
-  {
-    id: 'RM-12723-TEL',
-    booking_id: 'RM-12723-TEL',
-    train_no: '12723',
-    train_name: 'Telangana Express',
-    station_code: 'HYB',
-    station_name: 'Hyderabad Deccan',
-    destination: 'New Delhi',
-    journey_date: '2026-09-01',
-    journey_time: '06:00',
-    coach: 'A1',
-    seat_number: '31',
-    berth_type: 'Side Lower',
-    action_type: 'collect_from_seat',
-    booking_status: 'completed',
-    total_price: 60,
-    services: { luggage: 1 },
-    created_at: '2026-09-01T05:15:00Z',
-    accepted_at: '2026-09-01T05:30:00Z',
-    arrived_at: '2026-09-01T05:55:00Z',
-    completed_at: '2026-09-01T06:15:00Z',
-  },
-];
+
 
 function TrainLineArt({ className = "w-32 h-14" }) {
   return (
@@ -490,6 +402,7 @@ export default function PassengerDashboard() {
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
 
@@ -817,10 +730,13 @@ export default function PassengerDashboard() {
 
   const fetchBookings = useCallback(async () => {
     try {
+      setFetchError(null);
       const { data } = await axios.get('/bookings/my-bookings');
-      setBookings(data);
+      const tripsList = Array.isArray(data) ? data : (data?.trips || []);
+      setBookings(tripsList);
     } catch (e) {
-      console.error(e);
+      console.error('Failed to fetch user trips:', e);
+      setFetchError('Unable to load your trips. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -846,42 +762,39 @@ export default function PassengerDashboard() {
     });
   }, [bookings]);
 
-  const allDisplayBookings = (() => {
-    if (!bookings || bookings.length === 0) return DEFAULT_SAMPLE_TRIPS;
-    const realIds = new Set(bookings.map((b) => b.id || b.booking_id));
-    const supplemental = DEFAULT_SAMPLE_TRIPS.filter((s) => !realIds.has(s.id));
-    if (bookings.length >= 4) return bookings;
-    return [...bookings, ...supplemental.slice(0, Math.max(0, 4 - bookings.length))];
-  })();
+  const allDisplayBookings = useMemo(() => bookings || [], [bookings]);
 
   const isOngoingTrip = (b) => {
-    const status = b.booking_status?.toLowerCase();
+    const status = (b.booking_status || b.status || '').toLowerCase();
     if (status === 'completed' || status === 'cancelled') return false;
-    // Trip currently in progress: live status, or today's active journey
+    // Trip currently in progress: live assistant status or active in-transit
     if (['in_service', 'reached', 'arriving', 'accepted', 'assigned'].includes(status)) return true;
-    const jDate = b.journey_date || '';
-    if (jDate === '2026-09-06' || b.id === 'RM-VT834-VB') return true;
+    if (['pending', 'confirmed'].includes(status)) {
+      const today = new Date().toISOString().slice(0, 10);
+      const jDate = (b.journey_date || '').slice(0, 10);
+      if (jDate && jDate === today) return true;
+    }
     return false;
   };
 
-  const ongoingList = allDisplayBookings.filter((b) => isOngoingTrip(b));
-  const upcomingList = allDisplayBookings.filter((b) => {
-    const status = b.booking_status?.toLowerCase();
+  const ongoingList = useMemo(() => allDisplayBookings.filter((b) => isOngoingTrip(b)), [allDisplayBookings]);
+  const upcomingList = useMemo(() => allDisplayBookings.filter((b) => {
+    const status = (b.booking_status || b.status || '').toLowerCase();
     if (status === 'completed' || status === 'cancelled') return false;
     return !isOngoingTrip(b);
-  });
-  const completedList = allDisplayBookings.filter((b) =>
-    b.booking_status?.toLowerCase() === 'completed' || (!ACTIVE_STATUSES.includes(b.booking_status?.toLowerCase()) && !isOngoingTrip(b))
-  );
+  }), [allDisplayBookings]);
+  const completedList = useMemo(() => allDisplayBookings.filter((b) =>
+    (b.booking_status || b.status || '').toLowerCase() === 'completed'
+  ), [allDisplayBookings]);
 
-  const activeTripsCount = bookings.length === 0 ? 0 : (ongoingList.length + upcomingList.length);
+  const activeTripsCount = ongoingList.length + upcomingList.length;
 
   const activeTripData = useMemo(() => {
     if (!bookings || bookings.length === 0) {
       return null;
     }
     // Prioritize active/ongoing trip, or most recent booking
-    const trip = active[0] || bookings.find((b) => !['completed', 'cancelled'].includes(b.booking_status?.toLowerCase())) || bookings[0];
+    const trip = active[0] || bookings.find((b) => !['completed', 'cancelled'].includes((b.booking_status || b.status || '').toLowerCase())) || bookings[0];
     if (!trip) return null;
 
     const jDate = trip.journey_date || trip.created_at || new Date().toISOString();
@@ -890,7 +803,9 @@ export default function PassengerDashboard() {
     const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
     let serviceLabel = 'Luggage Assistance';
-    if (trip.action_type === 'collect_from_seat') {
+    if (trip.service) {
+      serviceLabel = trip.service.split(',')[0].trim();
+    } else if (trip.action_type === 'collect_from_seat' || trip.services?.action_type === 'collect_from_seat') {
       serviceLabel = 'De-boarding Assist';
     } else if (trip.services?.escort) {
       serviceLabel = 'Coach Escort';
@@ -900,8 +815,17 @@ export default function PassengerDashboard() {
 
     const trainNo = trip.train_no || trip.train_number || 'Train';
     const trainName = trip.train_name || 'Express';
-    const source = trip.source || trip.from_station || trip.station_name || 'Origin';
+    let source = trip.source || trip.from_station || trip.station_name;
+    if (!source && trip.station_code) {
+      source = STATIONS.find((s) => s.code === trip.station_code)?.name || trip.station_code;
+    }
+    if (!source) source = 'Origin';
     const destination = trip.destination || trip.to_station || 'Destination';
+
+    const safeMonth = !isNaN(dObj.getTime()) ? (monthNames[dObj.getMonth()] || 'JAN') : 'JAN';
+    const safeDay = !isNaN(dObj.getTime()) ? String(dObj.getDate()).padStart(2, '0') : '01';
+    const safeYear = !isNaN(dObj.getTime()) ? String(dObj.getFullYear()) : String(new Date().getFullYear());
+    const safeDayName = !isNaN(dObj.getTime()) ? (dayNames[dObj.getDay()] || 'SUN') : 'SUN';
 
     return {
       id: trip.id || trip.booking_id,
@@ -910,15 +834,15 @@ export default function PassengerDashboard() {
       source,
       destination,
       route: `${source} → ${destination}`,
-      coach: trip.coach ? `Coach ${trip.coach}` : 'Coach S4',
-      seat: trip.seat_number ? `Seat ${trip.seat_number}${trip.berth_type ? ` (${trip.berth_type})` : ''}` : 'Seat Pending',
+      coach: (trip.coach || trip.services?.coach) ? `Coach ${trip.coach || trip.services?.coach}` : 'Coach Pending',
+      seat: (trip.seat_number || trip.services?.seat_number) ? `Seat ${trip.seat_number || trip.services?.seat_number}${trip.berth_type || trip.services?.berth_type ? ` (${trip.berth_type || trip.services?.berth_type})` : ''}` : 'Seat Pending',
       service: serviceLabel,
-      status: (trip.booking_status || 'CONFIRMED').toUpperCase(),
-      dateMonth: monthNames[dObj.getMonth()] || 'SEP',
-      dateDay: String(dObj.getDate()).padStart(2, '0'),
-      dateYear: String(dObj.getFullYear()),
-      dateDayName: dayNames[dObj.getDay()] || 'SUN',
-      platform: trip.platform || '1',
+      status: (trip.booking_status || trip.status || 'CONFIRMED').toUpperCase(),
+      dateMonth: safeMonth,
+      dateDay: safeDay,
+      dateYear: safeYear,
+      dateDayName: safeDayName,
+      platform: trip.platform || trip.services?.platform || '1',
       isReal: true,
     };
   }, [active, bookings]);
@@ -1068,6 +992,7 @@ export default function PassengerDashboard() {
         localStorage.setItem('onecoolie_latest_booking', JSON.stringify({ id: data.id, time: Date.now() }));
       } catch (e) { }
       toast.success('Assistance booking confirmed!');
+      fetchBookings();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Booking submission failed');
     }
@@ -1081,7 +1006,7 @@ export default function PassengerDashboard() {
       const res = await axios.post(`/bookings/${cancelTargetId}/cancel`);
       const updatedBooking = res.data?.booking || res.data;
 
-      // 1. Immediately update bookings state optimistically / from backend response
+      // Immediately update bookings state optimistically / from backend response
       setBookings((prev) =>
         prev.map((b) => (b.id === cancelTargetId || b.booking_id === cancelTargetId
           ? {
@@ -1092,11 +1017,6 @@ export default function PassengerDashboard() {
             }
           : b
         ))
-      );
-
-      // 2. Immediately update active state if cancelled
-      setActive((prev) =>
-        prev ? (prev.id === cancelTargetId || prev.booking_id === cancelTargetId ? null : prev) : null
       );
 
       setConfirmCancel(null);
@@ -2607,23 +2527,55 @@ export default function PassengerDashboard() {
                 <TrainLoader
                   fullScreen={false}
                   size="md"
-                  text="Loading Your Trips..."
+                  text="Loading your trips..."
                   subtext="Syncing your bookings with Indian Railways telemetry..."
                 />
+              </div>
+            ) : fetchError ? (
+              <div className="bg-white border border-rose-200/80 rounded-3xl p-8 sm:p-12 text-center max-w-md mx-auto shadow-2xs">
+                <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-100">
+                  <AlertCircle className="w-7 h-7" />
+                </div>
+                <h3 className="font-extrabold text-base sm:text-lg text-zinc-900 mb-1">Unable to load your trips</h3>
+                <p className="text-xs sm:text-sm text-zinc-500 mb-6">Unable to load your trips. Please try again.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoading(true);
+                    fetchBookings();
+                  }}
+                  className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-2.5 rounded-full text-xs transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry</span>
+                </button>
               </div>
             ) : (() => {
               const formatDateBlock = (dateStr) => {
                 try {
-                  if (!dateStr) return { month: 'SEP', day: '06', year: '2026', weekday: 'SUN' };
-                  const d = new Date(dateStr);
-                  if (isNaN(d.getTime())) return { month: 'SEP', day: '06', year: '2026', weekday: 'SUN' };
+                  const d = dateStr ? new Date(dateStr) : new Date();
+                  if (isNaN(d.getTime())) {
+                    const now = new Date();
+                    return {
+                      month: now.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+                      day: String(now.getDate()).padStart(2, '0'),
+                      year: now.getFullYear(),
+                      weekday: now.toLocaleString('en-US', { weekday: 'short' }).toUpperCase()
+                    };
+                  }
                   const month = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
                   const day = String(d.getDate()).padStart(2, '0');
                   const year = d.getFullYear();
                   const weekday = d.toLocaleString('en-US', { weekday: 'short' }).toUpperCase();
                   return { month, day, year, weekday };
                 } catch (e) {
-                  return { month: 'SEP', day: '06', year: '2026', weekday: 'SUN' };
+                  const now = new Date();
+                  return {
+                    month: now.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+                    day: String(now.getDate()).padStart(2, '0'),
+                    year: now.getFullYear(),
+                    weekday: now.toLocaleString('en-US', { weekday: 'short' }).toUpperCase()
+                  };
                 }
               };
 
@@ -2667,27 +2619,49 @@ export default function PassengerDashboard() {
               });
 
               if (currentList.length === 0) {
+                if (allDisplayBookings.length === 0) {
+                  return (
+                    <div className="bg-white border border-slate-200/70 rounded-3xl p-10 sm:p-12 text-center max-w-md mx-auto shadow-2xs">
+                      <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#146BFF] flex items-center justify-center mx-auto mb-4 border border-blue-100">
+                        <Luggage className="w-7 h-7" />
+                      </div>
+                      <h3 className="font-extrabold text-base sm:text-lg text-zinc-900 mb-1">No trips yet</h3>
+                      <p className="text-xs sm:text-sm text-zinc-500 mb-6 max-w-xs mx-auto leading-relaxed">
+                        Your booked journeys and assistance requests will appear here.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setTab('book')}
+                        className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-3 rounded-full text-xs transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs"
+                      >
+                        <span>Book a Trip</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                }
+
                 return (
-                  <div className="bg-white border border-slate-200/70 rounded-3xl p-12 text-center max-w-md mx-auto shadow-2xs">
+                  <div className="bg-white border border-slate-200/70 rounded-3xl p-10 text-center max-w-md mx-auto shadow-2xs">
                     <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#146BFF] flex items-center justify-center mx-auto mb-4 border border-blue-100">
                       <Luggage className="w-7 h-7" />
                     </div>
-                    <p className="font-extrabold text-base text-zinc-900 mb-1">No trips found</p>
+                    <h3 className="font-extrabold text-base text-zinc-900 mb-1">
+                      {tripFilter === 'ongoing' ? 'No ongoing trips' : tripFilter === 'upcoming' ? 'No upcoming trips' : 'No completed trips'}
+                    </h3>
                     <p className="text-xs text-zinc-500 mb-6">
                       {tripFilter === 'ongoing'
                         ? 'You have no trips currently in progress.'
                         : tripFilter === 'upcoming'
                           ? 'You have no upcoming station assistance dispatches.'
-                          : tripFilter === 'completed'
-                            ? 'No historical completed trip records found.'
-                            : "You haven't requested station assistance yet."}
+                          : 'No historical completed trip records found.'}
                     </p>
                     <button
                       type="button"
-                      onClick={() => setTab('book')}
-                      className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-3 rounded-full text-xs transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      onClick={() => setTripFilter('all')}
+                      className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-2.5 rounded-full text-xs transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
-                      <span>Book Assistance Now</span>
+                      <span>View All Trips</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -2724,7 +2698,7 @@ export default function PassengerDashboard() {
                     const isConfirmedDone = !isCancelled;
                     const confirmedTime = formatStepTime(
                       b.created_at,
-                      isCompleted ? '08:00' : '14:28'
+                      b.journey_time || ''
                     );
                     const confirmedDate = formatDatePart(b.created_at) || defaultDateStr;
 
@@ -2737,9 +2711,9 @@ export default function PassengerDashboard() {
                     );
                     const assignedTime = formatStepTime(
                       b.accepted_at || b.services?.accepted_at,
-                      isCompleted ? '08:10' : ''
+                      ''
                     );
-                    const assignedDate = isAssignedDone ? (formatDatePart(b.accepted_at) || defaultDateStr) : '';
+                    const assignedDate = isAssignedDone ? (formatDatePart(b.accepted_at || b.services?.accepted_at) || defaultDateStr) : '';
 
                     // Step 3: Assistant Reached
                     const isReachedDone = !isCancelled && Boolean(
@@ -2749,33 +2723,26 @@ export default function PassengerDashboard() {
                     );
                     const reachedTime = formatStepTime(
                       b.arrived_at || b.services?.arrived_at,
-                      isCompleted ? '09:05' : ''
+                      ''
                     );
-                    const reachedDate = isReachedDone ? (formatDatePart(b.arrived_at) || defaultDateStr) : '';
+                    const reachedDate = isReachedDone ? (formatDatePart(b.arrived_at || b.services?.arrived_at) || defaultDateStr) : '';
 
                     // Step 4: Service Completed
                     const isServiceDone = !isCancelled && isCompleted;
                     const completedTime = formatStepTime(
                       b.completed_at || b.services?.completed_at,
-                      isCompleted ? '09:45' : ''
+                      ''
                     );
-                    const completedDate = isServiceDone ? (formatDatePart(b.completed_at) || defaultDateStr) : '';
+                    const completedDate = isServiceDone ? (formatDatePart(b.completed_at || b.services?.completed_at) || defaultDateStr) : '';
 
-                    const trainNo = b.train_no || b.train_number || '20834';
-                    const trainName = b.train_name || 'Vande Bharat Express';
-                    let fromStation = b.source || b.from_station || (b.station_name && b.station_name !== b.destination ? b.station_name : 'Secunderabad');
-                    let toStation = b.destination || b.to_station || (fromStation === 'Secunderabad' ? 'Visakhapatnam' : 'Kazipet');
-                    if (fromStation === toStation || trainNo === '17013') {
-                      if (trainNo === '20834' || trainName.toLowerCase().includes('vande bharat')) {
-                        fromStation = 'Secunderabad';
-                        toStation = 'Visakhapatnam';
-                      } else if (trainNo === '17013' || trainName.toLowerCase().includes('kazipet')) {
-                        fromStation = 'Hadaspar (Pune)';
-                        toStation = 'Kazipet';
-                      } else {
-                        toStation = 'Destination';
-                      }
+                    const trainNo = b.train_no || b.train_number || 'Train';
+                    const trainName = b.train_name || 'Express';
+                    let fromStation = b.source || b.from_station || b.station_name;
+                    if (!fromStation && b.station_code) {
+                      fromStation = STATIONS.find((s) => s.code === b.station_code)?.name || b.station_code;
                     }
+                    if (!fromStation) fromStation = 'Origin';
+                    let toStation = b.destination || b.to_station || 'Destination';
 
                     const trackerSteps = [
                       {
@@ -2812,7 +2779,20 @@ export default function PassengerDashboard() {
                       },
                     ];
 
-                    const serviceLabel = isBoarding ? 'Boarding Load' : 'Platform Assist';
+                    let serviceLabel = 'Platform Assist';
+                    if (b.service) {
+                      serviceLabel = b.service.split(',')[0].trim();
+                    } else if (b.action_type === 'collect_from_seat' || b.services?.action_type === 'collect_from_seat') {
+                      serviceLabel = 'De-boarding Assist';
+                    } else if (b.services?.luggage) {
+                      serviceLabel = 'Luggage Assist';
+                    } else if (b.services?.escort) {
+                      serviceLabel = 'Coach Escort';
+                    } else if (b.services?.wheelchair) {
+                      serviceLabel = 'Wheelchair Escort';
+                    } else {
+                      serviceLabel = isBoarding ? 'Boarding Load' : 'Station Assist';
+                    }
 
                     return (
                       <div
@@ -2939,7 +2919,7 @@ export default function PassengerDashboard() {
                               <div className="min-w-0">
                                 <span className="text-[9px] text-zinc-400 font-medium block leading-none">Coach</span>
                                 <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
-                                  {b.coach || b.services?.coach || 'S4'}
+                                  {b.coach || b.services?.coach || 'Unassigned'}
                                 </span>
                               </div>
                             </div>
@@ -2952,7 +2932,7 @@ export default function PassengerDashboard() {
                               <div className="min-w-0">
                                 <span className="text-[9px] text-zinc-400 font-medium block leading-none">Seat</span>
                                 <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
-                                  {b.seat_number || b.services?.seat_number || '42'}
+                                  {b.seat_number || b.services?.seat_number || 'Unassigned'}
                                 </span>
                               </div>
                             </div>
@@ -3072,7 +3052,7 @@ export default function PassengerDashboard() {
                           <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
                             <div>
                               <div className="text-xl font-black text-black tracking-tight leading-none">
-                                ₹{b.total_price || (isCompleted ? 30 : 70)}
+                                ₹{b.total_price ?? 0}
                               </div>
                               <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
                                 Assistance Fee
@@ -3179,7 +3159,7 @@ export default function PassengerDashboard() {
                                   <div className="min-w-0">
                                     <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Coach</span>
                                     <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
-                                      {b.coach || b.services?.coach || 'S4'}
+                                      {b.coach || b.services?.coach || 'Unassigned'}
                                     </span>
                                   </div>
                                 </div>
@@ -3192,7 +3172,7 @@ export default function PassengerDashboard() {
                                   <div className="min-w-0">
                                     <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Seat</span>
                                     <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
-                                      {b.seat_number || b.services?.seat_number || '42'}
+                                      {b.seat_number || b.services?.seat_number || 'Unassigned'}
                                     </span>
                                   </div>
                                 </div>
@@ -3368,7 +3348,7 @@ export default function PassengerDashboard() {
                             {/* Middle: Fee */}
                             <div className="text-right">
                               <div className="text-2xl sm:text-3xl font-black text-black tracking-tight leading-none">
-                                ₹{b.total_price || (isCompleted ? 30 : 70)}
+                                ₹{b.total_price ?? 0}
                               </div>
                               <div className="text-[11px] sm:text-xs text-zinc-400 font-semibold mt-1">
                                 Assistance Fee
