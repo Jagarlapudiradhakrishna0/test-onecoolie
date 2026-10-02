@@ -168,18 +168,28 @@ Railmitra-main/
 │   │   ├── api/
 │   │   │   └── axios.js                  # Preconfigured Axios instance with JWT interceptor
 │   │   ├── assets/
-│   │   │   └── hero.png                  # Marketing hero graphic
+│   │   │   ├── onecoolie-logo.png        # Official brand logo
+│   │   │   └── images/                   # Optimized visual assets
 │   │   ├── components/
 │   │   │   ├── ActiveBooking.jsx         # Live journey tracking & platform navigation card
 │   │   │   ├── AssistantJobCard.jsx      # Real-time assistant dispatch card with coach/seat box
+│   │   │   ├── AssistantNotifications.jsx# Real-time sound & push notifications
+│   │   │   ├── AssistantWalletView.jsx   # Wallet, settlement & earnings ledger
 │   │   │   ├── Brand.jsx                 # Centralized typography & logo renderer
-│   │   │   ├── ConfirmDialog.jsx         # Modal dialog for booking cancellation
+│   │   │   ├── Footer.jsx                # Global navigation footer
+│   │   │   ├── GlobalErrorBoundary.jsx   # Production fault-isolation & chunk error recovery
+│   │   │   ├── LaunchCenter.jsx          # Station deployment & service management console
 │   │   │   ├── OfflineBanner.jsx         # Network connectivity status banner
-│   │   │   ├── PaymentModal.jsx          # Digital checkout modal (UPI QR, Card, Cash)
-│   │   │   ├── RailwayCanvas3D.jsx       # Three.js procedural 3D train & station canvas
+│   │   │   ├── PassengerNotifications.jsx# Passenger notification center
+│   │   │   ├── PaymentModal.jsx          # Digital checkout modal (Razorpay UPI QR, Card, Cash)
 │   │   │   ├── Skeleton.jsx              # Loading skeletons for responsive UX
 │   │   │   ├── Toast.jsx                 # Toast notification provider
-│   │   │   └── TrainSearch.jsx           # Smart autocomplete for 5,218 all-India trains
+│   │   │   ├── TrainLoader.jsx           # High-visibility railway dispatch animated loader
+│   │   │   ├── TrainSearch.jsx           # Smart autocomplete for 5,218 all-India trains
+│   │   │   ├── admin/                    # Ops Console, Payouts, Station-Desk, Incidents
+│   │   │   ├── cancellation/             # Single authoritative cancellation & rebooking modal suite
+│   │   │   ├── journey/                  # Station selection, train cards, progress sidebar
+│   │   │   └── support/                  # AI Support Assistant, Ticket Tracking, FAQs, Inbox
 │   │   ├── context/
 │   │   │   ├── AuthContext.jsx           # Global authentication state, login, register, OTP
 │   │   │   ├── LanguageContext.jsx       # i18n localization context (EN, HI, TE)

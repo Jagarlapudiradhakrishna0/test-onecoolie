@@ -60,7 +60,6 @@ import JourneyProgressSidebar from '../components/journey/JourneyProgressSidebar
 import PaymentModal from '../components/PaymentModal';
 import ProfileMenu from '../context/ProfileMenu';
 import PassengerNotifications from '../components/PassengerNotifications';
-import ConfirmDialog from '../components/ConfirmDialog';
 import CancellationModal from '../components/cancellation/CancellationModal';
 import RebookingModal from '../components/cancellation/RebookingModal';
 import CancellationPolicyModal from '../components/cancellation/CancellationPolicyModal';
