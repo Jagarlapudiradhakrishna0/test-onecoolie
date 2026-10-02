@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import App from './App.jsx';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx';
 
 import './index.css';
 
@@ -77,13 +78,15 @@ ReactDOM.createRoot(
   document.getElementById('root')
 ).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <LanguageProvider>
-        <AuthProvider>
-          <ToastProvider />
-          <App />
-        </AuthProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+    <GlobalErrorBoundary>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <ToastProvider />
+            <App />
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </GlobalErrorBoundary>
   </React.StrictMode>
 );
