@@ -26,6 +26,7 @@ const CACHE_TTL_MS = 90 * 1000; // 90 seconds TTL
 const CACHE_FILE_PATH = path.join(__dirname, '..', 'data', 'station_telemetry_cache.json');
 const TRAINS_FILE_PATH = path.join(__dirname, '..', 'data', 'trains.json');
 const { getStationTimetable, findTrainsInTimetable } = require('../data/stationTimetables');
+const { validateTrainHost } = require('../utils/ssrfValidator');
 
 /**
  * Automatically merges newly discovered trains from API responses into trains.json
@@ -467,6 +468,12 @@ const fetchLiveStationBoard = async (stationCode, hours = 4) => {
   const apiHost = process.env.TRAIN_API_HOST || 'irctc-indian-railway-pnr-status.p.rapidapi.com';
   const baseUrl = process.env.TRAIN_API_BASE_URL || `https://${apiHost}`;
 
+  // Fail closed if apiHost fails SSRF validation
+  if (!validateTrainHost(apiHost)) {
+    console.warn('[SSRF Guard] Blocked outbound call to unauthorized host:', apiHost);
+    return generateLiveStationBoardForCurrentTime(code, hours);
+  }
+
   // If no API key is provided or placeholder is used, immediately use authentic timetable engine
   if (!apiKey || apiKey.trim() === '' || apiKey === 'your_rapidapi_key_here') {
     return generateLiveStationBoardForCurrentTime(code, hours);
@@ -713,6 +720,10 @@ const fetchPnrStatus = async (pnrNumber) => {
   const baseUrl = process.env.TRAIN_API_BASE_URL || `https://${apiHost}`;
 
   if (apiKey && apiKey !== 'your_rapidapi_key_here' && apiKey.trim() !== '') {
+    if (!validateTrainHost(apiHost)) {
+      console.warn('[SSRF Guard] Blocked PNR status call to unauthorized host:', apiHost);
+      return prsData || null;
+    }
     try {
       let targetUrl;
       if (apiHost.includes('irctc-indian-railway')) {

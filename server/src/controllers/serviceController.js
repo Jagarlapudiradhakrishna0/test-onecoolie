@@ -40,8 +40,8 @@ exports.broadcast = (bookingId, booking) => {
 
   // Emit to specific booking room (for active passenger & assistant)
   io.to(`booking_${bookingId}`).emit('status_update', safePayload);
-  // Emit globally (for admin command center)
-  io.emit('status_update', safePayload);
+  // Emit to authorized admin command center room
+  io.to('admin_room').emit('status_update', safePayload);
 };
 
 // --------------------------------------------------
@@ -579,14 +579,22 @@ exports.triggerSOS = async (req, res) => {
       ])
       .catch(() => { });
 
-    // Emit SOS alert via socket
+    // Emit SOS alert via socket to authorized rooms only (admin, booking, and parties)
     if (io) {
-      io.emit('sos_alert', {
+      const sosPayload = {
         booking_id,
         user_id: req.user.id,
         station_code: bookingRow.station_code,
         train_no: bookingRow.train_number,
-      });
+      };
+      io.to('admin_room').emit('sos_alert', sosPayload);
+      io.to(`booking_${booking_id}`).emit('sos_alert', sosPayload);
+      if (bookingRow.passenger_id) {
+        io.to(`passenger_${bookingRow.passenger_id}`).emit('sos_alert', sosPayload);
+      }
+      if (bookingRow.assistant_id) {
+        io.to(`assistant_${bookingRow.assistant_id}`).emit('sos_alert', sosPayload);
+      }
     }
 
     return res.json(formatBooking(updatedBooking || bookingRow));

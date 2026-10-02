@@ -71,7 +71,10 @@ const PERMISSIONS = {
   // Phase 6.8: Operations & Production Reliability
   OPERATIONS_READ: 'operations:read',
   OPERATIONS_VERIFY: 'operations:verify',
-  OPERATIONS_MANAGE: 'operations:manage'
+  OPERATIONS_MANAGE: 'operations:manage',
+
+  // Train Management & Outbound API
+  TRAINS_UPDATE: 'trains:update'
 };
 
 /**
@@ -93,7 +96,8 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.SUPPORT_MANAGE,
     PERMISSIONS.SOS_VIEW,
     PERMISSIONS.OPERATIONS_READ,
-    PERMISSIONS.OPERATIONS_VERIFY
+    PERMISSIONS.OPERATIONS_VERIFY,
+    PERMISSIONS.TRAINS_UPDATE
   ],
 
   [ROLES.ASSISTANT_ADMIN]: [

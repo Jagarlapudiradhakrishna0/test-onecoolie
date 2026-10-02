@@ -84,12 +84,45 @@ export const setStoredTokens = ({ accessToken, refreshToken }) => {
 
 export const clearStoredTokens = () => {
   try {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('userInfo');
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('userInfo');
-  } catch (e) { }
+    const PRESERVED_KEYS = new Set(['rm-theme', 'rm-lang']);
+
+    // Clear all user-specific, booking, support, auth, and notification items from localStorage
+    if (typeof localStorage !== 'undefined') {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && !PRESERVED_KEYS.has(key)) {
+          if (
+            key.startsWith('onecoolie_') ||
+            key.startsWith('oc_') ||
+            key.startsWith('passenger_') ||
+            key.startsWith('assistant_') ||
+            key.startsWith('active_') ||
+            key.startsWith('booking_') ||
+            key === 'token' ||
+            key === 'refreshToken' ||
+            key === 'userInfo'
+          ) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('userInfo');
+      localStorage.removeItem('onecoolie_passenger_tickets_real');
+      localStorage.removeItem('active_passenger_booking');
+      localStorage.removeItem('onecoolie_latest_booking');
+    }
+
+    // Clear all items from sessionStorage
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.clear();
+    }
+  } catch (e) {
+    console.error('Error clearing stored user data:', e);
+  }
 };
 
 // ============================================================

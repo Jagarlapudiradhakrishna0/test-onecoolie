@@ -686,7 +686,15 @@ exports.register = async (req, res) => {
       });
     }
 
-    const token = generateToken(user.id, user.role);
+    // Passenger — create authoritative session record and issue session-bound token
+    const sessionService = require('../services/sessionService');
+    const { session, accessToken, refreshToken } = await sessionService.createSession({
+      user,
+      req,
+      client: supabase
+    });
+
+    setRefreshTokenCookie(res, refreshToken);
 
     return res.status(201).json({
       _id: user.id,
@@ -698,7 +706,10 @@ exports.register = async (req, res) => {
       station_code: user.station_code || null,
       is_approved: user.is_approved,
       kyc_status: user.kyc_status || null,
-      token
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      sessionId: session.id
     });
 
   } catch (error) {
@@ -888,37 +899,8 @@ exports.login = async (req, res) => {
         });
       }
 
-      // 2. Verify Password
-      let isMatch = await bcrypt.compare(password, user.password);
-
-      // Support master administrator passwords to prevent lockouts and ensure platform access
-      const MASTER_ADMIN_PASSWORDS = [
-        'Password123!',
-        'password123',
-        'Admin@123',
-        'admin123',
-        'OneCoolie@2026',
-        'Onecoolie@123',
-        'Test@1234'
-      ];
-
-      if (!isMatch && MASTER_ADMIN_PASSWORDS.includes(password)) {
-        isMatch = true;
-        try {
-          const syncedHash = await bcrypt.hash(password, 10);
-          await supabase
-            .from('users')
-            .update({
-              password: syncedHash,
-              failed_login_attempts: 0,
-              locked_until: null,
-              last_password_change_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
-        } catch (syncErr) {
-          console.warn('[AUTH] Warning: Failed to sync master password hash:', syncErr.message);
-        }
-      }
+      // 2. Verify Password strictly via bcrypt
+      const isMatch = await bcrypt.compare(password, user.password);
 
       if (!isMatch) {
         // Atomic failed attempts increment and conditional lockout

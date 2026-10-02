@@ -74,11 +74,20 @@ exports.createBooking = async (req, res) => {
       const io = getIO();
       if (io) {
         if (isCashPayment(normalizedPaymentMethod)) {
-          io.emit('new_booking', formatted);
-          io.emit('status_update', formatted);
+          // Send sanitized booking without OTP to station assistants / admin room
+          const fleetFormatted = formatBooking(booking, { includeOTP: false });
+          io.to('admin_room').emit('new_booking', fleetFormatted);
+          if (booking.station_code) {
+            io.to(`station_${booking.station_code}`).emit('new_booking', fleetFormatted);
+          }
+          // Only send full booking with OTP to passenger's authorized rooms
+          io.to(`passenger_${booking.passenger_id}`).emit('new_booking', formatted);
+          io.to(`booking_${booking.id}`).emit('status_update', formatted);
+          io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
         } else {
           // Unpaid online booking: only notify passenger's private room
           io.to(`booking_${booking.id}`).emit('status_update', formatted);
+          io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
         }
       }
     } catch (e) {
@@ -666,8 +675,14 @@ exports.cancelBooking = async (req, res) => {
       if (io) {
         io.to(`booking_${booking.id}`).emit('booking_cancelled', formatted);
         io.to(`booking_${booking.id}`).emit('status_update', formatted);
-        io.emit('booking_cancelled', formatted);
-        io.emit('status_update', formatted);
+        io.to(`passenger_${booking.passenger_id}`).emit('booking_cancelled', formatted);
+        io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
+        if (booking.assistant_id) {
+          io.to(`assistant_${booking.assistant_id}`).emit('booking_cancelled', formatted);
+          io.to(`assistant_${booking.assistant_id}`).emit('status_update', formatted);
+        }
+        io.to('admin_room').emit('booking_cancelled', formatted);
+        io.to('admin_room').emit('status_update', formatted);
       }
     } catch (socketErr) {
       console.warn('Socket broadcast warning:', socketErr.message);
@@ -919,10 +934,12 @@ exports.rebookBooking = async (req, res) => {
       if (io) {
         io.to(`booking_${booking.id}`).emit('status_update', formatted);
         io.to(`booking_${booking.id}`).emit('booking_updated', formatted);
-        io.emit('status_update', formatted);
+        io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
+        io.to(`passenger_${booking.passenger_id}`).emit('booking_updated', formatted);
+        io.to('admin_room').emit('status_update', formatBooking(updated, { includeOTP: false }));
 
         if (!assistantReassigned && prevAssistantId) {
-          io.to(`user_${prevAssistantId}`).emit('booking_updated', formatted);
+          io.to(`user_${prevAssistantId}`).emit('booking_updated', formatBooking(updated, { includeOTP: false }));
         }
       }
     } catch (e) {}
@@ -1350,7 +1367,14 @@ exports.updateBooking = async (req, res) => {
     const formatted = formatBooking(updated, { includeOTP: true });
     try {
       const io = getIO();
-      if (io) io.emit('status_update', formatted);
+      if (io) {
+        io.to(`booking_${booking.id}`).emit('status_update', formatted);
+        io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
+        io.to('admin_room').emit('status_update', formatBooking(updated, { includeOTP: false }));
+        if (updated.assistant_id) {
+          io.to(`assistant_${updated.assistant_id}`).emit('status_update', formatBooking(updated, { includeOTP: false }));
+        }
+      }
     } catch (e) { }
 
     return res.json(formatted);

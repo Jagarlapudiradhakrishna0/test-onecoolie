@@ -639,10 +639,14 @@ exports.addMessageToTicket = async (req, res) => {
 
     if (ioInstance) {
       try {
-        ioInstance.emit('ticket_message', { ticketId: ticket.id, message: newMsg });
+        ioInstance.to(`ticket_${ticket.id}`).emit('ticket_message', { ticketId: ticket.id, message: newMsg });
+        if (ticket.ticket_number && ticket.ticket_number !== ticket.id) {
+          ioInstance.to(`ticket_${ticket.ticket_number}`).emit('ticket_message', { ticketId: ticket.id, message: newMsg });
+        }
         if (ticket.passenger_id) {
           ioInstance.to(`passenger_${ticket.passenger_id}`).emit('ticket_message', { ticketId: ticket.id, message: newMsg });
         }
+        ioInstance.to('admin_room').emit('ticket_message', { ticketId: ticket.id, message: newMsg });
       } catch (ioErr) {
         console.warn('Socket broadcast warning:', ioErr.message);
       }
@@ -768,18 +772,19 @@ exports.updateTicketStatus = async (req, res) => {
 
     if (ioInstance) {
       try {
-        ioInstance.emit('ticket_status_updated', {
+        const updatePayload = {
           ticketId: tickets[index].id,
           status: tickets[index].status,
           ticket: tickets[index]
-        });
-        if (tickets[index].passenger_id) {
-          ioInstance.to(`passenger_${tickets[index].passenger_id}`).emit('ticket_status_updated', {
-            ticketId: tickets[index].id,
-            status: tickets[index].status,
-            ticket: tickets[index]
-          });
+        };
+        ioInstance.to(`ticket_${tickets[index].id}`).emit('ticket_status_updated', updatePayload);
+        if (tickets[index].ticket_number && tickets[index].ticket_number !== tickets[index].id) {
+          ioInstance.to(`ticket_${tickets[index].ticket_number}`).emit('ticket_status_updated', updatePayload);
         }
+        if (tickets[index].passenger_id) {
+          ioInstance.to(`passenger_${tickets[index].passenger_id}`).emit('ticket_status_updated', updatePayload);
+        }
+        ioInstance.to('admin_room').emit('ticket_status_updated', updatePayload);
       } catch (ioErr) {
         console.warn('Socket broadcast warning:', ioErr.message);
       }
@@ -792,3 +797,29 @@ exports.updateTicketStatus = async (req, res) => {
     return res.status(500).json({ error: 'Failed to update ticket status.' });
   }
 };
+
+/**
+ * Authoritative ticket lookup helper for Socket.IO authorization
+ */
+async function resolveTicketById(id) {
+  if (!id) return null;
+  const cleanId = String(id).trim().toLowerCase().replace('#', '');
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .or(`ticket_number.ilike.${cleanId},id.eq.${cleanId}`)
+        .maybeSingle();
+      if (!error && data) return formatDbTicket(data);
+    } catch (e) {}
+  }
+  const tickets = loadTickets();
+  return tickets.find(
+    (t) =>
+      String(t.id).toLowerCase().replace('#', '') === cleanId ||
+      String(t.ticket_number || '').toLowerCase().replace('#', '') === cleanId
+  ) || null;
+}
+
+exports.resolveTicketById = resolveTicketById;

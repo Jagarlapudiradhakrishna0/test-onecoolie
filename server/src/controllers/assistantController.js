@@ -458,7 +458,11 @@ exports.cancelByAssistant = async (req, res) => {
     try {
       const io = getIO();
       if (io && isBookingAvailableToAssistants(data)) {
-        io.emit('new_booking', formatBooking(data, { includeOTP: false }));
+        const fleetPayload = formatBooking(data, { includeOTP: false });
+        io.to('admin_room').emit('new_booking', fleetPayload);
+        if (data.station_code) {
+          io.to(`station_${data.station_code}`).emit('new_booking', fleetPayload);
+        }
       }
     } catch (sErr) {}
 

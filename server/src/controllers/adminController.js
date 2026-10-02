@@ -944,8 +944,16 @@ exports.cancelBookingByAdmin = async (req, res) => {
     const { getIO } = require('./serviceController');
     const io = getIO();
     if (io) {
-      io.emit('booking_cancelled', formatted);
-      io.emit('status_update', formatted);
+      io.to(`booking_${booking.id}`).emit('booking_cancelled', formatted);
+      io.to(`booking_${booking.id}`).emit('status_update', formatted);
+      io.to(`passenger_${booking.passenger_id}`).emit('booking_cancelled', formatted);
+      io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
+      if (booking.assistant_id) {
+        io.to(`assistant_${booking.assistant_id}`).emit('booking_cancelled', formatted);
+        io.to(`assistant_${booking.assistant_id}`).emit('status_update', formatted);
+      }
+      io.to('admin_room').emit('booking_cancelled', formatted);
+      io.to('admin_room').emit('status_update', formatted);
     }
 
     try {

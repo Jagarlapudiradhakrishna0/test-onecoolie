@@ -10,8 +10,26 @@
 
 import axios from '../api/axios';
 
-const STORAGE_KEY = 'onecoolie_passenger_tickets_real';
+export function getStorageKey(userId) {
+  if (userId) return `onecoolie_passenger_tickets_${userId}`;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('userInfo') : null;
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u?.id) return `onecoolie_passenger_tickets_${u.id}`;
+    }
+  } catch {}
+  return 'onecoolie_passenger_tickets_guest';
+}
+
 const CHANNEL_NAME = 'onecoolie_support_sync';
+
+// Clean up legacy globally shared key on initialization
+try {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('onecoolie_passenger_tickets_real');
+  }
+} catch {}
 
 // BroadcastChannel for instant cross-tab sync between Passenger and Admin
 let channel = null;
@@ -30,15 +48,15 @@ export const INITIAL_TICKETS = [];
 export { SUPPORT_PHONE, SUPPORT_PHONE_DIALABLE, SUPPORT_PHONE_NUMERIC } from '../services/supportService';
 
 /**
- * Get all support tickets from localStorage
+ * Get all support tickets from localStorage namespaced to authenticated user
  */
-export function getTickets() {
+export function getTickets(userId) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(userId);
+    const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Strip any legacy demo tickets if user had them cached in browser localStorage
         return parsed.filter(t => 
           !String(t.id || '').includes('TEST') && 
           t.id !== 'OC-10482' && 
@@ -56,9 +74,9 @@ export function getTickets() {
 }
 
 /**
- * Save tickets to localStorage and broadcast to other tabs
+ * Save tickets to localStorage namespaced to user and broadcast to other tabs
  */
-export function saveTickets(tickets) {
+export function saveTickets(tickets, userId) {
   try {
     const clean = Array.isArray(tickets) ? tickets.filter(t => 
       !String(t.id || '').includes('TEST') && 
@@ -68,7 +86,8 @@ export function saveTickets(tickets) {
       t.id !== 'OC-10421' && 
       t.id !== 'OC-10377'
     ) : [];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+    const key = getStorageKey(userId);
+    localStorage.setItem(key, JSON.stringify(clean));
     if (channel) {
       channel.postMessage({ type: 'TICKETS_UPDATED', timestamp: Date.now() });
     }

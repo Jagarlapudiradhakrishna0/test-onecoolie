@@ -155,6 +155,12 @@ function validateEnvironment(options = {}) {
       missing.push('ALLOWED_ORIGINS');
     }
 
+    // PAYMENT_MODE validation in production: MUST NEVER be test
+    const paymentMode = (process.env.PAYMENT_MODE || '').toLowerCase();
+    if (paymentMode === 'test') {
+      errors.push('PAYMENT_MODE cannot be set to "test" in production environment. Production must run with live payment gateway.');
+    }
+
     // In production, if online payments are enabled or keys partially present
     const hasKeyId = Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_ID.trim());
     const hasKeySecret = Boolean(process.env.RAZORPAY_KEY_SECRET && process.env.RAZORPAY_KEY_SECRET.trim());

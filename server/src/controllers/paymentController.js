@@ -1222,32 +1222,37 @@ exports.notifyPaymentVerified = (booking) => {
       const assistantFormatted = formatBooking(booking, { includeOTP: false });
       const passengerFormatted = formatBooking(booking, { includeOTP: true });
 
-      // 1. Visible on assistant fleet radar
-      io.emit('new_booking', assistantFormatted);
-      io.emit('status_update', assistantFormatted);
-
-      // 2. Real-time payment verification event for passenger
-      if (booking.passenger_id) {
-        io.to(`passenger_${booking.passenger_id}`).emit('payment:success', {
-          bookingId: booking.id,
-          booking_id: booking.booking_id,
-          payment_status: 'paid',
-          booking: passengerFormatted
-        });
-        io.to(`passenger_${booking.passenger_id}`).emit('payment_verified', {
-          bookingId: booking.id,
-          booking_id: booking.booking_id,
-          payment_status: 'paid',
-          booking: passengerFormatted
-        });
+      // 1. Notify station fleet and admin without exposing OTP
+      io.to('admin_room').emit('new_booking', assistantFormatted);
+      io.to('admin_room').emit('status_update', assistantFormatted);
+      if (booking.station_code) {
+        io.to(`station_${booking.station_code}`).emit('new_booking', assistantFormatted);
       }
 
-      // Also emit global payment:success
-      io.emit('payment:success', {
+      // 2. Real-time payment verification event for passenger and booking rooms
+      const successPayload = {
         bookingId: booking.id,
         booking_id: booking.booking_id,
         payment_status: 'paid',
         booking: passengerFormatted
+      };
+
+      io.to(`booking_${booking.id}`).emit('payment:success', successPayload);
+      io.to(`booking_${booking.id}`).emit('payment_verified', successPayload);
+      io.to(`booking_${booking.id}`).emit('status_update', passengerFormatted);
+
+      if (booking.passenger_id) {
+        io.to(`passenger_${booking.passenger_id}`).emit('payment:success', successPayload);
+        io.to(`passenger_${booking.passenger_id}`).emit('payment_verified', successPayload);
+        io.to(`passenger_${booking.passenger_id}`).emit('status_update', passengerFormatted);
+      }
+
+      // Notify admin room with sanitized booking
+      io.to('admin_room').emit('payment:success', {
+        bookingId: booking.id,
+        booking_id: booking.booking_id,
+        payment_status: 'paid',
+        booking: assistantFormatted
       });
     }
   } catch (err) {
@@ -1265,12 +1270,15 @@ exports.notifyPaymentVerified = (booking) => {
  */
 exports.confirmTestPayment = async (req, res) => {
   try {
-    const paymentMode = (process.env.PAYMENT_MODE || (process.env.NODE_ENV === 'production' ? 'production' : 'test')).toLowerCase();
-    if (paymentMode === 'production') {
-      return res.status(403).json({
+    const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+    const paymentMode = (process.env.PAYMENT_MODE || '').toLowerCase();
+
+    // FAIL CLOSED: Never allow test payment confirmation in production or when PAYMENT_MODE !== 'test'
+    if (isProd || paymentMode !== 'test') {
+      return res.status(404).json({
         success: false,
-        code: 'TEST_MODE_DISABLED',
-        message: 'Test payment confirmation is strictly disabled in production.'
+        code: 'ENDPOINT_NOT_FOUND',
+        message: 'Endpoint not found.'
       });
     }
 

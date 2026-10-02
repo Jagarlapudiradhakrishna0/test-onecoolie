@@ -557,43 +557,50 @@ ALTER TABLE public.production_launch_certifications ENABLE ROW LEVEL SECURITY;
 DO $$
 BEGIN
     DROP POLICY IF EXISTS "Allow all operations for service role on users" ON public.users;
-    CREATE POLICY "Allow all operations for service role on users" ON public.users FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on users" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on bookings" ON public.bookings;
-    CREATE POLICY "Allow all operations for service role on bookings" ON public.bookings FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on bookings" ON public.bookings FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on payments" ON public.payments;
-    CREATE POLICY "Allow all operations for service role on payments" ON public.payments FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on payments" ON public.payments FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on refunds" ON public.refunds;
-    CREATE POLICY "Allow all operations for service role on refunds" ON public.refunds FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on refunds" ON public.refunds FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on assistant_earnings" ON public.assistant_earnings;
-    CREATE POLICY "Allow all operations for service role on assistant_earnings" ON public.assistant_earnings FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on assistant_earnings" ON public.assistant_earnings FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on assistant_payouts" ON public.assistant_payouts;
-    CREATE POLICY "Allow all operations for service role on assistant_payouts" ON public.assistant_payouts FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on assistant_payouts" ON public.assistant_payouts FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on assistant_payout_items" ON public.assistant_payout_items;
-    CREATE POLICY "Allow all operations for service role on assistant_payout_items" ON public.assistant_payout_items FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on assistant_payout_items" ON public.assistant_payout_items FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on financial_audit_logs" ON public.financial_audit_logs;
-    CREATE POLICY "Allow all operations for service role on financial_audit_logs" ON public.financial_audit_logs FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on financial_audit_logs" ON public.financial_audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on financial_incidents" ON public.financial_incidents;
-    CREATE POLICY "Allow all operations for service role on financial_incidents" ON public.financial_incidents FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on financial_incidents" ON public.financial_incidents FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on payment_webhook_events" ON public.payment_webhook_events;
-    CREATE POLICY "Allow all operations for service role on payment_webhook_events" ON public.payment_webhook_events FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on payment_webhook_events" ON public.payment_webhook_events FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on validation_sessions" ON public.production_validation_sessions;
-    CREATE POLICY "Allow all operations for service role on validation_sessions" ON public.production_validation_sessions FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on validation_sessions" ON public.production_validation_sessions FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on validation_evidence" ON public.production_validation_evidence;
-    CREATE POLICY "Allow all operations for service role on validation_evidence" ON public.production_validation_evidence FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on validation_evidence" ON public.production_validation_evidence FOR ALL TO service_role USING (true) WITH CHECK (true);
 
     DROP POLICY IF EXISTS "Allow all operations for service role on launch_certifications" ON public.production_launch_certifications;
-    CREATE POLICY "Allow all operations for service role on launch_certifications" ON public.production_launch_certifications FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "Allow all operations for service role on launch_certifications" ON public.production_launch_certifications FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+    -- Client Ownership Policies
+    DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
+    CREATE POLICY "Users can view own profile" ON public.users FOR SELECT TO authenticated USING (auth.uid() = id);
+
+    DROP POLICY IF EXISTS "Users can view own bookings" ON public.bookings;
+    CREATE POLICY "Users can view own bookings" ON public.bookings FOR SELECT TO authenticated USING (auth.uid() = passenger_id OR auth.uid() = assistant_id);
 END $$;
 
 -- ==============================================================================

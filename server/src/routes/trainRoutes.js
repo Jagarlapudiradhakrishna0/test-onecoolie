@@ -32,13 +32,16 @@ router.get('/live-station', liveStationLimiter, getLiveStationBoard);
 // Supported stations list
 router.get('/supported-stations', getSupportedStations);
 
-// Update API key dynamically
-router.post('/update-key', updateTrainApiKey);
+const { protect } = require('../middleware/authMiddleware');
+const { adminOnly, requirePermission } = require('../middleware/adminMiddleware');
+
+// Update API key dynamically (Admin only with trains:update permission)
+router.post('/update-key', protect, adminOnly, requirePermission('trains:update'), updateTrainApiKey);
 
 // PNR Status Lookup
 router.get('/pnr-status', liveStationLimiter, getPnrStatus);
 
-// Auto-sync trains database from live railway APIs
-router.post('/sync', syncTrainsDatabase);
+// Auto-sync trains database from live railway APIs (Admin only with trains:update permission)
+router.post('/sync', protect, adminOnly, requirePermission('trains:update'), syncTrainsDatabase);
 
 module.exports = router;

@@ -612,52 +612,61 @@ ALTER TABLE public.production_launch_certifications ENABLE ROW LEVEL SECURITY;
 -- 17.1 Service Role Universal Access (Backend Invariants)
 -- The Node.js Express server uses SUPABASE_SECRET_KEY (service_role) to execute all ledger invariants
 CREATE POLICY "Allow all operations for service role on users" ON public.users
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on bookings" ON public.bookings
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on email_otps" ON public.email_otps
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on activity_logs" ON public.activity_logs
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on sos_alerts" ON public.sos_alerts
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on payments" ON public.payments
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on refunds" ON public.refunds
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on assistant_earnings" ON public.assistant_earnings
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on assistant_payouts" ON public.assistant_payouts
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on assistant_payout_items" ON public.assistant_payout_items
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on financial_audit_logs" ON public.financial_audit_logs
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on financial_incidents" ON public.financial_incidents
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on payment_webhook_events" ON public.payment_webhook_events
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on validation_sessions" ON public.production_validation_sessions
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on validation_evidence" ON public.production_validation_evidence
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all operations for service role on launch_certifications" ON public.production_launch_certifications
-    FOR ALL USING (true) WITH CHECK (true);
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- 17.2 Client Ownership Access Policies (Authenticated Users)
+-- Users can only view their own user profile (prevents enumeration / cross-account reads)
+CREATE POLICY "Users can view own profile" ON public.users
+    FOR SELECT TO authenticated USING (auth.uid() = id);
+
+-- Passengers can view their own bookings; assigned assistants can view bookings assigned to them
+CREATE POLICY "Users can view own bookings" ON public.bookings
+    FOR SELECT TO authenticated USING (auth.uid() = passenger_id OR auth.uid() = assistant_id);
 
 -- 17.2 Authenticated Client & Assistant Access Policies
 CREATE POLICY "Assistants can view own payouts" ON public.assistant_payouts

@@ -233,21 +233,38 @@ exports.getSupportedStations = (req, res) => {
   res.json(stations);
 };
 
+const { validateTrainHost, ALLOWED_TRAIN_API_HOSTS } = require('../utils/ssrfValidator');
+
 /**
- * Dynamically update Train API key in memory
+ * Dynamically update Train API key in memory (Admin only)
  * POST /api/trains/update-key
  */
 exports.updateTrainApiKey = (req, res) => {
   const { apiKey, apiHost } = req.body;
-  if (!apiKey || apiKey.trim() === '') {
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
     return res.status(400).json({ success: false, message: 'API key is required.' });
   }
-  process.env.TRAIN_API_KEY = apiKey.trim();
-  if (apiHost) {
-    process.env.TRAIN_API_HOST = apiHost.trim();
-    process.env.TRAIN_API_BASE_URL = `https://${apiHost.trim()}`;
+
+  // Key format validation (no malicious characters / buffer overflow)
+  const cleanKey = apiKey.trim();
+  if (cleanKey.length > 128 || !/^[A-Za-z0-9_-]+$/.test(cleanKey)) {
+    return res.status(400).json({ success: false, message: 'Malformed API key format.' });
   }
-  return res.json({ success: true, message: 'Train API Key updated successfully.' });
+
+  if (apiHost) {
+    if (!validateTrainHost(apiHost)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or unauthorized train API host. Host must belong to approved providers list: ' + ALLOWED_TRAIN_API_HOSTS.join(', ')
+      });
+    }
+    const cleanHost = apiHost.trim().toLowerCase().replace(/^https?:\/\//i, '').split('/')[0].split(':')[0];
+    process.env.TRAIN_API_HOST = cleanHost;
+    process.env.TRAIN_API_BASE_URL = `https://${cleanHost}`;
+  }
+
+  process.env.TRAIN_API_KEY = cleanKey;
+  return res.json({ success: true, message: 'Train API configuration updated successfully.' });
 };
 
 /**

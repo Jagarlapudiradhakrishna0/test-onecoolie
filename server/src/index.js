@@ -520,6 +520,70 @@ io.on('connection', (socket) => {
     socket.emit('admin_joined', { success: true });
   });
 
+  // Join support ticket room — strictly requires authenticated user to be owner, assigned assistant, or admin
+  socket.on('join_ticket', async (ticketId) => {
+    if (!ticketId || typeof ticketId !== 'string') return;
+    const cleanTicketId = ticketId.trim();
+    const user = socket.data?.user;
+
+    if (!user || !user.id) {
+      logger.warn('Socket join_ticket rejected: unauthenticated socket', { socketId: socket.id });
+      return socket.emit('ticket_auth_error', { message: 'Unauthorized: Authentication required.' });
+    }
+
+    try {
+      const { resolveTicketById } = require('./controllers/supportController');
+      const ticket = await resolveTicketById(cleanTicketId);
+
+      if (!ticket) {
+        logger.warn('Socket join_ticket failed: ticket not found', {
+          socketId: socket.id,
+          userId: user.id,
+          ticketId: cleanTicketId
+        });
+        return socket.emit('ticket_auth_error', { message: 'Unauthorized: Ticket not found or access denied.' });
+      }
+
+      const isPassenger = (ticket.passenger_id && String(ticket.passenger_id) === String(user.id)) ||
+                          (ticket.created_by && String(ticket.created_by) === String(user.id));
+      const isAssistant = ticket.assistant_id && String(ticket.assistant_id) === String(user.id);
+      const isAdmin = user.role === 'admin';
+
+      if (!isPassenger && !isAssistant && !isAdmin) {
+        logger.warn('Unauthorized join_ticket attempt', {
+          socketId: socket.id,
+          userId: user.id,
+          role: user.role,
+          ticketId: cleanTicketId
+        });
+        return socket.emit('ticket_auth_error', { message: 'Unauthorized: You do not have permission to access this ticket.' });
+      }
+
+      socket.join(`ticket_${cleanTicketId}`);
+      if (ticket.id && ticket.id !== cleanTicketId) {
+        socket.join(`ticket_${ticket.id}`);
+      }
+      if (ticket.ticket_number && ticket.ticket_number !== cleanTicketId) {
+        socket.join(`ticket_${ticket.ticket_number}`);
+      }
+
+      socket.emit('ticket_joined', { ticketId: cleanTicketId });
+    } catch (err) {
+      logger.error('Error in socket join_ticket handler', {
+        error: err.message,
+        ticketId: cleanTicketId
+      });
+      return socket.emit('ticket_auth_error', { message: 'Unauthorized: Failed to verify ticket access.' });
+    }
+  });
+
+  socket.on('leave_ticket', (ticketId) => {
+    if (!ticketId || typeof ticketId !== 'string') return;
+    const cleanTicketId = ticketId.trim();
+    socket.leave(`ticket_${cleanTicketId}`);
+    socket.emit('ticket_left', { ticketId: cleanTicketId });
+  });
+
   // Chat — authoritative database persistence and broadcast to the booking room
   socket.on('chat_message', async (payload) => {
     if (!payload?.bookingId || !payload?.text) return;

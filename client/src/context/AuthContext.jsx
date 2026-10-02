@@ -550,6 +550,7 @@ export const AuthProvider = ({ children }) => {
       clearStoredTokens();
       if (window.socket) {
         window.socket.auth = { token: '' };
+        try { window.socket.removeAllListeners(); } catch {}
         window.socket.disconnect();
       }
       setUser(null);
@@ -568,6 +569,7 @@ export const AuthProvider = ({ children }) => {
       clearStoredTokens();
       if (window.socket) {
         window.socket.auth = { token: '' };
+        try { window.socket.removeAllListeners(); } catch {}
         window.socket.disconnect();
       }
       setUser(null);
