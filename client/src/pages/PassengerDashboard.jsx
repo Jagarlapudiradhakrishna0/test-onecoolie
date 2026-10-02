@@ -438,8 +438,8 @@ export default function PassengerDashboard() {
         if (saved.journeyDate) setJourneyDate(saved.journeyDate);
         if (saved.journeyTime) setJourneyTime(saved.journeyTime);
         if (saved.station) setStation(saved.station);
-        if (saved.coach) setCoach(saved.coach);
-        if (saved.seatNumber) setSeatNumber(saved.seatNumber);
+        if (saved.coach) setCoach(String(saved.coach));
+        if (saved.seatNumber) setSeatNumber(String(saved.seatNumber));
         if (saved.berthType) setBerthType(saved.berthType);
         if (saved.actionType) setActionType(saved.actionType);
         if (saved.services) setServices(saved.services);
@@ -658,7 +658,7 @@ export default function PassengerDashboard() {
       };
     }
 
-    const cleanCoach = (coachVal || '').trim().toUpperCase();
+    const cleanCoach = String(coachVal || '').trim().toUpperCase();
     const coachMatch = cleanCoach.match(/^(HA|AB|HB|EC|EA|3E|S|B|A|H|C|D|E|M|G|J)/);
     const prefix = coachMatch ? coachMatch[1] : null;
 
@@ -783,12 +783,22 @@ export default function PassengerDashboard() {
 
     if (typeof window !== 'undefined' && window.socket) {
       const handleLiveTripEvent = (updated) => {
-        if (!updated || !updated.id) {
+        if (!updated) {
+          fetchBookings();
+          return;
+        }
+        const updatedId = updated.id || updated.booking_id || updated._id;
+        if (!updatedId) {
           fetchBookings();
           return;
         }
         setBookings((prev) => {
-          const index = prev.findIndex((b) => b.id === updated.id || b.booking_id === updated.booking_id);
+          if (!Array.isArray(prev)) return [updated];
+          const index = prev.findIndex((b) => {
+            if (!b) return false;
+            const bId = b.id || b.booking_id || b._id;
+            return bId && String(bId) === String(updatedId);
+          });
           if (index >= 0) {
             const next = [...prev];
             next[index] = { ...next[index], ...updated };
@@ -801,6 +811,10 @@ export default function PassengerDashboard() {
       window.socket.on('status_update', handleLiveTripEvent);
       window.socket.on('booking_cancelled', handleLiveTripEvent);
       window.socket.on('booking_updated', handleLiveTripEvent);
+      window.socket.on('booking_created', handleLiveTripEvent);
+      window.socket.on('assistant:assigned', handleLiveTripEvent);
+      window.socket.on('assistant:status', handleLiveTripEvent);
+      window.socket.on('payment:success', handleLiveTripEvent);
 
       return () => {
         clearInterval(interval);
@@ -808,6 +822,10 @@ export default function PassengerDashboard() {
           window.socket.off('status_update', handleLiveTripEvent);
           window.socket.off('booking_cancelled', handleLiveTripEvent);
           window.socket.off('booking_updated', handleLiveTripEvent);
+          window.socket.off('booking_created', handleLiveTripEvent);
+          window.socket.off('assistant:assigned', handleLiveTripEvent);
+          window.socket.off('assistant:status', handleLiveTripEvent);
+          window.socket.off('payment:success', handleLiveTripEvent);
         }
       };
     }
@@ -870,7 +888,7 @@ export default function PassengerDashboard() {
     const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
     let serviceLabel = 'Luggage Assistance';
-    if (trip.service) {
+    if (typeof trip.service === 'string' && trip.service.trim()) {
       serviceLabel = trip.service.split(',')[0].trim();
     } else if (trip.action_type === 'collect_from_seat' || trip.services?.action_type === 'collect_from_seat') {
       serviceLabel = 'De-boarding Assist';
@@ -878,6 +896,8 @@ export default function PassengerDashboard() {
       serviceLabel = 'Coach Escort';
     } else if (trip.services?.wheelchair) {
       serviceLabel = 'Wheelchair Escort';
+    } else if (trip.services?.luggage) {
+      serviceLabel = 'Luggage Assist';
     }
 
     const trainNo = trip.train_no || trip.train_number || 'Train';
@@ -904,7 +924,7 @@ export default function PassengerDashboard() {
       coach: (trip.coach || trip.services?.coach) ? `Coach ${trip.coach || trip.services?.coach}` : 'Coach Pending',
       seat: (trip.seat_number || trip.services?.seat_number) ? `Seat ${trip.seat_number || trip.services?.seat_number}${trip.berth_type || trip.services?.berth_type ? ` (${trip.berth_type || trip.services?.berth_type})` : ''}` : 'Seat Pending',
       service: serviceLabel,
-      status: (trip.booking_status || trip.status || 'CONFIRMED').toUpperCase(),
+      status: String(trip.booking_status || trip.status || 'CONFIRMED').toUpperCase(),
       dateMonth: safeMonth,
       dateDay: safeDay,
       dateYear: safeYear,
@@ -985,8 +1005,8 @@ export default function PassengerDashboard() {
             }
           } catch { }
         }
-        if (d.coach) setCoach(d.coach);
-        if (d.berthNumber) setSeatNumber(d.berthNumber);
+        if (d.coach) setCoach(String(d.coach));
+        if (d.berthNumber) setSeatNumber(String(d.berthNumber));
         if (d.berthType) setBerthType(d.berthType);
         toast.success(`PNR verified: Train ${d.trainNumber} · Coach ${d.coach || 'TBD'} · Berth ${d.berthNumber || 'TBD'}`);
       }
@@ -1740,18 +1760,18 @@ export default function PassengerDashboard() {
                             value={coach}
                             maxLength={4}
                             onChange={(e) => setCoach(e.target.value.toUpperCase())}
-                            className={`w-full pl-4 pr-10 py-3 bg-[#fafbfc] border rounded-xl text-sm font-mono font-bold outline-none transition-all ${coach.trim().length > 0 && !coachValidation.isValid
+                            className={`w-full pl-4 pr-10 py-3 bg-[#fafbfc] border rounded-xl text-sm font-mono font-bold outline-none transition-all ${String(coach || '').trim().length > 0 && !coachValidation.isValid
                               ? 'border-rose-500 bg-rose-50/20 text-rose-900 focus:ring-2 focus:ring-rose-500/20'
                               : 'border-slate-200 focus:border-black focus:ring-1 focus:ring-black'
                               }`}
                           />
-                          {coach.trim().length > 0 && !coachValidation.isValid && (
+                          {String(coach || '').trim().length > 0 && !coachValidation.isValid && (
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
                               <AlertCircle className="w-5 h-5 text-rose-500" />
                             </div>
                           )}
                         </div>
-                        {coach.trim().length > 0 && !coachValidation.isValid && (
+                        {String(coach || '').trim().length > 0 && !coachValidation.isValid && (
                           <p className="text-[11px] font-semibold text-rose-600 mt-1.5 flex items-start gap-1">
                             <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
                             <span>{coachValidation.reason}</span>
@@ -1771,18 +1791,18 @@ export default function PassengerDashboard() {
                             value={seatNumber}
                             maxLength={8}
                             onChange={(e) => setSeatNumber(e.target.value.toUpperCase())}
-                            className={`w-full pl-4 pr-10 py-3 bg-[#fafbfc] border rounded-xl text-sm font-mono font-bold outline-none transition-all ${seatNumber.trim().length > 0 && !seatValidation.isValid
+                            className={`w-full pl-4 pr-10 py-3 bg-[#fafbfc] border rounded-xl text-sm font-mono font-bold outline-none transition-all ${String(seatNumber || '').trim().length > 0 && !seatValidation.isValid
                               ? 'border-rose-500 bg-rose-50/20 text-rose-900 focus:ring-2 focus:ring-rose-500/20'
                               : 'border-slate-200 focus:border-black focus:ring-1 focus:ring-black'
                               }`}
                           />
-                          {seatNumber.trim().length > 0 && !seatValidation.isValid && (
+                          {String(seatNumber || '').trim().length > 0 && !seatValidation.isValid && (
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
                               <AlertCircle className="w-5 h-5 text-rose-500" />
                             </div>
                           )}
                         </div>
-                        {seatNumber.trim().length > 0 && !seatValidation.isValid && (
+                        {String(seatNumber || '').trim().length > 0 && !seatValidation.isValid && (
                           <p className="text-[11px] font-semibold text-rose-600 mt-1.5 flex items-start gap-1">
                             <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
                             <span>{seatValidation.reason}</span>
@@ -2655,16 +2675,17 @@ export default function PassengerDashboard() {
                       ? completedList
                       : allDisplayBookings;
 
-              // Apply Sorting
-              currentList = [...currentList].sort((a, b) => {
+              // Apply Sorting safely
+              currentList = [...(currentList || [])].filter(Boolean).sort((a, b) => {
+                if (!a || !b) return 0;
                 if (sortBy === 'oldest') {
                   return new Date(a.journey_date || 0) - new Date(b.journey_date || 0);
                 }
                 if (sortBy === 'fare_high') {
-                  return (b.total_price || 0) - (a.total_price || 0);
+                  return (Number(b.total_price) || 0) - (Number(a.total_price) || 0);
                 }
                 if (sortBy === 'fare_low') {
-                  return (a.total_price || 0) - (b.total_price || 0);
+                  return (Number(a.total_price) || 0) - (Number(b.total_price) || 0);
                 }
                 return new Date(b.journey_date || 0) - new Date(a.journey_date || 0);
               });
@@ -2722,10 +2743,13 @@ export default function PassengerDashboard() {
               return (
                 <div className="space-y-4 sm:space-y-5">
                   {currentList.map((b) => {
+                    if (!b) return null;
+                    const bookingId = b.id || b.booking_id || b._id || '';
                     const { month, day, year, weekday } = formatDateBlock(b.journey_date);
-                    const isCompleted = b.booking_status?.toLowerCase() === 'completed';
-                    const isCancelled = b.booking_status?.toLowerCase() === 'cancelled';
-                    const isInService = b.booking_status?.toLowerCase() === 'in_service';
+                    const rawStatus = String(b.booking_status || b.status || '').toLowerCase();
+                    const isCompleted = rawStatus === 'completed';
+                    const isCancelled = rawStatus === 'cancelled';
+                    const isInService = rawStatus === 'in_service';
                     const canCancel = !isCancelled && !isCompleted && !isInService;
                     const isPending = !isCompleted && !isCancelled;
                     const isBoarding = !(b.action_type === 'collect_from_seat' || b.services?.action_type === 'collect_from_seat');
@@ -2745,7 +2769,7 @@ export default function PassengerDashboard() {
                       }
                     };
 
-                    const defaultDateStr = `${day} ${month.charAt(0) + month.slice(1).toLowerCase()} ${year}`;
+                    const defaultDateStr = `${day} ${month ? (month.charAt(0) + month.slice(1).toLowerCase()) : ''} ${year}`;
 
                     // Step 1: Booking Confirmed
                     const isConfirmedDone = !isCancelled;
@@ -2760,7 +2784,7 @@ export default function PassengerDashboard() {
                       b.assistant_id ||
                       b.assistant ||
                       b.accepted_at ||
-                      ['assigned', 'accepted', 'arriving', 'reached', 'in_service', 'completed'].includes(b.booking_status?.toLowerCase())
+                      ['assigned', 'accepted', 'arriving', 'reached', 'in_service', 'completed'].includes(rawStatus)
                     );
                     const assignedTime = formatStepTime(
                       b.accepted_at || b.services?.accepted_at,
@@ -2772,7 +2796,7 @@ export default function PassengerDashboard() {
                     const isReachedDone = !isCancelled && Boolean(
                       b.arrived_at ||
                       b.services?.arrived_at ||
-                      ['reached', 'in_service', 'completed'].includes(b.booking_status?.toLowerCase())
+                      ['reached', 'in_service', 'completed'].includes(rawStatus)
                     );
                     const reachedTime = formatStepTime(
                       b.arrived_at || b.services?.arrived_at,
@@ -2833,7 +2857,7 @@ export default function PassengerDashboard() {
                     ];
 
                     let serviceLabel = 'Platform Assist';
-                    if (b.service) {
+                    if (typeof b.service === 'string' && b.service.trim()) {
                       serviceLabel = b.service.split(',')[0].trim();
                     } else if (b.action_type === 'collect_from_seat' || b.services?.action_type === 'collect_from_seat') {
                       serviceLabel = 'De-boarding Assist';
@@ -2849,7 +2873,7 @@ export default function PassengerDashboard() {
 
                     return (
                       <div
-                        key={b.id}
+                        key={bookingId || Math.random()}
                         className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-4 sm:p-5 lg:p-7 hover:border-slate-300 transition-all relative group"
                       >
                         {/* ══════════════════════════════════════════════════════════════════
@@ -3131,10 +3155,9 @@ export default function PassengerDashboard() {
                                 type="button"
                                 onClick={() => {
                                   try {
-                                    if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
-                                    if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
+                                    if (bookingId) sessionStorage.setItem(`booking_${bookingId}`, JSON.stringify(b));
                                   } catch (e) { }
-                                  const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
+                                  const targetRoute = isCompleted ? `/trip-summary/${bookingId}` : `/booking/${bookingId}`;
                                   navigate(targetRoute, { state: { booking: b } });
                                 }}
                                 className={`rounded-full font-bold text-xs px-4 py-2 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
@@ -3470,10 +3493,9 @@ export default function PassengerDashboard() {
                                 type="button"
                                 onClick={() => {
                                   try {
-                                    if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
-                                    if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
+                                    if (bookingId) sessionStorage.setItem(`booking_${bookingId}`, JSON.stringify(b));
                                   } catch (e) { }
-                                  const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
+                                  const targetRoute = isCompleted ? `/trip-summary/${bookingId}` : `/booking/${bookingId}`;
                                   navigate(targetRoute, { state: { booking: b } });
                                 }}
                                 className={`w-full rounded-full font-bold text-xs px-4 py-2.5 flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending

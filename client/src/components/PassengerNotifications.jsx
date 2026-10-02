@@ -81,15 +81,18 @@ export default function PassengerNotifications({
     // 1. Active In-Progress / Upcoming Bookings
     if (activeBookings && activeBookings.length > 0) {
       activeBookings.forEach((b) => {
+        if (!b) return;
+        const bId = b.id || b.booking_id || b._id || '';
+        const rawStatus = String(b.booking_status || b.status || '').toLowerCase();
         const isAssigned = Boolean(
           b.assistant_id ||
           b.assistant ||
-          ['assigned', 'accepted', 'arriving', 'in_service', 'reached'].includes(b.booking_status?.toLowerCase())
+          ['assigned', 'accepted', 'arriving', 'in_service', 'reached'].includes(rawStatus)
         );
 
         list.push({
-          id: `active-${b.id || b.booking_id}`,
-          bookingId: b.id,
+          id: `active-${bId || Math.random()}`,
+          bookingId: bId,
           booking: b,
           type: 'active',
           urgency: 'high',
@@ -113,27 +116,30 @@ export default function PassengerNotifications({
     // 2. Recent Confirmed Bookings (up to 3)
     if (bookings && bookings.length > 0) {
       bookings.slice(0, 3).forEach((b) => {
-        const key = `booking-${b.id || b.booking_id}`;
+        if (!b) return;
+        const bId = b.id || b.booking_id || b._id || '';
+        const key = `booking-${bId || Math.random()}`;
         // Skip if already in active list
-        if (list.some((item) => item.bookingId === b.id)) return;
+        if (bId && list.some((item) => item.bookingId && String(item.bookingId) === String(bId))) return;
 
-        const isCompleted = b.booking_status === 'completed';
-        const isCancelled = b.booking_status === 'cancelled';
+        const rawStatus = String(b.booking_status || b.status || '').toLowerCase();
+        const isCompleted = rawStatus === 'completed';
+        const isCancelled = rawStatus === 'cancelled';
 
         list.push({
           id: key,
-          bookingId: b.id,
+          bookingId: bId,
           booking: b,
           type: 'history',
           urgency: 'normal',
           title: isCompleted
-            ? `Trip Completed · Train ${b.train_no}`
+            ? `Trip Completed · Train ${b.train_no || 'Express'}`
             : isCancelled
-              ? `Booking Cancelled · Train ${b.train_no}`
-              : `Assistance Confirmed · Train ${b.train_no}`,
+              ? `Booking Cancelled · Train ${b.train_no || 'Express'}`
+              : `Assistance Confirmed · Train ${b.train_no || 'Express'}`,
           description: isCompleted
             ? `Assistance at ${b.station_code || 'station'} completed. Thank you for travelling with OneCoolie.`
-            : `Booking Ref #${b.booking_id || b.id} · Coach ${b.coach || '--'} · Total: ₹${b.total_price || 30}`,
+            : `Booking Ref #${b.booking_id || b.id || 'N/A'} · Coach ${b.coach || '--'} · Total: ₹${b.total_price || 30}`,
           badge: isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : 'Confirmed',
           badgeStyle: isCompleted
             ? 'bg-slate-100 text-zinc-700 border-slate-200'
