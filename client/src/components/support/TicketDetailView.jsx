@@ -8,29 +8,38 @@ import { getTicketById, addTicketMessage, updateTicketStatus, subscribeToSupport
 
 export default function TicketDetailView({ onNavigate, ticketId, user }) {
   const [ticket, setTicket] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState(null);
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
 
   const fetchTicket = async () => {
-    // 1. Check local store first for instant render
-    const t = getTicketById(ticketId);
-    if (t) setTicket(t);
-
-    // 2. Fetch authoritative ticket from backend
     try {
-      const res = await axios.get(`/support/tickets/${ticketId}`).catch(() => null);
-      if (res && res.data && res.data.id) {
+      const res = await axios.get(`/support/tickets/${ticketId}`);
+      if (res.data && res.data.id) {
         setTicket(res.data);
+        setErrorMsg(null);
       }
     } catch (err) {
-      console.warn('Backend fetch ticket error:', err);
+      const status = err.response?.status;
+      if (status === 403) {
+        setErrorMsg('Access denied: You do not have permission to view this ticket.');
+        setTicket(null);
+      } else if (status === 404) {
+        setErrorMsg('Support ticket not found.');
+        setTicket(null);
+      } else {
+        setErrorMsg('Unable to load support ticket details.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchTicket();
     const unsubscribe = subscribeToSupportUpdates(fetchTicket);
-    const interval = setInterval(fetchTicket, 3000); // 3-second rapid sync with Admin responses
+    const interval = setInterval(fetchTicket, 4000);
 
     // Real-time socket sync
     const handleTicketMsg = (data) => {
@@ -41,6 +50,7 @@ export default function TicketDetailView({ onNavigate, ticketId, user }) {
 
     if (window.socket) {
       window.socket.on('ticket_message', handleTicketMsg);
+      window.socket.on('ticket_status_updated', handleTicketMsg);
     }
 
     return () => {
@@ -48,6 +58,7 @@ export default function TicketDetailView({ onNavigate, ticketId, user }) {
       clearInterval(interval);
       if (window.socket) {
         window.socket.off('ticket_message', handleTicketMsg);
+        window.socket.off('ticket_status_updated', handleTicketMsg);
       }
     };
   }, [ticketId]);
@@ -60,36 +71,61 @@ export default function TicketDetailView({ onNavigate, ticketId, user }) {
     scrollToBottom();
   }, [ticket?.conversation]);
 
-  if (!ticket) {
+  if (loading) {
     return (
       <div className="flex flex-col h-screen items-center justify-center bg-[#F8FAFC]">
-        <p className="text-sm font-semibold text-slate-500 mb-4">Ticket not found.</p>
+        <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-bold text-slate-500">Loading ticket details...</p>
+      </div>
+    );
+  }
+
+  if (errorMsg || !ticket) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center bg-[#F8FAFC] px-4 text-center">
+        <p className="text-sm font-bold text-slate-700 mb-4">{errorMsg || 'Ticket not found.'}</p>
         <button
           onClick={() => onNavigate('back')}
-          className="bg-black text-white px-5 py-2 rounded-full text-xs font-bold cursor-pointer"
+          className="bg-black hover:bg-zinc-800 text-white px-5 py-2.5 rounded-full text-xs font-bold cursor-pointer transition-all shadow-xs"
         >
-          Go Back
+          Go Back to Tickets
         </button>
       </div>
     );
   }
 
-  const isResolved = ['resolved', 'closed'].includes(ticket.status);
+  const isResolved = ['resolved', 'closed'].includes((ticket.status || '').toLowerCase());
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    addTicketMessage(ticketId, {
-      sender: 'passenger',
-      name: user?.name || 'Passenger',
-      text: inputValue.trim()
-    });
+    const textToSend = inputValue.trim();
     setInputValue('');
+
+    try {
+      const res = await axios.post(`/support/tickets/${ticketId}/messages`, {
+        text: textToSend,
+        sender: 'passenger',
+        name: user?.name || 'Passenger'
+      });
+      if (res.data) {
+        setTicket(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
   };
 
-  const handleCloseTicket = () => {
-    updateTicketStatus(ticketId, 'resolved');
+  const handleCloseTicket = async () => {
+    try {
+      const res = await axios.patch(`/support/tickets/${ticketId}/status`, { status: 'resolved' });
+      if (res.data) {
+        setTicket(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to close ticket:', err);
+    }
   };
 
   return (

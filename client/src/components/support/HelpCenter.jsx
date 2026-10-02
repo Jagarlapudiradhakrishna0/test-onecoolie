@@ -10,7 +10,7 @@ import {
 import oneCoolieLogo from '../../assets/onecoolie-logo.png';
 import trainHeroImg from '../../assets/images/vande-bharat-crisp.jpg';
 import aiRobotImg from '../../assets/images/ai-support-robot.jpg';
-import { getTickets, subscribeToSupportUpdates } from '../../utils/supportStore';
+import { getTickets, subscribeToSupportUpdates, fetchServerTickets } from '../../utils/supportStore';
 import { FAQ_CATEGORIES, FAQ_QUESTIONS } from '../../utils/supportFaqData';
 import ProfileMenu from '../../context/ProfileMenu';
 import PassengerNotifications from '../PassengerNotifications';
@@ -25,6 +25,11 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
 
   useEffect(() => {
     setTickets(getTickets());
+    fetchServerTickets().then((data) => {
+      if (Array.isArray(data)) setTickets(data);
+    }).catch(() => {
+      // Keep existing local tickets if offline
+    });
     const unsubscribe = subscribeToSupportUpdates(() => {
       setTickets(getTickets());
     });

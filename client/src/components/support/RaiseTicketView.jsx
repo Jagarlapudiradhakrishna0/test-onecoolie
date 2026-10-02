@@ -5,6 +5,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { createTicket } from '../../utils/supportStore';
+import toast from 'react-hot-toast';
 
 export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings = [], initialCategory }) {
   const [issueType, setIssueType] = useState(initialCategory || 'Booking');
@@ -45,26 +46,27 @@ export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings
     });
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!subject.trim() || !description.trim()) return;
 
     setIsSubmitting(true);
 
-    const selectedTrip = tripOptions.find(t => t.id === selectedTripId)?.raw || activeTrip || null;
+    try {
+      const selectedTrip = selectedTripId !== 'none'
+        ? (tripOptions.find(t => t.id === selectedTripId)?.raw || activeTrip || null)
+        : null;
 
-    setTimeout(() => {
-      const newTicket = createTicket({
+      const newTicket = await createTicket({
         subject: subject.trim(),
         passengerName: user?.name || 'Passenger',
-        passengerPhone: user?.phone || '+91 98765 43210',
-        passengerEmail: user?.email || 'passenger@onecoolie.com',
+        passengerPhone: user?.phone || '',
+        passengerEmail: user?.email || '',
         trip: selectedTrip,
         station: selectedTrip?.station_code || selectedTrip?.fromCode || 'KZJ',
         pnr: selectedTrip?.pnr || 'N/A',
         priority: ['Payment', 'Assistant'].includes(issueType) ? 'high' : 'medium',
         issueType,
-        status: 'open',
         description: description.trim(),
         aiSummary: `${issueType}: ${description.trim()}`,
         initialMessages: [
@@ -78,9 +80,14 @@ export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings
         ]
       });
 
-      setIsSubmitting(false);
       setSubmittedTicket(newTicket);
-    }, 400);
+      toast.success(`Support Ticket #${newTicket.id} created successfully!`);
+    } catch (err) {
+      console.error('Failed to create ticket:', err);
+      toast.error(err.response?.data?.error || 'Failed to submit support ticket. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

@@ -1,6 +1,301 @@
 [
   {
+    "id": "OC-10557",
+    "ticket_number": "OC-10557",
+    "created_by": "554193da-67b9-4eca-80e0-888ea7d1a35b",
+    "passenger_id": "554193da-67b9-4eca-80e0-888ea7d1a35b",
+    "assistant_id": null,
+    "booking_id": null,
+    "type": "passenger",
+    "subject": "Trip Support: Train 12252",
+    "category": "General",
+    "issueType": "General",
+    "desc": "Trip Support: Train 12252",
+    "description": "Trip Support: Train 12252",
+    "priority": "urgent",
+    "status": "in_progress",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "test",
+    "passengerPhone": "+91 7032304118",
+    "passengerEmail": "kandagatlasaipraneeth02@gmail.com",
+    "trip": {
+      "id": "39c7e383-4b55-496d-9533-56f4465df305",
+      "seat": "Seat 50 (Middle)",
+      "coach": "Coach S3",
+      "route": "KZJ → KZJ",
+      "isReal": true,
+      "source": "KZJ",
+      "status": "COMPLETED",
+      "dateDay": "01",
+      "service": "Luggage Assistance (2 items)",
+      "trainNo": "12252",
+      "dateYear": "2026",
+      "platform": "2",
+      "dateMonth": "NOV",
+      "trainName": "WAINGANGA EXP",
+      "dateDayName": "SUN",
+      "destination": "KZJ"
+    },
+    "aiSummary": "Passenger reported: \"Train delay\".\nTrip context: Train 12252 (KZJ → KZJ), Coach Coach S3, Seat Seat 50 (Middle), Service: Luggage Assistance (2 items).\nAI attempted automated assignment & telemetry check.\nIssue was unresolved automatically. Ticket escalated for immediate human assistance.",
+    "conversation": [
+      {
+        "id": "msg-welcome",
+        "name": "OneCoolie Support Assistant",
+        "text": "Hi! I'm your OneCoolie Support Assistant. Ask me anything about your booking, assistant, luggage, payment or journey. How can I help?",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Payment issue"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Cancel my booking"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Refund status"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Train delay"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to support"
+          }
+        ],
+        "tripCard": null,
+        "timestamp": "18:59"
+      },
+      {
+        "id": "msg-1790947788880",
+        "name": "test",
+        "text": "Can the assistant assist senior citizens or passengers needing wheelchairs?",
+        "sender": "passenger",
+        "timestamp": "18:59"
+      },
+      {
+        "id": "msg-1790947789584",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've analyzed your question regarding your journey on Train 12252 (KZJ → KZJ).\n\nOur platform assistants handle station porterage, wheelchair escort, and berth guidance seamlessly.\n\nIf this doesn't fully resolve what you need, let me know or click below to connect directly with our 24/7 human support team.",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to a support agent →"
+          }
+        ],
+        "tripCard": {
+          "id": "39c7e383-4b55-496d-9533-56f4465df305",
+          "seat": "Seat 50 (Middle)",
+          "coach": "Coach S3",
+          "route": "KZJ → KZJ",
+          "isReal": true,
+          "source": "KZJ",
+          "status": "COMPLETED",
+          "dateDay": "01",
+          "service": "Luggage Assistance (2 items)",
+          "trainNo": "12252",
+          "dateYear": "2026",
+          "platform": "2",
+          "dateMonth": "NOV",
+          "trainName": "WAINGANGA EXP",
+          "dateDayName": "SUN",
+          "destination": "KZJ"
+        },
+        "timestamp": "18:59",
+        "showFeedback": true
+      },
+      {
+        "id": "msg-1790947798737",
+        "name": "test",
+        "text": "Where is my assistant?",
+        "sender": "passenger",
+        "timestamp": "18:59"
+      },
+      {
+        "id": "msg-1790947799441",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've checked your booking details.\n\nTrain: 12252 (WAINGANGA EXP)\nCoach: Coach S3 • Seat: Seat 50 (Middle)\nStation: Secunderabad\n\nYour assistant has not been assigned yet. We are currently searching for the nearest available assistant at the concourse.\n\nYou'll be notified automatically as soon as an assistant is assigned. ✓",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "track_trip",
+            "label": "View Trip Progress →"
+          }
+        ],
+        "tripCard": {
+          "id": "39c7e383-4b55-496d-9533-56f4465df305",
+          "seat": "Seat 50 (Middle)",
+          "coach": "Coach S3",
+          "route": "KZJ → KZJ",
+          "isReal": true,
+          "source": "KZJ",
+          "status": "COMPLETED",
+          "dateDay": "01",
+          "service": "Luggage Assistance (2 items)",
+          "trainNo": "12252",
+          "dateYear": "2026",
+          "platform": "2",
+          "dateMonth": "NOV",
+          "trainName": "WAINGANGA EXP",
+          "dateDayName": "SUN",
+          "destination": "KZJ"
+        },
+        "timestamp": "18:59",
+        "showFeedback": true
+      },
+      {
+        "id": "msg-1790947803756",
+        "name": "test",
+        "text": "Train delay",
+        "sender": "passenger",
+        "timestamp": "19:00"
+      },
+      {
+        "id": "msg-1790947804472",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've analyzed your question regarding your journey on Train 12252 (KZJ → KZJ).\n\nOur platform assistants handle station porterage, wheelchair escort, and berth guidance seamlessly.\n\nIf this doesn't fully resolve what you need, let me know or click below to connect directly with our 24/7 human support team.",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to a support agent →"
+          }
+        ],
+        "tripCard": {
+          "id": "39c7e383-4b55-496d-9533-56f4465df305",
+          "seat": "Seat 50 (Middle)",
+          "coach": "Coach S3",
+          "route": "KZJ → KZJ",
+          "isReal": true,
+          "source": "KZJ",
+          "status": "COMPLETED",
+          "dateDay": "01",
+          "service": "Luggage Assistance (2 items)",
+          "trainNo": "12252",
+          "dateYear": "2026",
+          "platform": "2",
+          "dateMonth": "NOV",
+          "trainName": "WAINGANGA EXP",
+          "dateDayName": "SUN",
+          "destination": "KZJ"
+        },
+        "timestamp": "19:00",
+        "showFeedback": true
+      },
+      {
+        "id": "msg-1790947810917-sys",
+        "name": "System",
+        "text": "Your conversation has been transferred to OneCoolie Support. A support executive has joined this chat.",
+        "sender": "system",
+        "timestamp": "19:00"
+      },
+      {
+        "id": "msg-1790947810919-sys",
+        "name": "System",
+        "text": "Connected to OneCoolie Support · Ticket #OC-10557",
+        "sender": "system",
+        "timestamp": "01:30 PM",
+        "clientMessageId": "msg-1790947810919-sys"
+      },
+      {
+        "id": "msg-1790947812728-agent",
+        "name": "Support Executive",
+        "text": "Hello test! I'm coordinating with the station team right now. I can see your booking for Train 12252 (Coach S3, Seat 50 (Middle)). How can I assist you right away?",
+        "sender": "support",
+        "timestamp": "01:30 PM",
+        "clientMessageId": "msg-1790947812728-agent"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-10-02T13:30:17.879572+00:00",
+    "updated_at": "2026-10-02T13:30:19.362217+00:00",
+    "createdAt": "2026-10-02T13:30:17.879572+00:00",
+    "updatedAt": "2026-10-02T13:30:19.362217+00:00"
+  },
+  {
+    "id": "OC-10569",
+    "ticket_number": "OC-10569",
+    "created_by": "554193da-67b9-4eca-80e0-888ea7d1a35b",
+    "passenger_id": "554193da-67b9-4eca-80e0-888ea7d1a35b",
+    "assistant_id": null,
+    "booking_id": null,
+    "type": "passenger",
+    "subject": "Refund of my payment",
+    "category": "Refund",
+    "issueType": "Refund",
+    "desc": "I had cancel my booking before the train arriable",
+    "description": "I had cancel my booking before the train arriable",
+    "priority": "medium",
+    "status": "in_progress",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "test",
+    "passengerPhone": "+91 7032304118",
+    "passengerEmail": "kandagatlasaipraneeth02@gmail.com",
+    "trip": {
+      "id": "39c7e383-4b55-496d-9533-56f4465df305",
+      "seat": "Seat 50 (Middle)",
+      "coach": "Coach S3",
+      "route": "KZJ → KZJ",
+      "isReal": true,
+      "source": "KZJ",
+      "status": "COMPLETED",
+      "dateDay": "01",
+      "service": "Luggage Assistance (2 items)",
+      "trainNo": "12252",
+      "dateYear": "2026",
+      "platform": "2",
+      "dateMonth": "NOV",
+      "trainName": "WAINGANGA EXP",
+      "dateDayName": "SUN",
+      "destination": "KZJ"
+    },
+    "aiSummary": "Refund: I had cancel my booking before the train arriable",
+    "conversation": [
+      {
+        "id": "msg-1790947471887",
+        "name": "test",
+        "text": "Refund of my payment\n\nI had cancel my booking before the train arriable",
+        "sender": "passenger",
+        "timestamp": "18:54"
+      },
+      {
+        "id": "msg-1790947471887-sys",
+        "name": "System",
+        "text": "Your conversation has been transferred to OneCoolie Support. A support executive has joined this chat.",
+        "sender": "system",
+        "timestamp": "18:54"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-10-02T13:24:38.837708+00:00",
+    "updated_at": "2026-10-02T13:24:38.724+00:00",
+    "createdAt": "2026-10-02T13:24:38.837708+00:00",
+    "updatedAt": "2026-10-02T13:24:38.724+00:00"
+  },
+  {
     "id": "OC-10540",
+    "ticket_number": "OC-10540",
+    "created_by": "b74762cf-b7d0-4459-9f76-d462286b9198",
+    "passenger_id": "b74762cf-b7d0-4459-9f76-d462286b9198",
+    "assistant_id": null,
+    "booking_id": null,
     "type": "passenger",
     "subject": "Trip Support: Train 20834",
     "category": "General",
@@ -163,6 +458,11 @@
   },
   {
     "id": "OC-10554",
+    "ticket_number": "OC-10554",
+    "created_by": "94ff574b-b292-4282-b52c-2f02783721d4",
+    "passenger_id": "94ff574b-b292-4282-b52c-2f02783721d4",
+    "assistant_id": null,
+    "booking_id": null,
     "type": "passenger",
     "subject": "1",
     "category": "Booking",
@@ -253,50 +553,12 @@
     "updatedAt": "2026-09-10T13:40:05.208962+00:00"
   },
   {
-    "id": "OC-50735",
-    "type": "passenger",
-    "subject": "Platform Assistance Dispute",
-    "category": "Assistant",
-    "issueType": "Assistant",
-    "desc": "Passenger requested immediate escort from Gate 1 to Coach S3",
-    "description": "Passenger requested immediate escort from Gate 1 to Coach S3",
-    "priority": "urgent",
-    "status": "Resolved by Station Master",
-    "station": "KZJ",
-    "pnr": "N/A",
-    "passenger_id": null,
-    "passengerName": "Karthik Rao",
-    "passengerPhone": "+91 98480 11223",
-    "passengerEmail": "passenger@onecoolie.com",
-    "trip": null,
-    "aiSummary": "",
-    "conversation": [
-      {
-        "id": "msg-1788809786351",
-        "sender": "passenger",
-        "name": "Karthik Rao",
-        "text": "Passenger requested immediate escort from Gate 1 to Coach S3",
-        "timestamp": "01:06 AM"
-      },
-      {
-        "id": "sys-1788809786381",
-        "sender": "system",
-        "name": "System",
-        "text": "Ticket status updated to \"Resolved by Station Master\". Note: Platform escort deployed successfully",
-        "timestamp": "01:06 AM"
-      }
-    ],
-    "assistant_id": null,
-    "assistant_name": null,
-    "assistant_phone": null,
-    "resolution_notes": "Platform escort deployed successfully",
-    "created_at": "2026-09-07T19:36:26.364Z",
-    "updated_at": "2026-09-07T19:36:26.381Z",
-    "createdAt": "2026-09-07T19:36:26.364Z",
-    "updatedAt": "2026-09-07T19:36:26.381Z"
-  },
-  {
     "id": "OC-10571",
+    "ticket_number": "OC-10571",
+    "created_by": "94ff574b-b292-4282-b52c-2f02783721d4",
+    "passenger_id": "94ff574b-b292-4282-b52c-2f02783721d4",
+    "assistant_id": null,
+    "booking_id": null,
     "type": "passenger",
     "subject": "Trip Support: Train 12722",
     "category": "General",
@@ -451,6 +713,11 @@
   },
   {
     "id": "OC-99999",
+    "ticket_number": "OC-99999",
+    "created_by": "fae9a115-4d47-4881-b0f8-f4e432de343d",
+    "passenger_id": "fae9a115-4d47-4881-b0f8-f4e432de343d",
+    "assistant_id": null,
+    "booking_id": null,
     "type": "passenger",
     "subject": "Test issue",
     "category": "Booking",
@@ -483,6 +750,11 @@
   },
   {
     "id": "OC-10564",
+    "ticket_number": "OC-10564",
+    "created_by": "3b8b07ae-4c87-46e4-8d44-28be92520334",
+    "passenger_id": "3b8b07ae-4c87-46e4-8d44-28be92520334",
+    "assistant_id": null,
+    "booking_id": null,
     "type": "passenger",
     "subject": "1",
     "category": "Booking",
@@ -539,6 +811,11 @@
   },
   {
     "id": "OC-34670",
+    "ticket_number": "OC-34670",
+    "created_by": "94ff574b-b292-4282-b52c-2f02783721d4",
+    "passenger_id": "94ff574b-b292-4282-b52c-2f02783721d4",
+    "assistant_id": null,
+    "booking_id": null,
     "type": "passenger",
     "subject": "Deployed Verification Ticket",
     "category": "Payment",
@@ -589,267 +866,5 @@
     "updated_at": "2026-09-07T18:40:12.435+00:00",
     "createdAt": "2026-09-07T18:40:12.624658+00:00",
     "updatedAt": "2026-09-07T18:40:12.435+00:00"
-  },
-  {
-    "id": "OC-42901",
-    "type": "passenger",
-    "subject": "Emergency Wheelchair request from passenger portal",
-    "category": "wheelchair",
-    "issueType": "wheelchair",
-    "desc": "Emergency Wheelchair request from passenger portal",
-    "description": "Emergency Wheelchair request from passenger portal",
-    "priority": "normal",
-    "status": "Resolved by Station Master",
-    "station": "SC",
-    "pnr": "4521890321",
-    "passenger_id": null,
-    "passengerName": "Kavita Reddy",
-    "passengerPhone": "9848022338",
-    "passengerEmail": "passenger@onecoolie.com",
-    "trip": {
-      "trainNo": "12723",
-      "trainName": "TELANGANA EXP",
-      "coach": "S2",
-      "seat": "18",
-      "pnr": "4521890321"
-    },
-    "aiSummary": "",
-    "conversation": [
-      {
-        "sender": "passenger",
-        "text": "Elderly passenger needs wheelchair assistance at Secunderabad Platform 1.",
-        "timestamp": "11:45 PM"
-      },
-      {
-        "id": "msg-1788804918857",
-        "sender": "support",
-        "name": "Secunderabad Station Control Desk",
-        "text": "Hello Kavita, Sahayak Ramesh has been dispatched with a wheelchair to Coach S2 Platform 1.",
-        "timestamp": "11:45 PM"
-      },
-      {
-        "id": "msg-1788804918881",
-        "sender": "passenger",
-        "name": "Kavita Reddy",
-        "text": "Thank you so much! We are waiting near the door.",
-        "timestamp": "11:45 PM"
-      },
-      {
-        "id": "sys-1788804918889",
-        "sender": "system",
-        "name": "System",
-        "text": "Ticket status updated to \"Resolved by Station Master\". Note: Assistance rendered successfully.",
-        "timestamp": "11:45 PM"
-      }
-    ],
-    "assistant_id": null,
-    "assistant_name": null,
-    "assistant_phone": null,
-    "resolution_notes": "Assistance rendered successfully.",
-    "created_at": "2026-09-07T18:15:11.289Z",
-    "updated_at": "2026-09-07T18:15:18.889Z",
-    "createdAt": "2026-09-07T18:15:11.289Z",
-    "updatedAt": "2026-09-07T18:15:18.889Z"
-  },
-  {
-    "id": "OC-73984",
-    "type": "passenger",
-    "subject": "Wheelchair assistance requested at Platform 1",
-    "category": "wheelchair",
-    "issueType": "wheelchair",
-    "desc": "Wheelchair assistance requested at Platform 1",
-    "description": "Wheelchair assistance requested at Platform 1",
-    "priority": "normal",
-    "status": "resolved",
-    "station": "KZJ",
-    "pnr": "N/A",
-    "passenger_id": null,
-    "passengerName": "Ananya Sharma",
-    "passengerPhone": "9876543210",
-    "passengerEmail": "passenger@onecoolie.com",
-    "trip": {
-      "trainNo": "20833",
-      "trainName": "VANDE BHARAT EXP",
-      "coach": "C4",
-      "seat": "42"
-    },
-    "aiSummary": "",
-    "conversation": [
-      {
-        "sender": "passenger",
-        "text": "Please send assistant to Coach C4 near door.",
-        "timestamp": "11:30 PM"
-      },
-      {
-        "id": "msg-1788804223389",
-        "sender": "support",
-        "name": "Station Control Room",
-        "text": "A Sahayak has been assigned and is heading towards Coach C4.",
-        "timestamp": "11:33 PM"
-      },
-      {
-        "id": "sys-1788804223393",
-        "sender": "system",
-        "name": "System",
-        "text": "Ticket status updated to \"resolved\". Note: Sahayak assisted passenger with wheelchair successfully at Coach C4.",
-        "timestamp": "11:33 PM"
-      }
-    ],
-    "assistant_id": null,
-    "assistant_name": null,
-    "assistant_phone": null,
-    "resolution_notes": "Sahayak assisted passenger with wheelchair successfully at Coach C4.",
-    "created_at": "2026-09-07T18:03:43.373Z",
-    "updated_at": "2026-09-07T18:03:43.393Z",
-    "createdAt": "2026-09-07T18:03:43.373Z",
-    "updatedAt": "2026-09-07T18:03:43.393Z"
-  },
-  {
-    "id": "OC-47499",
-    "type": "passenger",
-    "subject": "Wheelchair assistance test",
-    "category": "wheelchair",
-    "issueType": "wheelchair",
-    "desc": "Wheelchair assistance test",
-    "description": "Wheelchair assistance test",
-    "priority": "normal",
-    "status": "open",
-    "station": "KZJ",
-    "pnr": "N/A",
-    "passenger_id": null,
-    "passengerName": "Ananya Sharma",
-    "passengerPhone": "9876543210",
-    "passengerEmail": "passenger@onecoolie.com",
-    "trip": null,
-    "aiSummary": "",
-    "conversation": [
-      {
-        "id": "msg-1788804125244",
-        "sender": "passenger",
-        "name": "Ananya Sharma",
-        "text": "Wheelchair assistance test",
-        "timestamp": "11:32 PM"
-      }
-    ],
-    "assistant_id": null,
-    "assistant_name": null,
-    "assistant_phone": null,
-    "resolution_notes": "",
-    "created_at": "2026-09-07T18:02:05.244Z",
-    "updated_at": "2026-09-07T18:02:05.244Z",
-    "createdAt": "2026-09-07T18:02:05.244Z",
-    "updatedAt": "2026-09-07T18:02:05.244Z"
-  },
-  {
-    "id": "OC-78965",
-    "type": "passenger",
-    "subject": "Wheelchair assistance requested at Platform 1",
-    "category": "wheelchair",
-    "issueType": "wheelchair",
-    "desc": "Wheelchair assistance requested at Platform 1",
-    "description": "Wheelchair assistance requested at Platform 1",
-    "priority": "normal",
-    "status": "open",
-    "station": "KZJ",
-    "pnr": "N/A",
-    "passenger_id": null,
-    "passengerName": "Ananya Sharma",
-    "passengerPhone": "9876543210",
-    "passengerEmail": "passenger@onecoolie.com",
-    "trip": {
-      "trainNo": "20833",
-      "trainName": "VANDE BHARAT EXP",
-      "coach": "C4",
-      "seat": "42"
-    },
-    "aiSummary": "",
-    "conversation": [
-      {
-        "id": "msg-1788804117567",
-        "sender": "passenger",
-        "name": "Ananya Sharma",
-        "text": "Wheelchair assistance requested at Platform 1",
-        "timestamp": "11:31 PM"
-      }
-    ],
-    "assistant_id": null,
-    "assistant_name": null,
-    "assistant_phone": null,
-    "resolution_notes": "",
-    "created_at": "2026-09-07T18:01:57.568Z",
-    "updated_at": "2026-09-07T18:01:57.568Z",
-    "createdAt": "2026-09-07T18:01:57.568Z",
-    "updatedAt": "2026-09-07T18:01:57.568Z"
-  },
-  {
-    "id": "OC-49156",
-    "type": "passenger",
-    "subject": "Luggage Porter Assistance Delay",
-    "category": "Passenger Help",
-    "issueType": "General",
-    "desc": "Assistant is not at Coach S4 door. Train departing in 15 mins.",
-    "description": "Assistant is not at Coach S4 door. Train departing in 15 mins.",
-    "priority": "urgent",
-    "status": "open",
-    "station": "KZJ",
-    "pnr": "N/A",
-    "passenger_id": null,
-    "passengerName": "Karthik Rao",
-    "passengerPhone": "+91 98480 55667",
-    "passengerEmail": "passenger@onecoolie.com",
-    "trip": {
-      "trainNo": "12723",
-      "trainName": "Telangana Express",
-      "coach": "S4",
-      "seat": "32"
-    },
-    "aiSummary": "",
-    "conversation": [
-      {
-        "id": "msg-1788803791774",
-        "sender": "passenger",
-        "name": "Karthik Rao",
-        "text": "Assistant is not at Coach S4 door. Train departing in 15 mins.",
-        "timestamp": "11:26 PM"
-      }
-    ],
-    "assistant_id": null,
-    "assistant_name": null,
-    "assistant_phone": null,
-    "resolution_notes": "",
-    "created_at": "2026-09-07T17:56:31.789Z",
-    "updated_at": "2026-09-07T17:56:31.789Z",
-    "createdAt": "2026-09-07T17:56:31.789Z",
-    "updatedAt": "2026-09-07T17:56:31.789Z"
-  },
-  {
-    "id": "KZJ-SUP-6909",
-    "assistant_id": "1ce44861-eb8d-46c4-8976-81972c7a2313",
-    "assistant_name": "On-Duty Assistant",
-    "assistant_phone": "N/A",
-    "station": "KZJ",
-    "category": "Luggage Dispute",
-    "pnr": "N/A",
-    "desc": "Test ticket from node script",
-    "priority": "normal",
-    "status": "Dispatched to Station Supervisor",
-    "resolution_notes": "",
-    "created_at": "2026-09-07T17:54:19.741Z",
-    "updated_at": "2026-09-07T17:54:19.741Z"
-  },
-  {
-    "id": "KZJ-SUP-9102",
-    "assistant_id": "sample-assistant-id",
-    "assistant_name": "Sai Coolie",
-    "assistant_phone": "+91 98480 22338",
-    "station": "KZJ",
-    "category": "Luggage Assistance Dispute",
-    "pnr": "2489012431",
-    "desc": "Passenger luggage exceeded 45kg; guidance provided for excess baggage tariff.",
-    "priority": "normal",
-    "status": "Resolved by Station Master",
-    "resolution_notes": "Station Master issued excess luggage receipt to passenger.",
-    "created_at": "2026-09-05T18:50:07.239Z",
-    "updated_at": "2026-09-05T19:50:07.241Z"
   }
 ]

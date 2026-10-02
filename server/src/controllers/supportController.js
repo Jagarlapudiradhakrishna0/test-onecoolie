@@ -15,47 +15,12 @@ exports.setIO = (io) => {
 function loadTickets() {
   try {
     if (!fs.existsSync(TICKETS_FILE)) {
-      const initialTickets = [
-        {
-          id: 'KZJ-SUP-9102',
-          type: 'assistant',
-          subject: 'Luggage Assistance Dispute',
-          category: 'Luggage Assistance Dispute',
-          assistant_id: 'sample-assistant-id',
-          assistant_name: 'Sai Coolie',
-          assistant_phone: '+91 98480 22338',
-          station: 'KZJ',
-          pnr: '2489012431',
-          desc: 'Passenger luggage exceeded 45kg; guidance provided for excess baggage tariff.',
-          description: 'Passenger luggage exceeded 45kg; guidance provided for excess baggage tariff.',
-          priority: 'normal',
-          status: 'Resolved by Station Master',
-          resolution_notes: 'Station Master issued excess luggage receipt to passenger.',
-          created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-          updated_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-          conversation: [
-            {
-              id: 'msg-seed-1',
-              sender: 'assistant',
-              name: 'Sai Coolie',
-              text: 'Passenger luggage exceeded 45kg; guidance provided for excess baggage tariff.',
-              timestamp: '02:30 PM'
-            },
-            {
-              id: 'msg-seed-2',
-              sender: 'support',
-              name: 'Station Supervisor',
-              text: 'Station Master issued excess luggage receipt to passenger.',
-              timestamp: '03:15 PM'
-            }
-          ]
-        }
-      ];
-      saveTickets(initialTickets);
-      return initialTickets;
+      saveTickets([]);
+      return [];
     }
     const raw = fs.readFileSync(TICKETS_FILE, 'utf8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Error loading support tickets:', err);
     return [];
@@ -77,21 +42,60 @@ function saveTickets(tickets) {
   }
 }
 
+// Helper to format a Supabase row into a standardized ticket object
+function formatDbTicket(row) {
+  if (!row) return null;
+  const ctx = row.context || {};
+  return {
+    id: row.ticket_number,
+    ticket_number: row.ticket_number,
+    created_by: row.created_by,
+    passenger_id: row.passenger_id || row.created_by,
+    assistant_id: row.assistant_id || null,
+    booking_id: row.booking_id || null,
+    type: ctx.type || 'passenger',
+    subject: row.subject || 'Passenger Assistance Query',
+    category: row.category || 'General',
+    issueType: row.category || 'General',
+    desc: row.description || '',
+    description: row.description || '',
+    priority: row.priority || 'medium',
+    status: row.status || 'open',
+    station: ctx.station || 'KZJ',
+    pnr: ctx.pnr || 'N/A',
+    passengerName: ctx.passengerName || 'Passenger',
+    passengerPhone: ctx.passengerPhone || '',
+    passengerEmail: ctx.passengerEmail || '',
+    trip: ctx.trip || null,
+    aiSummary: row.ai_summary || ctx.aiSummary || '',
+    conversation: Array.isArray(ctx.conversation) && ctx.conversation.length > 0 ? ctx.conversation : [
+      {
+        id: `msg-${row.ticket_number}`,
+        sender: 'passenger',
+        name: ctx.passengerName || 'Passenger',
+        text: row.description || row.subject || 'Support ticket raised',
+        timestamp: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ],
+    resolution_notes: ctx.resolution_notes || '',
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // Asynchronously persist ticket to Supabase support_tickets table
 async function syncTicketToDB(ticket, userId) {
   if (!supabase) return;
   try {
-    let creatorId = userId;
-    if (!creatorId) {
-      const { data: userRow } = await supabase.from('users').select('id').limit(1);
-      creatorId = userRow?.[0]?.id || null;
-    }
+    const creatorId = ticket.created_by || userId;
     if (!creatorId) return;
 
     const rawPriority = (ticket.priority || '').toLowerCase();
     const validPriority = ['low', 'medium', 'high', 'urgent'].includes(rawPriority)
       ? rawPriority
-      : (rawPriority === 'normal' ? 'medium' : 'medium');
+      : 'medium';
 
     const rawStatus = (ticket.status || '').toLowerCase();
     const validStatus = ['open', 'in_progress', 'waiting_passenger', 'waiting_assistant', 'resolved', 'closed'].includes(rawStatus)
@@ -102,9 +106,12 @@ async function syncTicketToDB(ticket, userId) {
       {
         ticket_number: ticket.id,
         created_by: creatorId,
-        subject: ticket.subject || 'Passenger Assistance',
+        passenger_id: ticket.passenger_id || creatorId,
+        assistant_id: ticket.assistant_id || null,
+        booking_id: ticket.booking_id || ticket.trip?.id || ticket.trip?.bookingId || null,
+        subject: ticket.subject || 'Passenger Assistance Query',
         description: ticket.description || ticket.desc || 'Support Ticket',
-        category: ticket.category || 'Other',
+        category: ticket.category || 'General',
         priority: validPriority,
         status: validStatus,
         context: {
@@ -132,51 +139,22 @@ async function syncTicketToDB(ticket, userId) {
 async function hydrateTicketsFromDB() {
   if (!supabase) return;
   try {
-    const { data, error } = await supabase.from('support_tickets').select('*').order('created_at', { ascending: false });
-    if (error || !Array.isArray(data) || data.length === 0) return;
+    const { data, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .not('ticket_number', 'ilike', 'OC-TEST-%')
+      .order('created_at', { ascending: false });
 
-    const tickets = loadTickets();
-    const ticketMap = new Map();
-    tickets.forEach((t) => ticketMap.set(String(t.id).toLowerCase().replace('#', ''), t));
+    if (error || !Array.isArray(data)) return;
 
-    for (const row of data) {
-      const idKey = String(row.ticket_number).toLowerCase().replace('#', '');
-      const ctx = row.context || {};
-      const hydrated = {
-        id: row.ticket_number,
-        type: ctx.type || 'passenger',
-        subject: row.subject,
-        category: row.category,
-        issueType: row.category,
-        desc: row.description,
-        description: row.description,
-        priority: row.priority,
-        status: row.status,
-        station: ctx.station || 'KZJ',
-        pnr: ctx.pnr || 'N/A',
-        passengerName: ctx.passengerName || 'Passenger',
-        passengerPhone: ctx.passengerPhone || '',
-        passengerEmail: ctx.passengerEmail || '',
-        trip: ctx.trip || null,
-        aiSummary: row.ai_summary || ctx.aiSummary || '',
-        conversation: Array.isArray(ctx.conversation) ? ctx.conversation : [],
-        resolution_notes: ctx.resolution_notes || '',
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      };
-      ticketMap.set(idKey, hydrated);
-    }
-    const merged = Array.from(ticketMap.values()).sort(
-      (a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
-    );
-    saveTickets(merged);
+    const cleanList = data.map(formatDbTicket).filter(Boolean);
+    saveTickets(cleanList);
+    console.log(`[SUPPORT HYDRATION] Hydrated ${cleanList.length} real tickets from Supabase.`);
   } catch (e) {
     console.warn('[SUPPORT HYDRATION NOTICE]:', e.message);
   }
 }
-setTimeout(hydrateTicketsFromDB, 2000);
+setTimeout(hydrateTicketsFromDB, 1500);
 
 // ----------------------------------------------------
 // CREATE TICKET (POST /api/support/tickets or /api/assistants/support-tickets)
@@ -184,12 +162,13 @@ setTimeout(hydrateTicketsFromDB, 2000);
 // ----------------------------------------------------
 exports.createTicket = async (req, res) => {
   try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required to create a support ticket.' });
+    }
+
     const body = req.body || {};
-    const isPassenger =
-      body.type === 'passenger' ||
-      Boolean(body.passengerName) ||
-      Boolean(body.subject && !body.assistant_name) ||
-      req.user?.role === 'passenger';
+    const isPassenger = user.role === 'passenger';
 
     const ticketDesc = (body.description || body.desc || body.subject || '').trim();
     if (!ticketDesc) {
@@ -200,79 +179,131 @@ exports.createTicket = async (req, res) => {
       body.station ||
       body.trip?.fromCode ||
       body.trip?.station_code ||
-      req.user?.station_code ||
+      user.station_code ||
       'KZJ'
     ).toUpperCase();
 
-    const idPrefix = isPassenger ? 'OC' : stn;
-    const generatedNum = Math.floor(10000 + Math.random() * 90000);
-    const id = body.id || (isPassenger ? `OC-${generatedNum}` : `${stn}-SUP-${Math.floor(1000 + Math.random() * 9000)}`);
+    // Unique production ticket ID generation (Never OC-TEST)
+    const existingTickets = loadTickets();
+    let ticketNumber = null;
+    for (let attempts = 0; attempts < 10; attempts++) {
+      const candNum = isPassenger ? `OC-${Math.floor(10000 + Math.random() * 90000)}` : `${stn}-SUP-${Math.floor(1000 + Math.random() * 9000)}`;
+      if (!existingTickets.some(t => t.id === candNum)) {
+        ticketNumber = candNum;
+        break;
+      }
+    }
+    if (!ticketNumber) {
+      ticketNumber = isPassenger ? `OC-${Date.now().toString().slice(-5)}` : `${stn}-SUP-${Date.now().toString().slice(-4)}`;
+    }
+
+    const initialConversation = Array.isArray(body.conversation) && body.conversation.length > 0
+      ? body.conversation
+      : Array.isArray(body.initialMessages) && body.initialMessages.length > 0
+        ? body.initialMessages
+        : [
+            {
+              id: `msg-${Date.now()}`,
+              sender: isPassenger ? 'passenger' : 'assistant',
+              name: user.name || body.passengerName || 'Passenger',
+              text: ticketDesc,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }
+          ];
+
+    const rawPriority = (body.priority || 'medium').toLowerCase();
+    const validPriority = ['low', 'medium', 'high', 'urgent'].includes(rawPriority)
+      ? rawPriority
+      : 'medium';
 
     const newTicket = {
-      id,
+      id: ticketNumber,
+      ticket_number: ticketNumber,
       type: isPassenger ? 'passenger' : 'assistant',
-      subject: body.subject || body.category || (isPassenger ? 'Passenger Assistance Query' : 'Station Operational Concern'),
+      subject: body.subject || (isPassenger ? 'Passenger Assistance Query' : 'Station Operational Concern'),
       category: body.category || body.issueType || (isPassenger ? 'Passenger Help' : 'Other Station Concern'),
       issueType: body.issueType || body.category || 'General',
       desc: ticketDesc,
       description: ticketDesc,
-      priority: body.priority === 'urgent' || body.priority === 'high' ? 'urgent' : (body.priority || 'normal'),
-      status: body.status || (isPassenger ? 'open' : 'Dispatched to Station Supervisor'),
+      priority: validPriority,
+      status: 'open',
       station: stn,
       pnr: body.pnr && body.pnr !== 'N/A' ? String(body.pnr).trim() : (body.trip?.pnr || 'N/A'),
 
-      // Passenger Details
-      passenger_id: req.user?.role === 'passenger' ? req.user.id : (body.passenger_id || null),
-      passengerName: body.passengerName || (req.user?.role === 'passenger' ? req.user.name : 'Passenger'),
-      passengerPhone: body.passengerPhone || (req.user?.role === 'passenger' ? req.user.phone : '+91 98765 43210'),
-      passengerEmail: body.passengerEmail || (req.user?.role === 'passenger' ? req.user.email : 'passenger@onecoolie.com'),
+      // AUTHENTICATED PASSENGER ISOLATION:
+      // Always derive creator and passenger ownership strictly from authenticated user
+      created_by: user.id,
+      passenger_id: isPassenger ? user.id : (body.passenger_id || null),
+      passengerName: user.name || body.passengerName || 'Passenger',
+      passengerPhone: user.phone || body.passengerPhone || '',
+      passengerEmail: user.email || body.passengerEmail || '',
+
       trip: body.trip || null,
       aiSummary: body.aiSummary || '',
+      conversation: initialConversation,
 
-      // Conversation Messages Array
-      conversation: Array.isArray(body.conversation) && body.conversation.length > 0
-        ? body.conversation
-        : Array.isArray(body.initialMessages) && body.initialMessages.length > 0
-          ? body.initialMessages
-          : [
-              {
-                id: `msg-${Date.now()}`,
-                sender: isPassenger ? 'passenger' : 'assistant',
-                name: isPassenger ? (body.passengerName || req.user?.name || 'Passenger') : (req.user?.name || 'Assistant'),
-                text: ticketDesc,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              }
-            ],
-
-      // Assistant Details (for operational station issues)
-      assistant_id: isPassenger ? null : (req.user?.id || body.assistant_id || 'unknown'),
-      assistant_name: isPassenger ? null : (req.user?.name || body.assistant_name || 'On-Duty Assistant'),
-      assistant_phone: isPassenger ? null : (req.user?.phone || body.assistant_phone || 'N/A'),
-      resolution_notes: body.resolution_notes || '',
+      // Assistant Details
+      assistant_id: isPassenger ? null : (user.id || body.assistant_id || null),
+      assistant_name: isPassenger ? null : (user.name || body.assistant_name || 'On-Duty Assistant'),
+      assistant_phone: isPassenger ? null : (user.phone || body.assistant_phone || 'N/A'),
+      resolution_notes: '',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    // Insert directly into real Supabase database table
+    if (supabase) {
+      try {
+        const { error: dbErr } = await supabase.from('support_tickets').insert({
+          ticket_number: ticketNumber,
+          created_by: user.id,
+          passenger_id: isPassenger ? user.id : (body.passenger_id || null),
+          assistant_id: isPassenger ? null : (user.id || body.assistant_id || null),
+          booking_id: body.booking_id || body.trip?.id || body.trip?.bookingId || null,
+          category: newTicket.category,
+          subject: newTicket.subject,
+          description: ticketDesc,
+          priority: validPriority,
+          status: 'open',
+          context: {
+            type: newTicket.type,
+            passengerName: newTicket.passengerName,
+            passengerPhone: newTicket.passengerPhone,
+            passengerEmail: newTicket.passengerEmail,
+            station: stn,
+            pnr: newTicket.pnr,
+            trip: newTicket.trip,
+            aiSummary: newTicket.aiSummary,
+            conversation: newTicket.conversation,
+            resolution_notes: ''
+          }
+        });
+        if (dbErr) {
+          console.warn('[SUPPORT DB INSERT NOTICE]:', dbErr.message);
+        }
+      } catch (insertErr) {
+        console.warn('[SUPPORT DB INSERT ERROR]:', insertErr.message);
+      }
+    }
+
+    // Prepend to local file backup
     const tickets = loadTickets();
-    // Prepend new ticket so it appears at top of list
     tickets.unshift(newTicket);
     saveTickets(tickets);
 
-    // Asynchronously sync to Supabase support_tickets table
-    syncTicketToDB(newTicket, req.user?.id);
-
-    // Real-time broadcast to Admin room
+    // Socket.io real-time alerts
     if (ioInstance) {
       try {
         ioInstance.to('admin_room').emit('new_support_ticket', newTicket);
+        ioInstance.to(`passenger_${user.id}`).emit('new_support_ticket', newTicket);
       } catch (ioErr) {
         console.warn('Socket broadcast warning:', ioErr.message);
       }
     }
 
-    console.log(`[SUPPORT TICKET] New ticket #${id} (${newTicket.type}) created at station ${stn}`);
+    console.log(`[SUPPORT TICKET] New ticket #${ticketNumber} created by user ${user.id} (${user.role})`);
     return res.status(201).json(newTicket);
   } catch (err) {
     console.error('Create ticket error:', err);
@@ -285,17 +316,33 @@ exports.createTicket = async (req, res) => {
 // ----------------------------------------------------
 exports.getAssistantTickets = async (req, res) => {
   try {
-    const assistantId = req.user?.id;
-    const tickets = loadTickets();
-    
-    // Return tickets created by this assistant, station operational tickets, or sample assistant tickets
-    const userTickets = tickets.filter(
-      (t) =>
-        t.type === 'assistant' &&
-        (t.assistant_id === assistantId || t.assistant_id === 'sample-assistant-id' || !t.assistant_id || t.assistant_id === 'unknown')
-    );
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
 
-    return res.json(userTickets);
+    let tickets = [];
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('support_tickets')
+          .select('*')
+          .or(`assistant_id.eq.${user.id},created_by.eq.${user.id}`)
+          .order('created_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          tickets = data.map(formatDbTicket).filter(Boolean);
+          return res.json(tickets);
+        }
+      } catch (dbErr) {
+        console.warn('Assistant tickets DB fetch notice:', dbErr.message);
+      }
+    }
+
+    tickets = loadTickets().filter(
+      (t) => t.type === 'assistant' && (t.assistant_id === user.id || t.created_by === user.id)
+    );
+    return res.json(tickets);
   } catch (err) {
     console.error('Get assistant tickets error:', err);
     return res.status(500).json({ error: 'Failed to retrieve support tickets.' });
@@ -304,60 +351,142 @@ exports.getAssistantTickets = async (req, res) => {
 
 // ----------------------------------------------------
 // GET ALL TICKETS (GET /api/admin/support-tickets or /api/support/tickets)
+// Strictly enforces authenticated passenger isolation
 // ----------------------------------------------------
 exports.getAllTickets = async (req, res) => {
   try {
-    const { station, status, priority, type, q } = req.query;
-    let tickets = loadTickets();
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
 
+    const { station, status, priority, type, q } = req.query;
+
+    // 1. Query Supabase directly
+    let dbTickets = null;
+    if (supabase) {
+      try {
+        let query = supabase.from('support_tickets').select('*').not('ticket_number', 'ilike', 'OC-TEST-%').order('created_at', { ascending: false });
+
+        if (user.role === 'passenger') {
+          // PASSENGER ISOLATION:
+          // Must only retrieve tickets created by or assigned to this passenger
+          query = query.or(`created_by.eq.${user.id},passenger_id.eq.${user.id}`);
+        } else if (user.role === 'assistant') {
+          query = query.or(`assistant_id.eq.${user.id},created_by.eq.${user.id}`);
+        }
+        // Admin gets all tickets without user filter
+
+        if (status && status !== 'ALL') {
+          query = query.ilike('status', status);
+        }
+        if (priority && priority !== 'ALL') {
+          query = query.ilike('priority', priority);
+        }
+
+        const { data, error } = await query;
+        if (!error && Array.isArray(data)) {
+          dbTickets = data.map(formatDbTicket).filter(Boolean);
+        }
+      } catch (dbErr) {
+        console.warn('Supabase query error in getAllTickets:', dbErr.message);
+      }
+    }
+
+    // 2. Use dbTickets or file backup filtered strictly by user role
+    let tickets = dbTickets !== null ? dbTickets : loadTickets();
+
+    if (dbTickets === null) {
+      if (user.role === 'passenger') {
+        tickets = tickets.filter((t) => t.created_by === user.id || t.passenger_id === user.id);
+      } else if (user.role === 'assistant') {
+        tickets = tickets.filter((t) => t.assistant_id === user.id || t.created_by === user.id);
+      }
+    }
+
+    // Filter out any lingering test tickets
+    tickets = tickets.filter((t) => !String(t.id || t.ticket_number || '').includes('TEST'));
+
+    // Additional query filters (station, type, q)
     if (type && type !== 'ALL') {
       tickets = tickets.filter((t) => t.type === type);
     }
     if (station && station !== 'ALL') {
-      tickets = tickets.filter((t) => t.station === station);
-    }
-    if (status && status !== 'ALL') {
-      const s = status.toLowerCase();
-      tickets = tickets.filter((t) => (t.status || '').toLowerCase() === s);
-    }
-    if (priority && priority !== 'ALL') {
-      const p = priority.toLowerCase();
-      tickets = tickets.filter((t) => (t.priority || '').toLowerCase() === p);
+      tickets = tickets.filter((t) => (t.station || '').toUpperCase() === station.toUpperCase());
     }
     if (q) {
-      const query = q.toLowerCase();
+      const queryStr = q.toLowerCase();
       tickets = tickets.filter(
         (t) =>
-          (t.id && t.id.toLowerCase().includes(query)) ||
-          (t.subject && t.subject.toLowerCase().includes(query)) ||
-          (t.pnr && t.pnr.toLowerCase().includes(query)) ||
-          (t.assistant_name && t.assistant_name.toLowerCase().includes(query)) ||
-          (t.passengerName && t.passengerName.toLowerCase().includes(query)) ||
-          (t.desc && t.desc.toLowerCase().includes(query)) ||
-          (t.description && t.description.toLowerCase().includes(query)) ||
-          (t.category && t.category.toLowerCase().includes(query))
+          (t.id && t.id.toLowerCase().includes(queryStr)) ||
+          (t.subject && t.subject.toLowerCase().includes(queryStr)) ||
+          (t.pnr && t.pnr.toLowerCase().includes(queryStr)) ||
+          (t.passengerName && t.passengerName.toLowerCase().includes(queryStr)) ||
+          (t.desc && t.desc.toLowerCase().includes(queryStr)) ||
+          (t.description && t.description.toLowerCase().includes(queryStr)) ||
+          (t.category && t.category.toLowerCase().includes(queryStr))
       );
     }
 
     return res.json(tickets);
   } catch (err) {
     console.error('Get all tickets error:', err);
-    return res.status(500).json({ error: 'Failed to retrieve tickets for Admin.' });
+    return res.status(500).json({ error: 'Failed to retrieve support tickets.' });
   }
 };
 
 // ----------------------------------------------------
 // GET TICKET BY ID (GET /api/support/tickets/:id)
+// Validates ownership for passengers and assistants
 // ----------------------------------------------------
 exports.getTicketById = async (req, res) => {
   try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
     const { id } = req.params;
-    const tickets = loadTickets();
     const cleanId = String(id).trim().toLowerCase().replace('#', '');
-    const ticket = tickets.find((t) => String(t.id).toLowerCase().replace('#', '') === cleanId);
+
+    let ticket = null;
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('support_tickets')
+          .select('*')
+          .ilike('ticket_number', cleanId)
+          .maybeSingle();
+
+        if (!error && data) {
+          ticket = formatDbTicket(data);
+        }
+      } catch (dbErr) {
+        console.warn('Supabase getTicketById notice:', dbErr.message);
+      }
+    }
+
+    if (!ticket) {
+      const tickets = loadTickets();
+      ticket = tickets.find((t) => String(t.id).toLowerCase().replace('#', '') === cleanId);
+    }
 
     if (!ticket) {
       return res.status(404).json({ error: 'Support ticket not found.' });
+    }
+
+    // STRICT AUTHORIZATION CHECK:
+    // Only admins or the authenticated creator/passenger/assigned assistant can access
+    if (user.role !== 'admin') {
+      const isOwner =
+        ticket.created_by === user.id ||
+        ticket.passenger_id === user.id ||
+        (user.role === 'assistant' && ticket.assistant_id === user.id);
+
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Access denied: You do not have permission to view this ticket.' });
+      }
     }
 
     return res.json(ticket);
@@ -372,6 +501,11 @@ exports.getTicketById = async (req, res) => {
 // ----------------------------------------------------
 exports.addMessageToTicket = async (req, res) => {
   try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
     const { id } = req.params;
     const { text, sender, name, id: clientMsgId, clientMessageId } = req.body;
 
@@ -380,28 +514,60 @@ exports.addMessageToTicket = async (req, res) => {
     }
 
     const cleanText = String(text).trim().slice(0, 2000);
-    const tickets = loadTickets();
     const cleanId = String(id).trim().toLowerCase().replace('#', '');
-    const index = tickets.findIndex((t) => String(t.id).toLowerCase().replace('#', '') === cleanId);
 
-    if (index === -1) {
+    // 1. Fetch current ticket from DB or fallback
+    let ticket = null;
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('support_tickets')
+          .select('*')
+          .ilike('ticket_number', cleanId)
+          .maybeSingle();
+        if (!error && data) {
+          ticket = formatDbTicket(data);
+        }
+      } catch (dbErr) {
+        console.warn('Supabase fetch ticket error in addMessage:', dbErr.message);
+      }
+    }
+
+    if (!ticket) {
+      const tickets = loadTickets();
+      ticket = tickets.find((t) => String(t.id).toLowerCase().replace('#', '') === cleanId);
+    }
+
+    if (!ticket) {
       return res.status(404).json({ error: 'Support ticket not found.' });
     }
 
+    // STRICT AUTHORIZATION CHECK:
+    if (user.role !== 'admin') {
+      const isOwner =
+        ticket.created_by === user.id ||
+        ticket.passenger_id === user.id ||
+        (user.role === 'assistant' && ticket.assistant_id === user.id);
+
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Access denied: You cannot post messages to this ticket.' });
+      }
+    }
+
     // Determine authoritative sender from authenticated user
-    const authorSender = req.user?.role === 'admin'
+    const authorSender = user.role === 'admin'
       ? 'support'
-      : (req.user?.role === 'assistant' ? 'assistant' : (sender || 'passenger'));
-    const authorName = req.user?.name || name || (authorSender === 'support' ? 'Support Desk' : 'Passenger');
+      : (user.role === 'assistant' ? 'assistant' : 'passenger');
+    const authorName = user.name || name || (authorSender === 'support' ? 'Support Desk' : 'Passenger');
 
     const effectiveId = clientMessageId || clientMsgId || `msg-${Date.now()}`;
 
-    if (!Array.isArray(tickets[index].conversation)) {
-      tickets[index].conversation = [];
+    if (!Array.isArray(ticket.conversation)) {
+      ticket.conversation = [];
     }
 
     // Strict idempotency: prevent duplicate message insertion
-    const alreadyExists = tickets[index].conversation.some((m) => {
+    const alreadyExists = ticket.conversation.some((m) => {
       if (m.id && (m.id === effectiveId || m.clientMessageId === effectiveId)) {
         return true;
       }
@@ -413,7 +579,7 @@ exports.addMessageToTicket = async (req, res) => {
     });
 
     if (alreadyExists) {
-      return res.json(tickets[index]);
+      return res.json(ticket);
     }
 
     const newMsg = {
@@ -425,29 +591,64 @@ exports.addMessageToTicket = async (req, res) => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    tickets[index].conversation.push(newMsg);
-    tickets[index].updated_at = new Date().toISOString();
-    tickets[index].updatedAt = new Date().toISOString();
+    ticket.conversation.push(newMsg);
+    ticket.updated_at = new Date().toISOString();
+    ticket.updatedAt = new Date().toISOString();
 
     // Auto-advance open ticket to in_progress upon support agent response
-    if (newMsg.sender === 'support' && (tickets[index].status === 'open' || tickets[index].status === 'Dispatched to Station Supervisor')) {
-      tickets[index].status = 'in_progress';
+    if (newMsg.sender === 'support' && (ticket.status === 'open' || ticket.status === 'Dispatched to Station Supervisor')) {
+      ticket.status = 'in_progress';
     }
 
+    // Save in file backup
+    const tickets = loadTickets();
+    const idx = tickets.findIndex((t) => String(t.id).toLowerCase().replace('#', '') === cleanId);
+    if (idx !== -1) {
+      tickets[idx] = ticket;
+    } else {
+      tickets.unshift(ticket);
+    }
     saveTickets(tickets);
 
-    // Asynchronously sync message update to Supabase support_tickets table
-    syncTicketToDB(tickets[index], req.user?.id);
+    // Save in Supabase
+    if (supabase) {
+      try {
+        await supabase
+          .from('support_tickets')
+          .update({
+            status: ticket.status,
+            context: {
+              type: ticket.type,
+              passengerName: ticket.passengerName,
+              passengerPhone: ticket.passengerPhone,
+              passengerEmail: ticket.passengerEmail,
+              station: ticket.station,
+              pnr: ticket.pnr,
+              trip: ticket.trip,
+              aiSummary: ticket.aiSummary,
+              conversation: ticket.conversation,
+              resolution_notes: ticket.resolution_notes || ''
+            },
+            updated_at: ticket.updated_at
+          })
+          .ilike('ticket_number', cleanId);
+      } catch (dbUpErr) {
+        console.warn('Supabase update notice in addMessage:', dbUpErr.message);
+      }
+    }
 
     if (ioInstance) {
       try {
-        ioInstance.emit('ticket_message', { ticketId: tickets[index].id, message: newMsg });
+        ioInstance.emit('ticket_message', { ticketId: ticket.id, message: newMsg });
+        if (ticket.passenger_id) {
+          ioInstance.to(`passenger_${ticket.passenger_id}`).emit('ticket_message', { ticketId: ticket.id, message: newMsg });
+        }
       } catch (ioErr) {
         console.warn('Socket broadcast warning:', ioErr.message);
       }
     }
 
-    return res.json(tickets[index]);
+    return res.json(ticket);
   } catch (err) {
     console.error('Add ticket message error:', err);
     return res.status(500).json({ error: 'Failed to add message to ticket conversation.' });
@@ -459,15 +660,36 @@ exports.addMessageToTicket = async (req, res) => {
 // ----------------------------------------------------
 exports.updateTicketStatus = async (req, res) => {
   try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
     const { id } = req.params;
     const { status, resolution_notes, resolutionNotes } = req.body;
+    const cleanId = String(id).trim().toLowerCase().replace('#', '');
 
     const tickets = loadTickets();
-    const cleanId = String(id).trim().toLowerCase().replace('#', '');
     const index = tickets.findIndex((t) => String(t.id).toLowerCase().replace('#', '') === cleanId);
 
     if (index === -1) {
       return res.status(404).json({ error: 'Support ticket not found.' });
+    }
+
+    // AUTHORIZATION ENFORCEMENT:
+    // Non-admin can only resolve or close their own ticket
+    if (user.role !== 'admin') {
+      const isOwner =
+        tickets[index].created_by === user.id ||
+        tickets[index].passenger_id === user.id;
+
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Access denied: You do not have permission to update this ticket.' });
+      }
+
+      if (status && !['resolved', 'closed'].includes(status.toLowerCase())) {
+        return res.status(403).json({ error: 'Passengers can only mark tickets as resolved or closed.' });
+      }
     }
 
     const previousStatus = tickets[index].status;
@@ -481,7 +703,7 @@ exports.updateTicketStatus = async (req, res) => {
     tickets[index].updated_at = new Date().toISOString();
     tickets[index].updatedAt = new Date().toISOString();
 
-    // Append a system note to conversation
+    // Append system note to conversation
     if (!Array.isArray(tickets[index].conversation)) {
       tickets[index].conversation = [];
     }
@@ -495,10 +717,36 @@ exports.updateTicketStatus = async (req, res) => {
 
     saveTickets(tickets);
 
-    // Asynchronously sync status update to Supabase support_tickets table
-    syncTicketToDB(tickets[index], req.user?.id);
+    // Sync to Supabase
+    if (supabase) {
+      try {
+        await supabase
+          .from('support_tickets')
+          .update({
+            status: tickets[index].status,
+            context: {
+              type: tickets[index].type,
+              passengerName: tickets[index].passengerName,
+              passengerPhone: tickets[index].passengerPhone,
+              passengerEmail: tickets[index].passengerEmail,
+              station: tickets[index].station,
+              pnr: tickets[index].pnr,
+              trip: tickets[index].trip,
+              aiSummary: tickets[index].aiSummary,
+              conversation: tickets[index].conversation,
+              resolution_notes: notes || tickets[index].resolution_notes || ''
+            },
+            resolved_at: ['resolved', 'closed'].includes(tickets[index].status) ? new Date().toISOString() : null,
+            resolved_by: ['resolved', 'closed'].includes(tickets[index].status) ? user.id : null,
+            updated_at: tickets[index].updated_at
+          })
+          .ilike('ticket_number', cleanId);
+      } catch (dbErr) {
+        console.warn('Supabase status update notice:', dbErr.message);
+      }
+    }
 
-    if (req.user?.role === 'admin') {
+    if (user.role === 'admin') {
       try {
         const { logAdminAction } = require('../services/adminAuditService');
         await logAdminAction({
@@ -525,6 +773,13 @@ exports.updateTicketStatus = async (req, res) => {
           status: tickets[index].status,
           ticket: tickets[index]
         });
+        if (tickets[index].passenger_id) {
+          ioInstance.to(`passenger_${tickets[index].passenger_id}`).emit('ticket_status_updated', {
+            ticketId: tickets[index].id,
+            status: tickets[index].status,
+            ticket: tickets[index]
+          });
+        }
       } catch (ioErr) {
         console.warn('Socket broadcast warning:', ioErr.message);
       }

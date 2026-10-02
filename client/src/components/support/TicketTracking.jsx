@@ -12,39 +12,38 @@ import axios from '../../api/axios';
 export default function TicketTracking({ onNavigate, user }) {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
 
-  const fetchUserTickets = async () => {
-    // 1. Local tickets first
-    const all = getTickets();
-    setTickets(all);
-
-    // 2. Fetch authoritative from backend
+  const fetchUserTickets = async (isManual = false) => {
+    if (isManual) setLoading(true);
+    setError(null);
     try {
-      const res = await axios.get('/support/tickets').catch(() => null);
-      if (res && Array.isArray(res.data) && res.data.length > 0) {
-        // Merge server and local unique by id
-        const mergedMap = new Map();
-        res.data.forEach((t) => mergedMap.set(t.id, t));
-        all.forEach((t) => {
-          if (!mergedMap.has(t.id)) mergedMap.set(t.id, t);
-        });
-        setTickets(Array.from(mergedMap.values()));
-      }
+      const res = await axios.get('/support/tickets');
+      const list = Array.isArray(res.data) ? res.data : [];
+      setTickets(list);
+      saveTickets(list);
+      setLoading(false);
     } catch (e) {
-      console.warn('Backend ticket fetch in tracking deferred:', e);
+      console.error('Backend ticket fetch error:', e);
+      setError('Unable to load your support tickets.');
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchUserTickets();
-    const unsubscribe = subscribeToSupportUpdates(fetchUserTickets);
-    const interval = setInterval(fetchUserTickets, 4000);
+    const unsubscribe = subscribeToSupportUpdates(() => fetchUserTickets(false));
+    const interval = setInterval(() => fetchUserTickets(false), 5000);
     return () => {
       unsubscribe();
       clearInterval(interval);
     };
   }, []);
+
+  const inProgressCount = tickets.filter(t => ['open', 'in_progress', 'bot_escalated'].includes(t.status)).length;
+  const resolvedCount = tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length;
 
   const filteredTickets = tickets.filter(t => {
     if (filter === 'open') return ['open', 'in_progress', 'bot_escalated'].includes(t.status);
@@ -53,7 +52,7 @@ export default function TicketTracking({ onNavigate, user }) {
   });
 
   const getStatusBadge = (status) => {
-    const s = status.toLowerCase();
+    const s = (status || '').toLowerCase();
     if (['resolved', 'closed'].includes(s)) {
       return (
         <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-md border border-emerald-200 flex items-center gap-1">
@@ -78,6 +77,7 @@ export default function TicketTracking({ onNavigate, user }) {
             type="button"
             onClick={() => onNavigate('back')}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200/60"
+            title="Go back"
           >
             <ArrowLeft className="w-4 h-4 text-slate-700" />
           </button>
@@ -105,7 +105,7 @@ export default function TicketTracking({ onNavigate, user }) {
       {/* ── MAIN CONTENT ────────────────────────────────────────── */}
       <main className="flex-1 max-w-[1280px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         
-        {/* Filter Pills */}
+        {/* Filter Pills with real counts */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button 
             type="button"
@@ -128,7 +128,7 @@ export default function TicketTracking({ onNavigate, user }) {
                 : 'bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50'
             }`}
           >
-            In Progress ({tickets.filter(t => ['open', 'in_progress', 'bot_escalated'].includes(t.status)).length})
+            In Progress ({inProgressCount})
           </button>
 
           <button 
@@ -140,32 +140,67 @@ export default function TicketTracking({ onNavigate, user }) {
                 : 'bg-white border border-slate-200/80 text-slate-600 hover:bg-slate-50'
             }`}
           >
-            Resolved ({tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length})
+            Resolved ({resolvedCount})
           </button>
         </div>
 
-        {/* Tickets Grid / List */}
-        <div className="space-y-3">
-          {filteredTickets.length === 0 ? (
-            <div className="text-center py-16 px-4 bg-white border border-slate-200/80 rounded-3xl shadow-2xs">
-              <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
-                <Search className="w-6 h-6" />
-              </div>
-              <h3 className="font-black text-slate-900 text-base mb-1">No tickets found</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
-                You don't have any support tickets matching this filter.
-              </p>
+        {/* Content Area: Loading / Error / Empty / Real Tickets */}
+        {loading ? (
+          <div className="text-center py-20 px-4 bg-white border border-slate-200/80 rounded-3xl shadow-2xs space-y-3">
+            <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <h3 className="font-bold text-slate-900 text-sm">Loading your tickets...</h3>
+          </div>
+        ) : error ? (
+          <div className="text-center py-16 px-4 bg-white border border-rose-200 rounded-3xl shadow-2xs space-y-3">
+            <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-500">
+              <Clock className="w-6 h-6" />
+            </div>
+            <h3 className="font-black text-slate-900 text-base">Unable to load your support tickets.</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              We encountered a network problem communicating with the support system.
+            </p>
+            <button
+              type="button"
+              onClick={() => fetchUserTickets(true)}
+              className="bg-black hover:bg-zinc-800 text-white font-bold text-xs px-5 py-2.5 rounded-full inline-flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+            >
+              Retry
+            </button>
+          </div>
+        ) : tickets.length === 0 ? (
+          /* Total Zero Tickets: Clean Real Empty State for New Passenger */
+          <div className="text-center py-20 px-4 bg-white border border-slate-200/80 rounded-3xl shadow-2xs space-y-3">
+            <div className="w-14 h-14 bg-blue-50 text-[#1463FF] rounded-full flex items-center justify-center mx-auto mb-2 border border-blue-100">
+              <FileText className="w-7 h-7" />
+            </div>
+            <h3 className="font-black text-slate-900 text-lg">No support tickets yet</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              Any issues or questions you raise will appear here.
+            </p>
+            <div className="pt-2">
               <button
                 type="button"
-                onClick={() => onNavigate('chat')}
-                className="bg-[#1463FF] hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-full inline-flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                onClick={() => onNavigate('raise_ticket')}
+                className="bg-black hover:bg-zinc-800 text-white font-bold text-xs px-6 py-3 rounded-full inline-flex items-center gap-2 shadow-xs transition-all cursor-pointer"
               >
-                <span>Start a Support Chat</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
+                <span>Raise New Ticket</span>
               </button>
             </div>
-          ) : (
-            filteredTickets.map((ticket) => {
+          </div>
+        ) : filteredTickets.length === 0 ? (
+          /* Filter Returned 0 results */
+          <div className="text-center py-16 px-4 bg-white border border-slate-200/80 rounded-3xl shadow-2xs space-y-2">
+            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-1 text-slate-400">
+              <Search className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-slate-900 text-sm">No tickets matching this filter</h3>
+            <p className="text-xs text-slate-500">Try switching to &quot;All Tickets&quot; to see all your requests.</p>
+          </div>
+        ) : (
+          /* Real Database Tickets List */
+          <div className="space-y-3">
+            {filteredTickets.map((ticket) => {
               return (
                 <button 
                   key={ticket.id}
@@ -183,9 +218,9 @@ export default function TicketTracking({ onNavigate, user }) {
                         <span className="text-xs font-black font-mono text-slate-900">
                           #{ticket.id}
                         </span>
-                        {ticket.isBotEscalated && (
-                          <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-blue-50 text-[#1463FF] rounded border border-blue-200">
-                            BOT ESCALATED
+                        {ticket.category && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                            {ticket.category}
                           </span>
                         )}
                       </div>
@@ -195,7 +230,7 @@ export default function TicketTracking({ onNavigate, user }) {
                       </h3>
 
                       <p className="text-xs text-slate-500 font-medium">
-                        {ticket.trip?.trainNo ? `Train ${ticket.trip.trainNo}${ticket.trip.route ? ` · ${ticket.trip.route}` : ''}` : 'General Support Request'}
+                        {ticket.trip?.trainNo ? `Train ${ticket.trip.trainNo}${ticket.trip.route ? ` · ${ticket.trip.route}` : ''}` : (ticket.description || 'General Support Inquiry')}
                       </p>
 
                       <p className="text-[11px] text-slate-400">
@@ -210,9 +245,9 @@ export default function TicketTracking({ onNavigate, user }) {
                   </div>
                 </button>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
 
       </main>
 
