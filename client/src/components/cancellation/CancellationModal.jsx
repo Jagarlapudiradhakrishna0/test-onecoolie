@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import axios from '../../api/axios';
 import { toast } from 'react-hot-toast';
 import {
   AlertTriangle,
@@ -65,10 +65,11 @@ function isMeaningfulReason(text) {
 }
 
 export default function CancellationModal({
-  isOpen,
+  isOpen = true,
   onClose,
   booking,
   onCancelled,
+  onSuccess,
   onRequestRebook
 }) {
   const [step, setStep] = useState('decision'); // 'decision' | 'reason' | 'review' | 'cancelling' | 'success'
@@ -126,7 +127,8 @@ export default function CancellationModal({
     setStep('review');
 
     try {
-      const res = await axios.post(`/bookings/${booking.id}/cancel-quote`, {
+      const targetId = booking.id || booking.booking_id;
+      const res = await axios.post(`/bookings/${targetId}/cancel-quote`, {
         reasonCategory: selectedReason,
         reasonDetails: reasonDetails.trim()
       });
@@ -180,7 +182,8 @@ export default function CancellationModal({
     setIsSubmitting(true);
 
     try {
-      const res = await axios.post(`/bookings/${booking.id}/cancel`, {
+      const targetId = booking.id || booking.booking_id;
+      const res = await axios.post(`/bookings/${targetId}/cancel`, {
         reasonCategory: selectedReason,
         reasonDetails: reasonDetails.trim()
       });
@@ -196,6 +199,7 @@ export default function CancellationModal({
       setStep('success');
       toast.success('Assistance booking cancelled.');
       if (onCancelled) onCancelled(updated);
+      if (onSuccess) onSuccess(updated);
     } catch (err) {
       const msg = err.response?.data?.message || 'Cancellation failed. Please try again.';
       toast.error(msg);

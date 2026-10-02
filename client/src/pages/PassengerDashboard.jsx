@@ -2908,7 +2908,8 @@ export default function PassengerDashboard() {
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setActiveMenuId(activeMenuId === b.id ? null : b.id);
+                                      const key = b.id || b.booking_id;
+                                      setActiveMenuId(activeMenuId === key ? null : key);
                                     }}
                                     className="text-zinc-400 hover:text-black p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                                     title="Options"
@@ -2916,7 +2917,7 @@ export default function PassengerDashboard() {
                                     <MoreVertical className="w-4 h-4" />
                                   </button>
 
-                                  {activeMenuId === b.id && (
+                                  {activeMenuId === (b.id || b.booking_id) && (
                                     <>
                                       <div className="fixed inset-0 z-30" onClick={() => setActiveMenuId(null)} />
                                       <div
@@ -3131,24 +3132,51 @@ export default function PassengerDashboard() {
                               </div>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                try {
-                                  if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
-                                  if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
-                                } catch (e) { }
-                                const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
-                                navigate(targetRoute, { state: { booking: b } });
-                              }}
-                              className={`rounded-full font-bold text-xs px-5 py-2.5 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
-                                  ? 'bg-black hover:bg-zinc-800 text-white'
-                                  : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
-                                }`}
-                            >
-                              <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  try {
+                                    if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
+                                    if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
+                                  } catch (e) { }
+                                  const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
+                                  navigate(targetRoute, { state: { booking: b } });
+                                }}
+                                className={`rounded-full font-bold text-xs px-4 py-2 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
+                                    ? 'bg-black hover:bg-zinc-800 text-white'
+                                    : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
+                                  }`}
+                              >
+                                <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+
+                              {canCancel && (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveRebookBooking(b);
+                                    }}
+                                    className="px-2 py-0.5 text-[11px] font-bold text-[#1463FF] hover:bg-blue-50 rounded-md transition-colors cursor-pointer border border-blue-200/60"
+                                  >
+                                    Rebook
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveCancelBooking(b);
+                                    }}
+                                    className="px-2 py-0.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer border border-rose-200/60"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -3371,7 +3399,8 @@ export default function PassengerDashboard() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setActiveMenuId(activeMenuId === b.id ? null : b.id);
+                                  const key = b.id || b.booking_id;
+                                  setActiveMenuId(activeMenuId === key ? null : key);
                                 }}
                                 className="text-zinc-400 hover:text-black p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                                 title="Options"
@@ -3379,7 +3408,7 @@ export default function PassengerDashboard() {
                                 <MoreVertical className="w-4 h-4" />
                               </button>
 
-                              {activeMenuId === b.id && (
+                              {activeMenuId === (b.id || b.booking_id) && (
                                 <>
                                   <div className="fixed inset-0 z-30" onClick={() => setActiveMenuId(null)} />
                                   <div
@@ -3441,25 +3470,54 @@ export default function PassengerDashboard() {
                               </div>
                             </div>
 
-                            {/* Bottom: View Trip Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                try {
-                                  if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
-                                  if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
-                                } catch (e) { }
-                                const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
-                                navigate(targetRoute, { state: { booking: b } });
-                              }}
-                              className={`rounded-full font-bold text-xs px-5 py-2.5 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
-                                  ? 'bg-black hover:bg-zinc-800 text-white'
-                                  : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
-                                }`}
-                            >
-                              <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
+                            {/* Bottom: View Trip + Quick Actions */}
+                            <div className="flex flex-col items-end gap-1.5 w-full">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  try {
+                                    if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
+                                    if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
+                                  } catch (e) { }
+                                  const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
+                                  navigate(targetRoute, { state: { booking: b } });
+                                }}
+                                className={`w-full rounded-full font-bold text-xs px-4 py-2.5 flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
+                                    ? 'bg-black hover:bg-zinc-800 text-white'
+                                    : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
+                                  }`}
+                              >
+                                <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+
+                              {canCancel && (
+                                <div className="flex items-center gap-1.5 w-full justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveRebookBooking(b);
+                                    }}
+                                    className="px-2.5 py-1 text-[11px] font-bold text-[#1463FF] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer border border-blue-200/60"
+                                    title="Change Date/Train/Coach"
+                                  >
+                                    Rebook
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveCancelBooking(b);
+                                    }}
+                                    className="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-rose-200/60"
+                                    title="Cancel Booking"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -4062,36 +4120,50 @@ export default function PassengerDashboard() {
       )}
 
       {/* Real-World Production Cancellation Modal */}
-      <CancellationModal
-        isOpen={Boolean(activeCancelBooking)}
-        booking={activeCancelBooking}
-        onClose={() => setActiveCancelBooking(null)}
-        onCancelled={() => {
-          setActiveCancelBooking(null);
-          fetchBookings();
-        }}
-        onRequestRebook={() => {
-          setActiveRebookBooking(activeCancelBooking);
-          setActiveCancelBooking(null);
-        }}
-      />
+      {Boolean(activeCancelBooking) && (
+        <CancellationModal
+          isOpen={Boolean(activeCancelBooking)}
+          booking={activeCancelBooking}
+          onClose={() => setActiveCancelBooking(null)}
+          onCancelled={() => {
+            setActiveCancelBooking(null);
+            fetchBookings();
+          }}
+          onSuccess={() => {
+            setActiveCancelBooking(null);
+            fetchBookings();
+          }}
+          onRequestRebook={() => {
+            setActiveRebookBooking(activeCancelBooking);
+            setActiveCancelBooking(null);
+          }}
+        />
+      )}
 
       {/* Rebooking / Modify Booking Modal */}
-      <RebookingModal
-        isOpen={Boolean(activeRebookBooking)}
-        booking={activeRebookBooking}
-        onClose={() => setActiveRebookBooking(null)}
-        onRebooked={() => {
-          setActiveRebookBooking(null);
-          fetchBookings();
-        }}
-      />
+      {Boolean(activeRebookBooking) && (
+        <RebookingModal
+          isOpen={Boolean(activeRebookBooking)}
+          booking={activeRebookBooking}
+          onClose={() => setActiveRebookBooking(null)}
+          onRebooked={() => {
+            setActiveRebookBooking(null);
+            fetchBookings();
+          }}
+          onSuccess={() => {
+            setActiveRebookBooking(null);
+            fetchBookings();
+          }}
+        />
+      )}
 
       {/* Authoritative Cancellation Policy Modal */}
-      <CancellationPolicyModal
-        isOpen={showPolicyModal}
-        onClose={() => setShowPolicyModal(false)}
-      />
+      {Boolean(showPolicyModal) && (
+        <CancellationPolicyModal
+          isOpen={showPolicyModal}
+          onClose={() => setShowPolicyModal(false)}
+        />
+      )}
 
       {/* Legacy Cancel Dialog Fallback */}
       <ConfirmDialog

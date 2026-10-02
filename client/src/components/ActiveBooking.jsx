@@ -716,6 +716,36 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             <p className="text-[11px] text-zinc-500 font-medium mt-2">
               A faster, smoother, and more comfortable journey with OneCoolie.
             </p>
+
+            {/* Quick Actions: Change Booking / Cancel Booking Pill Bar */}
+            {canCancel && (
+              <div className="flex flex-wrap items-center gap-2 mt-3.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowRebookingModal(true)}
+                  className="px-3.5 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 text-[#1463FF] border border-blue-200/80 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#1463FF]" />
+                  <span>Change / Rebook Journey</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCancellationModal(true)}
+                  className="px-3.5 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Cancel Booking</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPolicyModal(true)}
+                  className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-600 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
+                  <span>Cancellation Policy</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Right Railway Visual: ONLY takes the exact height of the text */}
@@ -1504,9 +1534,15 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
       {/* ── Real Production Cancellation Modal ── */}
       {showCancellationModal && (
         <CancellationModal
+          isOpen={showCancellationModal}
           booking={booking}
           onClose={() => setShowCancellationModal(false)}
+          onCancelled={(cancelledBooking) => {
+            setShowCancellationModal(false);
+            onUpdate?.(cancelledBooking);
+          }}
           onSuccess={(cancelledBooking) => {
+            setShowCancellationModal(false);
             onUpdate?.(cancelledBooking);
           }}
           onRequestRebook={() => {
@@ -1519,9 +1555,15 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
       {/* ── Real Production Rebooking Modal ── */}
       {showRebookingModal && (
         <RebookingModal
+          isOpen={showRebookingModal}
           booking={booking}
           onClose={() => setShowRebookingModal(false)}
+          onRebooked={(updatedBooking) => {
+            setShowRebookingModal(false);
+            onUpdate?.(updatedBooking);
+          }}
           onSuccess={(updatedBooking) => {
+            setShowRebookingModal(false);
             onUpdate?.(updatedBooking);
           }}
         />
@@ -1529,7 +1571,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
       {/* ── Cancellation Policy Modal ── */}
       {showPolicyModal && (
-        <CancellationPolicyModal onClose={() => setShowPolicyModal(false)} />
+        <CancellationPolicyModal
+          isOpen={showPolicyModal}
+          onClose={() => setShowPolicyModal(false)}
+        />
       )}
 
       {/* ── SOS Dialog Modal ── */}

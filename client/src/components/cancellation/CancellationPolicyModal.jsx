@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../../api/axios';
 import { ShieldCheck, CheckCircle2, AlertTriangle, X, Clock, CreditCard, Ban } from 'lucide-react';
 
-export default function CancellationPolicyModal({ isOpen, onClose }) {
+export default function CancellationPolicyModal({ isOpen = true, onClose }) {
   const [policyData, setPolicyData] = useState(null);
   const [loading, setLoading] = useState(true);
 

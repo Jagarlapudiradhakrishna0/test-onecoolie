@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../../api/axios';
 import { toast } from 'react-hot-toast';
 import {
   Calendar,
@@ -27,10 +27,11 @@ const STATIONS = [
 ];
 
 export default function RebookingModal({
-  isOpen,
+  isOpen = true,
   onClose,
   booking,
-  onRebooked
+  onRebooked,
+  onSuccess
 }) {
   const [journeyDate, setJourneyDate] = useState('');
   const [journeyTime, setJourneyTime] = useState('');
@@ -92,7 +93,8 @@ export default function RebookingModal({
     setIsSubmitting(true);
 
     try {
-      const res = await axios.post(`/bookings/${booking.id}/rebook`, {
+      const targetId = booking.id || booking.booking_id;
+      const res = await axios.post(`/bookings/${targetId}/rebook`, {
         journey_date: journeyDate,
         journey_time: journeyTime,
         station_code: stationCode,
@@ -108,6 +110,7 @@ export default function RebookingModal({
       const updated = res.data?.booking || res.data;
       toast.success(res.data?.message || 'Booking updated successfully!');
       if (onRebooked) onRebooked(updated);
+      if (onSuccess) onSuccess(updated);
       onClose();
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to update booking. Please try again.';
