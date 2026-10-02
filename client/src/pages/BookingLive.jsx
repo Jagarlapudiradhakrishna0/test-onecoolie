@@ -116,32 +116,7 @@ export default function BookingLive() {
           if (status === 401) {
             setFetchError('Your session has expired. Please sign in to view this trip.');
           } else if (status === 404) {
-            // Provide reference mockup trip fallback for preview or sample trips
-            return {
-              id: id || 'RM-MTPL5ZBA-FZGW9',
-              booking_id: id || 'RM-MTPL5ZBA-FZGW9',
-              train_no: '20834',
-              train_number: '20834',
-              train_name: 'Vande Bharat Express',
-              from_station: 'Secunderabad',
-              to_station: 'Visakhapatnam',
-              station_code: 'KZJ',
-              station_name: 'Kazipet Jn',
-              coach: 'S4',
-              seat_number: '42',
-              berth_type: 'Side Lower',
-              action_type: 'boarding',
-              service_type: 'Boarding Load',
-              special_instructions: 'Boarding assistance at Kazipet Jn. Please help with luggage to seat.',
-              total_price: 70,
-              amount: 70,
-              payment_status: 'PAID',
-              payment_method: 'Online Payment',
-              booking_status: 'pending',
-              status: 'pending',
-              created_at: '2026-09-06T14:35:00.000Z',
-              journey_date: '2026-09-06',
-            };
+            setFetchError('Booking not found. Please check your trip ID or return to My Trips.');
           } else if (status === 403) {
             setFetchError('You are not authorized to view this booking. Please check your account.');
           } else {
@@ -384,7 +359,7 @@ export default function BookingLive() {
             <div className="flex items-center gap-2 bg-slate-100/90 border border-slate-200/70 rounded-full px-3.5 py-1 text-xs">
               <span className="text-zinc-400 font-medium">Booking ID</span>
               <span className="font-mono font-bold text-zinc-900 select-all">
-                {getDisplayId(booking) || 'RM-MTPL5ZBA-FZGW9'}
+                {getDisplayId(booking) || id}
               </span>
               <button
                 type="button"

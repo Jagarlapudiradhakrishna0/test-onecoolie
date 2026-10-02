@@ -10,7 +10,7 @@
  *           broadcast to assistants -> accepted -> arrives -> OTP verified -> completed -> earnings
  */
 
-const CASH_PAYMENT_METHODS = ['cash'];
+const CASH_PAYMENT_METHODS = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'];
 
 const ONLINE_PAYMENT_METHODS = [
   'upi',

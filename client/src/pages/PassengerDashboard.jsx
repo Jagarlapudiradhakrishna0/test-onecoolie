@@ -61,6 +61,9 @@ import PaymentModal from '../components/PaymentModal';
 import ProfileMenu from '../context/ProfileMenu';
 import PassengerNotifications from '../components/PassengerNotifications';
 import ConfirmDialog from '../components/ConfirmDialog';
+import CancellationModal from '../components/cancellation/CancellationModal';
+import RebookingModal from '../components/cancellation/RebookingModal';
+import CancellationPolicyModal from '../components/cancellation/CancellationPolicyModal';
 import Brand from '../components/Brand';
 import { BookingSkeleton } from '../components/Skeleton';
 import { useTheme } from '../context/ThemeContext';
@@ -405,6 +408,9 @@ export default function PassengerDashboard() {
   const [fetchError, setFetchError] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [activeCancelBooking, setActiveCancelBooking] = useState(null);
+  const [activeRebookBooking, setActiveRebookBooking] = useState(null);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
 
   // 3-dots action menu & Edit Booking state
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -745,6 +751,38 @@ export default function PassengerDashboard() {
   useEffect(() => {
     fetchBookings();
     const interval = setInterval(fetchBookings, 8000);
+
+    if (typeof window !== 'undefined' && window.socket) {
+      const handleLiveTripEvent = (updated) => {
+        if (!updated || !updated.id) {
+          fetchBookings();
+          return;
+        }
+        setBookings((prev) => {
+          const index = prev.findIndex((b) => b.id === updated.id || b.booking_id === updated.booking_id);
+          if (index >= 0) {
+            const next = [...prev];
+            next[index] = { ...next[index], ...updated };
+            return next;
+          }
+          return [updated, ...prev];
+        });
+      };
+
+      window.socket.on('status_update', handleLiveTripEvent);
+      window.socket.on('booking_cancelled', handleLiveTripEvent);
+      window.socket.on('booking_updated', handleLiveTripEvent);
+
+      return () => {
+        clearInterval(interval);
+        if (window.socket) {
+          window.socket.off('status_update', handleLiveTripEvent);
+          window.socket.off('booking_cancelled', handleLiveTripEvent);
+          window.socket.off('booking_updated', handleLiveTripEvent);
+        }
+      };
+    }
+
     return () => clearInterval(interval);
   }, [fetchBookings, tab]);
 
@@ -1001,6 +1039,12 @@ export default function PassengerDashboard() {
   const doCancel = async () => {
     if (!confirmCancel || isCancelling) return;
     const cancelTargetId = confirmCancel;
+    const targetBooking = bookings.find((b) => b.id === cancelTargetId || b.booking_id === cancelTargetId);
+    const targetStatus = (targetBooking?.booking_status || targetBooking?.status || '').toLowerCase();
+    if (['in_service', 'completed', 'cancelled'].includes(targetStatus)) {
+      setConfirmCancel(null);
+      return toast.error('This booking cannot be cancelled in its current status.');
+    }
     setIsCancelling(true);
     try {
       const res = await axios.post(`/bookings/${cancelTargetId}/cancel`);
@@ -2463,8 +2507,20 @@ export default function PassengerDashboard() {
                 </button>
               </div>
 
-              {/* Sort By Dropdown */}
-              <div className="relative self-start sm:self-auto shrink-0">
+              {/* Actions & Sort Row */}
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowPolicyModal(true)}
+                  className="px-3.5 py-2 sm:py-2.5 rounded-full bg-white hover:bg-slate-50 text-zinc-700 font-bold text-xs border border-slate-200/80 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="View Cancellation & Refund Policy"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Cancellation Policy</span>
+                </button>
+
+                {/* Sort By Dropdown */}
+                <div className="relative shrink-0">
                 <button
                   type="button"
                   onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
@@ -2520,6 +2576,7 @@ export default function PassengerDashboard() {
                 )}
               </div>
             </div>
+          </div>
 
             {/* ── 3. TRIP CARDS LIST ── */}
             {loading ? (
@@ -2674,6 +2731,8 @@ export default function PassengerDashboard() {
                     const { month, day, year, weekday } = formatDateBlock(b.journey_date);
                     const isCompleted = b.booking_status?.toLowerCase() === 'completed';
                     const isCancelled = b.booking_status?.toLowerCase() === 'cancelled';
+                    const isInService = b.booking_status?.toLowerCase() === 'in_service';
+                    const canCancel = !isCancelled && !isCompleted && !isInService;
                     const isPending = !isCompleted && !isCancelled;
                     const isBoarding = !(b.action_type === 'collect_from_seat' || b.services?.action_type === 'collect_from_seat');
 
@@ -2878,18 +2937,31 @@ export default function PassengerDashboard() {
                                           <span>Copy ID: {b.booking_id || b.id}</span>
                                         </button>
 
-                                        {!isCompleted && !isCancelled && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setActiveMenuId(null);
-                                              setConfirmCancel(b.id);
-                                            }}
-                                            className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
-                                          >
-                                            <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
-                                            <span>Cancel Booking</span>
-                                          </button>
+                                        {canCancel && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveMenuId(null);
+                                                setActiveRebookBooking(b);
+                                              }}
+                                              className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-blue-600 hover:bg-blue-50 font-medium transition-colors cursor-pointer"
+                                            >
+                                              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                                              <span>Change Booking</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveMenuId(null);
+                                                setActiveCancelBooking(b);
+                                              }}
+                                              className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
+                                            >
+                                              <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                                              <span>Cancel Booking</span>
+                                            </button>
+                                          </>
                                         )}
                                       </div>
                                     </>
@@ -3066,14 +3138,15 @@ export default function PassengerDashboard() {
                                   if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
                                   if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
                                 } catch (e) { }
-                                navigate(`/booking/${b.id}`, { state: { booking: b } });
+                                const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
+                                navigate(targetRoute, { state: { booking: b } });
                               }}
                               className={`rounded-full font-bold text-xs px-5 py-2.5 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
                                   ? 'bg-black hover:bg-zinc-800 text-white'
                                   : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
                                 }`}
                             >
-                              <span>View Trip</span>
+                              <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -3327,18 +3400,31 @@ export default function PassengerDashboard() {
                                       <span>Copy ID: {b.booking_id || b.id}</span>
                                     </button>
 
-                                    {!isCompleted && !isCancelled && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActiveMenuId(null);
-                                          setConfirmCancel(b.id);
-                                        }}
-                                        className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
-                                      >
-                                        <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
-                                        <span>Cancel Booking</span>
-                                      </button>
+                                    {canCancel && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveMenuId(null);
+                                            setActiveRebookBooking(b);
+                                          }}
+                                          className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-blue-600 hover:bg-blue-50 font-medium transition-colors cursor-pointer"
+                                        >
+                                          <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                                          <span>Change Booking</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveMenuId(null);
+                                            setActiveCancelBooking(b);
+                                          }}
+                                          className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
+                                        >
+                                          <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                                          <span>Cancel Booking</span>
+                                        </button>
+                                      </>
                                     )}
                                   </div>
                                 </>
@@ -3363,14 +3449,15 @@ export default function PassengerDashboard() {
                                   if (b.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
                                   if (b.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
                                 } catch (e) { }
-                                navigate(`/booking/${b.id}`, { state: { booking: b } });
+                                const targetRoute = isCompleted ? `/trip-summary/${b.id}` : `/booking/${b.id}`;
+                                navigate(targetRoute, { state: { booking: b } });
                               }}
                               className={`rounded-full font-bold text-xs px-5 py-2.5 flex items-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-xs ${isPending
                                   ? 'bg-black hover:bg-zinc-800 text-white'
                                   : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
                                 }`}
                             >
-                              <span>View Trip</span>
+                              <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -3974,7 +4061,39 @@ export default function PassengerDashboard() {
         </div>
       )}
 
-      {/* Cancel Confirmation Dialog */}
+      {/* Real-World Production Cancellation Modal */}
+      <CancellationModal
+        isOpen={Boolean(activeCancelBooking)}
+        booking={activeCancelBooking}
+        onClose={() => setActiveCancelBooking(null)}
+        onCancelled={() => {
+          setActiveCancelBooking(null);
+          fetchBookings();
+        }}
+        onRequestRebook={() => {
+          setActiveRebookBooking(activeCancelBooking);
+          setActiveCancelBooking(null);
+        }}
+      />
+
+      {/* Rebooking / Modify Booking Modal */}
+      <RebookingModal
+        isOpen={Boolean(activeRebookBooking)}
+        booking={activeRebookBooking}
+        onClose={() => setActiveRebookBooking(null)}
+        onRebooked={() => {
+          setActiveRebookBooking(null);
+          fetchBookings();
+        }}
+      />
+
+      {/* Authoritative Cancellation Policy Modal */}
+      <CancellationPolicyModal
+        isOpen={showPolicyModal}
+        onClose={() => setShowPolicyModal(false)}
+      />
+
+      {/* Legacy Cancel Dialog Fallback */}
       <ConfirmDialog
         open={Boolean(confirmCancel)}
         loading={isCancelling}

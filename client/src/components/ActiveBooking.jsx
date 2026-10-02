@@ -34,6 +34,9 @@ import {
 import toast from 'react-hot-toast';
 import axios from '../api/axios';
 import vandeBharatCrisp from '../assets/images/vande-bharat-crisp.jpg';
+import CancellationModal from './cancellation/CancellationModal';
+import RebookingModal from './cancellation/RebookingModal';
+import CancellationPolicyModal from './cancellation/CancellationPolicyModal';
 import {
   getLocalChat,
   saveLocalChat,
@@ -185,43 +188,51 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     };
   }, [bookingUuid, bookingCode, onUpdate]);
 
-  // ── 3. Ratings & Feedback State ──
-  const savedRating = Number(localStorage.getItem(`rating_${booking?.id}`)) || booking?.rating || 0;
-  const savedReview = localStorage.getItem(`review_${booking?.id}`) || booking?.review || '';
-  const isAlreadySubmitted = Boolean(
-    booking?.rating ||
-    (savedRating > 0 && localStorage.getItem(`rated_${booking?.id}`) === 'true')
-  );
+  // ── 3. Ratings & Feedback State (Strictly Empty by Default, Database Backed) ──
+  const dbRating = booking?.rating ? Number(booking.rating) : null;
+  const dbReview = booking?.review || '';
+  const isAlreadySubmitted = Boolean(dbRating && dbRating >= 1 && dbRating <= 5);
 
-  const [rating, setRating] = useState(savedRating);
-  const [review, setReview] = useState(savedReview);
-  const [isSubmitted, setIsSubmitted] = useState(isAlreadySubmitted);
-  const [submittingRating, setSubmittingRating] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [rating, setRating] = useState(() => dbRating);
+  const [review, setReview] = useState(() => dbReview);
+  const [feedbackStatus, setFeedbackStatus] = useState(() => isAlreadySubmitted ? 'success' : 'idle'); // 'idle' | 'loading' | 'success' | 'error'
+  const [feedbackError, setFeedbackError] = useState('');
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [showRebookingModal, setShowRebookingModal] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [showSosModal, setShowSosModal] = useState(false);
   const [sosSent, setSosSent] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [redirectCountdown, setRedirectCountdown] = useState(5);
 
-  // ── 4. Derived Booking Details with Reference Defaults ──
+  // Sync if booking changes or loads fresh data from DB
+  useEffect(() => {
+    if (booking?.rating && Number(booking.rating) > 0) {
+      setRating(Number(booking.rating));
+      if (booking?.review) setReview(booking.review);
+      setFeedbackStatus('success');
+    }
+  }, [booking?.rating, booking?.review]);
+
+  // ── 4. Derived Booking Details (From Real Database Booking) ──
   const rawStatus = (booking?.booking_status || booking?.status || 'pending').toLowerCase();
   const isCompleted = rawStatus === 'completed';
   const isCancelled = rawStatus === 'cancelled';
+  const isInService = rawStatus === 'in_service';
+  const canCancel = !isCancelled && !isCompleted && !isInService;
   const isBoarding = !(booking?.action_type === 'collect_from_seat' || booking?.services?.action_type === 'collect_from_seat');
 
-  const trainNo = booking?.train_no || booking?.train_number || '20834';
-  const rawTrainName = booking?.train_name || 'Vande Bharat Express';
-  const fromStationName = booking?.from_station || 'Secunderabad';
-  const toStationName = booking?.to_station || 'Visakhapatnam';
-  const stationCode = booking?.station_code || 'KZJ';
-  const stationName = booking?.station_name || 'Kazipet Jn';
-  const destStationCode = 'VSKP';
+  const trainNo = booking?.train_no || booking?.train_number || 'Train';
+  const rawTrainName = booking?.train_name || 'Express';
+  const fromStationName = booking?.source || booking?.from_station || booking?.station_name || 'Origin';
+  const toStationName = booking?.destination || booking?.to_station || 'Destination';
+  const stationCode = booking?.station_code || booking?.source || '';
+  const stationName = booking?.station_name || fromStationName;
+  const destStationCode = booking?.destination || 'Destination';
 
   // Extract clean train name without duplicating the route / station names
-  // e.g., "Secunderabad - Visakhapatnam Vande Bharat Express" -> "Vande Bharat Express"
   const cleanTrainName = (() => {
     let name = (booking?.train_name || '').trim();
-    if (!name) return 'Vande Bharat Express';
+    if (!name) return 'Express';
 
     // Strip fromStation and toStation if present at start
     if (fromStationName && toStationName) {
@@ -233,16 +244,16 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     // Strip leading numbers
     name = name.replace(/^\d+\s*[-–—/]\s*/, '').trim();
 
-    return name || 'Vande Bharat Express';
+    return name || 'Express';
   })();
   const trainName = cleanTrainName;
 
-  const coach = booking?.coach || booking?.services?.coach || 'S4';
-  const seatNumber = booking?.seat_number || booking?.services?.seat_number || '42';
-  const berthType = booking?.berth_type || 'Side Lower';
+  const coach = booking?.coach || booking?.services?.coach || 'Unassigned';
+  const seatNumber = booking?.seat_number || booking?.services?.seat_number || 'Unassigned';
+  const berthType = booking?.berth_type || booking?.services?.berth_type || 'Berth';
   const serviceLabel = isBoarding ? 'Boarding Load' : 'Platform Assist';
-  const specialInstructions = booking?.special_instructions || booking?.notes || 'Boarding assistance at Kazipet Jn. Please help with luggage to seat.';
-  const fareAmount = booking?.total_price || booking?.amount || (isCompleted ? 30 : 70);
+  const specialInstructions = booking?.special_instructions || booking?.notes || booking?.service_description || 'Standard platform assistance';
+  const fareAmount = booking?.total_price ?? booking?.amount ?? 0;
   const paymentStatus = (booking?.payment_status || 'PAID').toUpperCase();
   const paymentMethod = booking?.payment_method || 'Online Payment';
 
@@ -419,7 +430,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     }
   };
 
-  const bookingCreationTime = formatTimeHHMM(booking?.created_at) || '14:35';
+  const bookingCreationTime = formatTimeHHMM(booking?.created_at) || '--:--';
   const bookingCreationDate = booking?.created_at
     ? (() => {
       try {
@@ -429,14 +440,14 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
         const year = d.getFullYear();
         return `${day} ${month} ${year}`;
       } catch (e) {
-        return '06 Sep 2026';
+        return 'Today';
       }
     })()
-    : '06 Sep 2026';
+    : 'Today';
 
   const paidOnFormatted = booking?.created_at
     ? `${bookingCreationDate}, ${bookingCreationTime}`
-    : '06 Sep 2026, 14:35';
+    : 'Confirmed';
 
   const journeyDateFormatted = booking?.journey_date
     ? (() => {
@@ -447,10 +458,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
         const year = d.getFullYear();
         return `${day} ${month} ${year}`;
       } catch (e) {
-        return '06 Sep 2026';
+        return 'Scheduled';
       }
     })()
-    : '06 Sep 2026';
+    : 'Scheduled';
 
   const journeyWeekday = booking?.journey_date
     ? (() => {
@@ -458,10 +469,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
         const d = new Date(booking.journey_date);
         return d.toLocaleDateString('en-US', { weekday: 'long' });
       } catch (e) {
-        return 'Sunday';
+        return 'Journey Day';
       }
     })()
-    : 'Sunday';
+    : 'Journey Day';
 
   // Assistant Allocated Status
   const hasAssignedAssistant = Boolean(
@@ -471,6 +482,8 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     rawStatus !== 'pending'
   );
 
+  const assistantName = booking?.assistant?.name || 'Assigned Assistant';
+
   const assistantBookingsCount =
     booking?.assistant?.completed_jobs ??
     booking?.assistant?.total_completed ??
@@ -479,16 +492,17 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     booking?.assistant?.bookings_count ??
     booking?.assistant?.bookings_done ??
     booking?.assistant?.jobs ??
-    142;
+    0;
 
-  const assistantRating =
-    Number(booking?.assistant?.rating || booking?.assistant_rating || 4.9).toFixed(1);
+  const assistantRating = booking?.assistant?.rating
+    ? Number(booking.assistant.rating).toFixed(1)
+    : null;
 
   const assistantReviewsCount =
     booking?.assistant?.reviews_count ||
     booking?.assistant?.total_reviews ||
     booking?.assistant?.ratings_count ||
-    128;
+    0;
 
   // ── 5. Status Milestone Steps (Strictly as Ordered) ──
   // 1. Booking Confirmed (MUST be first)
@@ -500,15 +514,15 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   const isServiceDone = rawStatus === 'completed';
 
   const assignedTime = isAssigned
-    ? formatTimeHHMM(booking?.accepted_at || booking?.services?.accepted_at || booking?.updated_at) || '14:40'
+    ? formatTimeHHMM(booking?.accepted_at || booking?.services?.accepted_at || booking?.updated_at) || '--:--'
     : '--:--';
 
   const reachedTime = isReached
-    ? formatTimeHHMM(booking?.arrived_at || booking?.services?.arrived_at) || '14:52'
+    ? formatTimeHHMM(booking?.arrived_at || booking?.services?.arrived_at) || '--:--'
     : '--:--';
 
   const completedTime = isServiceDone
-    ? formatTimeHHMM(booking?.completed_at || booking?.services?.completed_at) || '15:15'
+    ? formatTimeHHMM(booking?.completed_at || booking?.services?.completed_at) || '--:--'
     : '--:--';
 
   const steps = [
@@ -579,55 +593,50 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   };
 
   const submitRating = async () => {
-    if (rating === 0) {
-      toast.error('Please tap a star to rate your assistant.');
+    if (!rating || rating < 1 || rating > 5) {
+      toast.error('Please select a rating.');
       return;
     }
-    setSubmittingRating(true);
-    clearLocalChat(bookingUuid, bookingCode);
-    localStorage.setItem(`rated_${booking?.id}`, 'true');
-    localStorage.setItem(`rating_${booking?.id}`, String(rating));
-    if (review) localStorage.setItem(`review_${booking?.id}`, review);
-    setIsSubmitted(true);
+    setFeedbackStatus('loading');
+    setFeedbackError('');
 
     const targetId = bookingUuid || booking?.id;
     try {
-      if (targetId) {
-        await axios.post(`/bookings/${targetId}/rate`, { rating, review }).catch(() => { });
+      const payload = {
+        passengerId: booking?.passenger_id || booking?.passenger?.id,
+        bookingId: booking?.id || bookingUuid,
+        assistantId: booking?.assistant_id || booking?.assistant?.id,
+        rating: Number(rating),
+        comment: review.trim(),
+        review: review.trim()
+      };
+      const { data } = await axios.post(`/bookings/${targetId}/rate`, payload);
+      setFeedbackStatus('success');
+      toast.success('Feedback submitted successfully!');
+      if (data?.booking) {
+        onUpdate?.(data.booking);
       }
-      toast.success('Thank you for your rating!');
-      setShowCompletionModal(true);
-      setRedirectCountdown(5);
     } catch (e) {
-      toast.success('Feedback saved.');
-      setShowCompletionModal(true);
-      setRedirectCountdown(5);
-    } finally {
-      setSubmittingRating(false);
+      console.error('Failed to submit rating:', e);
+      setFeedbackStatus('error');
+      const msg = e.response?.data?.message || 'Unable to submit feedback. Please try again.';
+      setFeedbackError(msg);
+      toast.error(msg);
     }
   };
 
-  useEffect(() => {
-    if (!showCompletionModal) return;
-    if (redirectCountdown <= 0) {
-      setShowCompletionModal(false);
-      navigate('/dashboard');
-      return;
-    }
-    const timer = setTimeout(() => {
-      setRedirectCountdown((c) => c - 1);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [showCompletionModal, redirectCountdown, navigate]);
-
   const handleCancel = async () => {
+    if (isCancelling || !canCancel) return;
+    setIsCancelling(true);
     try {
       const { data } = await axios.post(`/bookings/${booking.id}/cancel`);
       onUpdate?.(data.booking || data);
       setShowCancelModal(false);
-      toast.success('Booking cancelled successfully.');
+      toast.success(data?.message || 'Booking cancelled successfully.');
     } catch (err) {
-      toast.error('Unable to cancel booking.');
+      toast.error(err.response?.data?.message || 'Unable to cancel booking.');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -926,10 +935,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowCompletionModal(true);
-                    setRedirectCountdown(5);
+                    const targetId = booking?.id || booking?.booking_id || bookingUuid;
+                    if (targetId) navigate(`/trip-summary/${targetId}`);
                   }}
-                  className="px-3 py-1 rounded-full bg-[#059669] text-white text-xs font-bold shrink-0 cursor-pointer hover:bg-[#047857] transition-colors"
+                  className="px-3.5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold shrink-0 cursor-pointer transition-colors shadow-xs"
                 >
                   View Summary
                 </button>
@@ -1245,50 +1254,127 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                   <h4 className="text-xs sm:text-sm font-extrabold text-zinc-900">
                     Rate Your Journey Assistant
                   </h4>
-                  {isSubmitted && (
-                    <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                      ✓ Feedback Submitted
+                  {feedbackStatus === 'success' && (
+                    <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60 inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>✓ Feedback Submitted</span>
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      disabled={isSubmitted}
-                      onClick={() => setRating(star)}
-                      className="p-1 text-zinc-300 hover:text-amber-400 transition-colors disabled:cursor-default"
-                    >
-                      <Star
-                        className={`w-6 h-6 ${star <= (rating || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
-                          }`}
-                      />
-                    </button>
-                  ))}
-                  <span className="text-xs font-bold text-zinc-900 ml-2">
-                    {rating > 0 ? `${rating} / 5` : 'Tap to rate'}
-                  </span>
-                </div>
+                {feedbackStatus === 'success' ? (
+                  <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                    <p className="text-xs text-zinc-600 font-medium">Thank you for your feedback.</p>
+                    <div>
+                      <span className="text-[10px] font-extrabold text-zinc-400 block uppercase tracking-wider mb-1">
+                        Rating:
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`w-5 h-5 ${
+                              rating && star <= rating
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-200'
+                            }`}
+                          />
+                        ))}
+                        <span className="text-xs font-black text-zinc-800 ml-2">
+                          {rating} / 5
+                        </span>
+                      </div>
+                    </div>
 
-                {!isSubmitted && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={review}
-                      onChange={(e) => setReview(e.target.value)}
-                      placeholder="Optional feedback..."
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      disabled={submittingRating}
-                      onClick={submitRating}
-                      className="bg-black hover:bg-zinc-800 text-white font-bold px-4 py-2 rounded-full text-xs transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      Submit
-                    </button>
+                    {review && (
+                      <div>
+                        <span className="text-[10px] font-extrabold text-zinc-400 block uppercase tracking-wider mb-1">
+                          Your Feedback:
+                        </span>
+                        <p className="text-xs text-zinc-800 font-medium bg-white/90 p-2.5 rounded-xl border border-emerald-100/90 leading-relaxed">
+                          {review}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="pt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/dashboard?tab=trips')}
+                        className="px-4 py-2 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Briefcase className="w-3.5 h-3.5" />
+                        <span>Back to My Trips</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetId = booking?.id || booking?.booking_id || bookingUuid;
+                          if (targetId) navigate(`/trip-summary/${targetId}`);
+                        }}
+                        className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-zinc-900 font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        <span>View Summary</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          disabled={feedbackStatus === 'loading'}
+                          onClick={() => setRating(star)}
+                          className="p-1 text-slate-200 hover:text-amber-400 transition-colors cursor-pointer disabled:cursor-default"
+                          title={`${star} Star`}
+                        >
+                          <Star
+                            className={`w-6 h-6 transition-all ${
+                              rating && star <= rating
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-300 hover:text-amber-400'
+                            }`}
+                          />
+                        </button>
+                      ))}
+                      <span className="text-xs font-bold text-zinc-700 ml-2">
+                        {rating ? `${rating} / 5` : '☆ Tap to rate'}
+                      </span>
+                    </div>
+
+                    {feedbackError && (
+                      <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+                        {feedbackError}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={review}
+                        onChange={(e) => setReview(e.target.value)}
+                        placeholder="Optional feedback..."
+                        disabled={feedbackStatus === 'loading'}
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs focus:outline-none focus:border-black"
+                      />
+                      <button
+                        type="button"
+                        disabled={feedbackStatus === 'loading'}
+                        onClick={submitRating}
+                        className="bg-black hover:bg-zinc-800 text-white font-bold px-5 py-2 rounded-full text-xs transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
+                      >
+                        {feedbackStatus === 'loading' ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <span>Submitting...</span>
+                          </>
+                        ) : (
+                          <span>Submit</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1375,14 +1461,34 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
           {/* Action Links: Cancel & SOS (Preserved functionality) */}
           {!isCompleted && !isCancelled && (
             <div className="flex items-center justify-center gap-4 text-xs font-semibold px-2">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(true)}
-                className="text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
-              >
-                Cancel Booking
-              </button>
-              <span className="text-zinc-300">•</span>
+              {canCancel && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowCancellationModal(true)}
+                    className="text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
+                  >
+                    Cancel Booking
+                  </button>
+                  <span className="text-zinc-300">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowRebookingModal(true)}
+                    className="text-zinc-400 hover:text-[#1463FF] transition-colors cursor-pointer"
+                  >
+                    Change / Rebook
+                  </button>
+                  <span className="text-zinc-300">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPolicyModal(true)}
+                    className="text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer"
+                  >
+                    Cancellation Policy
+                  </button>
+                  <span className="text-zinc-300">•</span>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => setShowSosModal(true)}
@@ -1395,35 +1501,35 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
         </div>
       </div>
 
-      {/* ── Cancel Dialog Modal ── */}
-      {showCancelModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 text-center shadow-xl border border-slate-200">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <h4 className="text-base font-extrabold text-zinc-900">Cancel This Booking?</h4>
-            <p className="text-xs text-zinc-500">
-              Are you sure you want to cancel your assistance booking for Train {trainNo}?
-            </p>
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(false)}
-                className="flex-1 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 font-bold text-xs cursor-pointer"
-              >
-                Keep Booking
-              </button>
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="flex-1 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer shadow-xs"
-              >
-                Yes, Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* ── Real Production Cancellation Modal ── */}
+      {showCancellationModal && (
+        <CancellationModal
+          booking={booking}
+          onClose={() => setShowCancellationModal(false)}
+          onSuccess={(cancelledBooking) => {
+            onUpdate?.(cancelledBooking);
+          }}
+          onRequestRebook={() => {
+            setShowCancellationModal(false);
+            setShowRebookingModal(true);
+          }}
+        />
+      )}
+
+      {/* ── Real Production Rebooking Modal ── */}
+      {showRebookingModal && (
+        <RebookingModal
+          booking={booking}
+          onClose={() => setShowRebookingModal(false)}
+          onSuccess={(updatedBooking) => {
+            onUpdate?.(updatedBooking);
+          }}
+        />
+      )}
+
+      {/* ── Cancellation Policy Modal ── */}
+      {showPolicyModal && (
+        <CancellationPolicyModal onClose={() => setShowPolicyModal(false)} />
       )}
 
       {/* ── SOS Dialog Modal ── */}
@@ -1563,23 +1669,32 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
               </div>
             </div>
 
-            {/* Action Button: Return to Dashboard */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowCompletionModal(false);
-                navigate('/dashboard');
-              }}
-              className="w-full bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-black py-3.5 px-6 rounded-full text-sm shadow-lg shadow-[#1463FF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer mb-2"
-            >
-              <span>Return to Dashboard</span>
-              <ArrowRight size={16} />
-            </button>
-
-            {/* Auto Redirect Countdown */}
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium">
-              Redirecting automatically in <span className="font-mono font-bold text-zinc-700 dark:text-zinc-300">{redirectCountdown}s</span>...
-            </p>
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompletionModal(false);
+                  const targetId = booking?.id || booking?.booking_id || bookingUuid;
+                  if (targetId) navigate(`/trip-summary/${targetId}`);
+                  else navigate('/dashboard?tab=trips');
+                }}
+                className="w-full bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-black py-3.5 px-6 rounded-full text-xs shadow-lg shadow-[#1463FF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>View Complete Summary</span>
+                <ArrowRight size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompletionModal(false);
+                  navigate('/dashboard?tab=trips');
+                }}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-zinc-700 font-bold py-2.5 px-6 rounded-full text-xs transition-colors cursor-pointer"
+              >
+                <span>Back to My Trips</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

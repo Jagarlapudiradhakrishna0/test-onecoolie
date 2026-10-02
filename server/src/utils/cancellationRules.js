@@ -1,31 +1,145 @@
 /**
  * server/src/utils/cancellationRules.js
  *
- * Centralized Cancellation & Refund Rules Engine for ONECOOLIE (Phase 3A)
+ * Centralized Cancellation & Refund Rules Engine for ONECOOLIE
  *
- * Enforces Option C business rules across all lifecycle stages:
- * - Cash bookings before collection: cancel booking & payment, NO gateway refund.
- * - Cash bookings after collection: passenger self-cancellation rejected.
- * - Online bookings pending: cancel booking & payment, NO gateway refund.
- * - Online bookings paid before acceptance: 100% gateway refund.
- * - Online bookings paid after acceptance (accepted/arriving): configurable refund (default 100%).
- * - Service in_service: passenger self-cancellation strictly rejected.
- * - Service completed: cancellation strictly rejected.
- * - Already cancelled: idempotent rejection / acknowledgement.
+ * Implements real-world production cancellation and refund policies:
+ *
+ * CASE 1 — ASSISTANT NOT YET ASSIGNED:
+ * - 100% refund under configured unassigned cancellation policy.
+ * - ₹0 cancellation charge.
+ * - Reason required with selectable categories.
+ *
+ * CASE 2 — ASSISTANT ALREADY ASSIGNED:
+ * - Option to Change Booking (rebook) or Cancel.
+ * - Genuine/Eligible travel disruption reasons: 100% refund (configurable).
+ * - Voluntary cancellation ("I simply want to cancel"): 70% refund, 30% cancellation charge.
+ *
+ * PAYMENT METHODS:
+ * - COD: 0 gateway refund call. Recorded in payment & booking ledger.
+ * - Online (Razorpay/Cashfree): Gateway refund executed for calculated refund amount.
+ * - Service in_service / completed: Cancellation strictly disallowed.
  */
 
 const { isCashPayment, isOnlinePayment } = require('./paymentClassification');
 
-// Policy constants (configurable)
-const PASSENGER_CANCEL_BEFORE_ACCEPT_REFUND_PERCENT = 100;
-const PASSENGER_CANCEL_AFTER_ACCEPT_REFUND_PERCENT = 100;
+// Configurable Policy Percentages (Source of truth)
+const UNASSIGNED_REFUND_PERCENTAGE = 100;
+const ASSIGNED_ASSISTANT_VALID_REASON_REFUND_PERCENTAGE = 100;
+const ASSIGNED_ASSISTANT_VOLUNTARY_REFUND_PERCENTAGE = 70;
+const VOLUNTARY_CANCELLATION_CHARGE_PERCENTAGE = 30;
+
+const CANCELLATION_POLICY_CONFIG = {
+  UNASSIGNED_REFUND_PERCENTAGE,
+  ASSIGNED_ASSISTANT_VALID_REASON_REFUND_PERCENTAGE,
+  ASSIGNED_ASSISTANT_VOLUNTARY_REFUND_PERCENTAGE,
+  VOLUNTARY_CANCELLATION_CHARGE_PERCENTAGE
+};
+
+// Legacy aliases for backward compatibility with previous services
+const PASSENGER_CANCEL_BEFORE_ACCEPT_REFUND_PERCENT = UNASSIGNED_REFUND_PERCENTAGE;
+const PASSENGER_CANCEL_AFTER_ACCEPT_REFUND_PERCENT = ASSIGNED_ASSISTANT_VALID_REASON_REFUND_PERCENTAGE;
+
+// ── Selectable Reason Categories ──
+const UNASSIGNED_REASONS = [
+  { id: 'TRAIN_CANCELLED', label: 'Train cancelled', isEligible: true },
+  { id: 'TRAIN_SCHEDULE_CHANGED', label: 'Train schedule changed', isEligible: true },
+  { id: 'JOURNEY_DATE_CHANGED', label: 'Journey date changed', isEligible: true },
+  { id: 'JOURNEY_TIME_CHANGED', label: 'Journey time changed', isEligible: true },
+  { id: 'DESTINATION_CHANGED', label: 'Destination changed', isEligible: true },
+  { id: 'DUPLICATE_BOOKING', label: 'Duplicate booking', isEligible: true },
+  { id: 'BOOKED_BY_MISTAKE', label: 'Booked by mistake', isEligible: true },
+  { id: 'PERSONAL_EMERGENCY', label: 'Personal emergency', isEligible: true },
+  { id: 'CHANGE_OF_PLANS', label: 'Change of travel plans', isEligible: true },
+  { id: 'OTHER', label: 'Other', isEligible: true, requiresDetails: true },
+];
+
+const ASSIGNED_REASONS = [
+  { id: 'TRAIN_CANCELLED', label: 'Train cancelled', isEligible: true },
+  { id: 'TRAIN_SCHEDULE_CHANGED', label: 'Train schedule changed', isEligible: true },
+  { id: 'JOURNEY_DATE_CHANGED', label: 'Journey date changed', isEligible: true },
+  { id: 'JOURNEY_TIME_CHANGED', label: 'Journey time changed', isEligible: true },
+  { id: 'DESTINATION_CHANGED', label: 'Destination changed', isEligible: true },
+  { id: 'PERSONAL_EMERGENCY', label: 'Emergency', isEligible: true },
+  { id: 'DUPLICATE_BOOKING', label: 'Duplicate booking', isEligible: true },
+  { id: 'BOOKED_BY_MISTAKE', label: 'Booking made by mistake', isEligible: true },
+  { id: 'OTHER_GENUINE', label: 'Other genuine travel reason', isEligible: true, requiresDetails: true },
+  { id: 'VOLUNTARY_CANCEL', label: 'I simply want to cancel', isEligible: false },
+];
+
+/**
+ * Validates text explanation for "Other" reasons against gibberish or spam.
+ */
+function isMeaningfulReason(text) {
+  if (!text || typeof text !== 'string') return false;
+  const clean = text.trim();
+  if (clean.length < 10) return false;
+
+  // Check repeating characters (e.g. "aaaaa", "1111111111")
+  if (/^(.)\1+$/.test(clean)) return false;
+
+  // Check repeating 2-char pattern (e.g. "ababababab")
+  if (/^(.{2})\1+$/.test(clean)) return false;
+
+  // Check common keyboard mash patterns
+  const lower = clean.toLowerCase();
+  const mashPatterns = [
+    'asdf', 'hjkl', 'qwerty', 'zxcv', '12345', 'test test', 'none', 'nothing', 'blah'
+  ];
+  if (mashPatterns.some(p => lower === p || lower.replace(/[^a-z0-9]/g, '') === p)) {
+    return false;
+  }
+
+  // Detect substrings like asdf, qwerty, zxcv, hjkl mash
+  if (mashPatterns.some(p => p.length >= 4 && lower.includes(p))) {
+    return false;
+  }
+
+  // Ensure reasonable character variety
+  const uniqueChars = new Set(clean.toLowerCase().replace(/\s+/g, ''));
+  if (uniqueChars.size < 4) return false;
+
+  return true;
+}
+
+/**
+ * Validates incoming cancellation reason payload.
+ */
+function validateCancellationReason(reasonCategory, reasonDetails, isAssigned) {
+  if (!reasonCategory || typeof reasonCategory !== 'string') {
+    return {
+      isValid: false,
+      message: 'Please select a reason for your cancellation.'
+    };
+  }
+
+  const validIds = isAssigned
+    ? ASSIGNED_REASONS.map((r) => r.id)
+    : UNASSIGNED_REASONS.map((r) => r.id);
+
+  // Allow either set for robust client backward-compatibility
+  const allKnownIds = [...new Set([...UNASSIGNED_REASONS.map(r => r.id), ...ASSIGNED_REASONS.map(r => r.id)])];
+  if (!allKnownIds.includes(reasonCategory)) {
+    return {
+      isValid: false,
+      message: 'Invalid cancellation reason category selected.'
+    };
+  }
+
+  if (reasonCategory === 'OTHER' || reasonCategory === 'OTHER_GENUINE') {
+    if (!isMeaningfulReason(reasonDetails)) {
+      return {
+        isValid: false,
+        message: 'Please provide a meaningful explanation for your cancellation reason (at least 10 characters).'
+      };
+    }
+  }
+
+  return { isValid: true };
+}
 
 /**
  * Evaluates whether a passenger is permitted to cancel the booking.
- *
- * @param {object} booking - Booking row
- * @param {object} [payment] - Associated payment row
- * @returns {{ allowed: boolean, isAlreadyCancelled?: boolean, reason?: string }}
  */
 function canPassengerCancel(booking, payment) {
   if (!booking) {
@@ -53,15 +167,15 @@ function canPassengerCancel(booking, payment) {
     };
   }
 
-  // 3. Cash booking rule: once cash has been collected, self-cancellation is disallowed
+  // 3. Cash booking rule: once cash has been collected by assistant, self-cancellation is disallowed
   if (isCashPayment(paymentMethod) && paymentStatus === 'paid') {
     return {
       allowed: false,
-      reason: 'Cash payment has already been collected by the assistant. Please contact support or admin for assistance.'
+      reason: 'Cash payment has already been collected by the assistant. Cancellations are not permitted.'
     };
   }
 
-  // 4. In-service bookings cannot be self-cancelled by passenger
+  // 4. In-service bookings cannot be cancelled
   if (bookingStatus === 'in_service') {
     return {
       allowed: false,
@@ -69,42 +183,19 @@ function canPassengerCancel(booking, payment) {
     };
   }
 
-  // 5. Cash booking rules (pending payment)
-  if (isCashPayment(paymentMethod)) {
-    if (['pending', 'accepted', 'arriving'].includes(bookingStatus)) {
-      return { allowed: true };
-    }
-    return {
-      allowed: false,
-      reason: `Cash booking cannot be cancelled at '${bookingStatus}' stage.`
-    };
+  // Allowed from: pending, accepted, arriving
+  if (['pending', 'accepted', 'arriving'].includes(bookingStatus)) {
+    return { allowed: true };
   }
 
-  // 5. Online payment rules
-  if (isOnlinePayment(paymentMethod)) {
-    // Online bookings at pending, accepted, or arriving can be cancelled
-    if (['pending', 'accepted', 'arriving'].includes(bookingStatus)) {
-      return { allowed: true };
-    }
-    return {
-      allowed: false,
-      reason: `Online booking cannot be cancelled at '${bookingStatus}' stage.`
-    };
-  }
-
-  // Fallback
   return {
-    allowed: ['pending', 'accepted', 'arriving'].includes(bookingStatus),
-    reason: 'Booking cannot be cancelled at this stage.'
+    allowed: false,
+    reason: `Booking cannot be cancelled at '${bookingStatus}' stage.`
   };
 }
 
 /**
  * Evaluates whether an assistant is permitted to cancel/release an assigned booking.
- *
- * @param {object} booking
- * @param {string} assistantUserId
- * @returns {{ allowed: boolean, reason?: string }}
  */
 function canAssistantCancel(booking, assistantUserId) {
   if (!booking) {
@@ -127,106 +218,140 @@ function canAssistantCancel(booking, assistantUserId) {
 }
 
 /**
- * Evaluates whether an admin can cancel the booking.
- *
- * @param {object} booking
- * @returns {{ allowed: boolean, isAlreadyCancelled?: boolean, reason?: string }}
+ * Authoritatively calculates refund amounts and charges based on assignment & reasons.
  */
-function canAdminCancel(booking) {
-  if (!booking) {
-    return { allowed: false, reason: 'Booking not found.' };
+function calculateCancellationRefund(booking, payment, reasonCategory = '', reasonDetails = '') {
+  const originalAmount = Number(payment?.amount || booking?.total_price || 0);
+  const isAssigned = Boolean(
+    booking?.assistant_id &&
+    ['accepted', 'arriving'].includes(String(booking?.booking_status || '').toLowerCase())
+  );
+  const paymentMethod = booking?.payment_method || 'cash';
+  const isCash = isCashPayment(paymentMethod);
+  const paymentStatus = String(payment?.status || booking?.payment_status || '').toLowerCase();
+
+  let refundPercent = 100;
+  let cancellationChargePercent = 0;
+  let reasonNote = '';
+  let isEligible = true;
+
+  if (!isAssigned) {
+    // Case 1: Assistant NOT yet assigned
+    refundPercent = UNASSIGNED_REFUND_PERCENTAGE; // 100%
+    cancellationChargePercent = 0;
+    reasonNote = 'Eligible cancellation before assistant assignment receives a 100% refund according to payment method.';
+  } else {
+    // Case 2B: Assistant assigned
+    const isVoluntary = reasonCategory === 'VOLUNTARY_CANCEL';
+
+    if (isVoluntary) {
+      refundPercent = ASSIGNED_ASSISTANT_VOLUNTARY_REFUND_PERCENTAGE; // 70%
+      cancellationChargePercent = VOLUNTARY_CANCELLATION_CHARGE_PERCENTAGE; // 30%
+      reasonNote = 'Voluntary cancellation after assistant assignment applies a 30% cancellation charge and 70% refund.';
+      isEligible = false;
+    } else {
+      refundPercent = ASSIGNED_ASSISTANT_VALID_REASON_REFUND_PERCENTAGE; // 100%
+      cancellationChargePercent = 100 - refundPercent; // 0%
+      reasonNote = 'Eligible cancellation with valid travel disruption reason receives a 100% refund.';
+      isEligible = true;
+    }
   }
 
-  if (String(booking.booking_status || '').toLowerCase() === 'cancelled') {
-    return {
-      allowed: false,
-      isAlreadyCancelled: true,
-      reason: 'Booking is already cancelled.'
-    };
+  const refundAmount = Math.round((originalAmount * refundPercent) / 100 * 100) / 100;
+  const cancellationCharge = Math.round((originalAmount * cancellationChargePercent) / 100 * 100) / 100;
+
+  let requiresGatewayRefund = false;
+  if (!isCash && paymentStatus === 'paid' && refundAmount > 0) {
+    requiresGatewayRefund = true;
   }
 
-  return { allowed: true };
+  return {
+    isAssigned,
+    isEligible,
+    originalAmount,
+    refundPercent,
+    cancellationChargePercent,
+    refundAmount,
+    cancellationCharge,
+    requiresGatewayRefund,
+    isCash,
+    reasonNote,
+    policyNotice: isCash
+      ? 'COD Booking: No online gateway deduction. Any cancellation charges are reconciled in your account summary.'
+      : 'Online Booking: Refund will be routed via the originating payment gateway (Razorpay/Cashfree).'
+  };
 }
 
 /**
- * Authoritatively determines refund eligibility and calculation.
- *
- * @param {object} booking
- * @param {object} [payment]
- * @param {string} [actorRole='passenger']
- * @returns {{
- *   requiresRefund: boolean,
- *   refundPercent: number,
- *   refundAmount: number,
- *   originalAmount: number,
- *   reason: string
- * }}
+ * Backward-compatible wrapper for existing controllers.
  */
-function determineRefundEligibility(booking, payment, actorRole = 'passenger') {
-  const originalAmount = Number(payment?.amount || booking.total_price || 0);
-  const paymentMethod = booking.payment_method;
-  const paymentStatus = String(payment?.status || booking.payment_status || '').toLowerCase();
-  const bookingStatus = String(booking.booking_status || '').toLowerCase();
+function determineRefundEligibility(booking, payment, actorRole = 'passenger', reasonCategory = '') {
+  const calc = calculateCancellationRefund(booking, payment, reasonCategory);
+  return {
+    requiresRefund: calc.requiresGatewayRefund,
+    refundPercent: calc.refundPercent,
+    refundAmount: calc.refundAmount,
+    originalAmount: calc.originalAmount,
+    cancellationCharge: calc.cancellationCharge,
+    reason: calc.reasonNote
+  };
+}
 
-  // 1. Cash bookings never produce gateway refunds
-  if (isCashPayment(paymentMethod)) {
+/**
+ * Evaluates whether an already assigned assistant is compatible with modified journey details.
+ * If station or journey date changes, existing assignment must be released for reassignment.
+ */
+function evaluateAssistantAssignmentForRebooking(originalBooking, updatedDetails = {}) {
+  if (!originalBooking?.assistant_id) {
     return {
-      requiresRefund: false,
-      refundPercent: 0,
-      refundAmount: 0,
-      originalAmount,
-      reason: 'Cash booking does not require gateway refund.'
+      canKeepAssistant: true,
+      requiresReassignment: false,
+      reason: 'No assistant currently assigned.'
     };
   }
 
-  // 2. Online bookings where payment was never completed / still pending
-  if (isOnlinePayment(paymentMethod) && paymentStatus !== 'paid') {
+  const { station_code, journey_date } = updatedDetails;
+  const stationChanged = Boolean(station_code && originalBooking.station_code && station_code.trim().toUpperCase() !== originalBooking.station_code.trim().toUpperCase());
+  const dateChanged = Boolean(journey_date && originalBooking.journey_date && journey_date.trim() !== originalBooking.journey_date.trim());
+
+  if (stationChanged) {
     return {
-      requiresRefund: false,
-      refundPercent: 0,
-      refundAmount: 0,
-      originalAmount,
-      reason: 'Online payment was not captured or is pending. No gateway refund required.'
+      canKeepAssistant: false,
+      requiresReassignment: true,
+      reason: `Station changed from ${originalBooking.station_code} to ${station_code}. Assistant operates only at original station.`
     };
   }
 
-  // 3. Online bookings that have been verified and paid
-  if (isOnlinePayment(paymentMethod) && paymentStatus === 'paid') {
-    let refundPercent = 100;
-
-    if (bookingStatus === 'pending') {
-      // Unassigned job: full refund
-      refundPercent = PASSENGER_CANCEL_BEFORE_ACCEPT_REFUND_PERCENT;
-    } else if (['accepted', 'arriving'].includes(bookingStatus)) {
-      // Assigned sahayak but not in-service: configurable refund percentage
-      refundPercent = PASSENGER_CANCEL_AFTER_ACCEPT_REFUND_PERCENT;
-    }
-
-    const calculated = Math.round((originalAmount * refundPercent) / 100 * 100) / 100;
-
+  if (dateChanged) {
     return {
-      requiresRefund: calculated > 0,
-      refundPercent,
-      refundAmount: calculated,
-      originalAmount,
-      reason: `Verified online payment cancellation refund (${refundPercent}%).`
+      canKeepAssistant: false,
+      requiresReassignment: true,
+      reason: `Date changed from ${originalBooking.journey_date} to ${journey_date}. Reassignment required for revised schedule.`
     };
   }
 
   return {
-    requiresRefund: false,
-    refundPercent: 0,
-    refundAmount: 0,
-    originalAmount,
-    reason: 'Payment method or status not eligible for gateway refund.'
+    canKeepAssistant: true,
+    requiresReassignment: false,
+    reason: 'Assistant remains compatible with updated coach/seat details on the same schedule.'
   };
 }
 
 module.exports = {
+  CANCELLATION_POLICY_CONFIG,
+  UNASSIGNED_REFUND_PERCENTAGE,
+  ASSIGNED_ASSISTANT_VALID_REASON_REFUND_PERCENTAGE,
+  ASSIGNED_ASSISTANT_VOLUNTARY_REFUND_PERCENTAGE,
+  VOLUNTARY_CANCELLATION_CHARGE_PERCENTAGE,
   PASSENGER_CANCEL_BEFORE_ACCEPT_REFUND_PERCENT,
   PASSENGER_CANCEL_AFTER_ACCEPT_REFUND_PERCENT,
+  UNASSIGNED_REASONS,
+  ASSIGNED_REASONS,
+  isMeaningfulReason,
+  validateCancellationReason,
   canPassengerCancel,
   canAssistantCancel,
-  canAdminCancel,
-  determineRefundEligibility
+  calculateCancellationRefund,
+  determineRefundEligibility,
+  evaluateAssistantAssignmentForRebooking
 };

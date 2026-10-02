@@ -188,6 +188,17 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     arrived_at: booking.arrived_at || booking.services?.arrived_at || (['arriving', 'in_service', 'completed'].includes(booking.booking_status) ? (booking.services?.arrived_at || booking.updated_at) : null),
     service_started_at: booking.service_started_at || booking.services?.in_service_at || booking.services?.service_started_at || null,
     completed_at: booking.completed_at || booking.services?.completed_at || null,
+
+    // ─── Cancellation & Rebooking Metadata ──────────────────────────────────
+    cancellation_reason_category: booking.cancellation_reason_category || booking.services?.cancellation?.reason_category || null,
+    cancellation_reason_details: booking.cancellation_reason_details || booking.services?.cancellation?.reason_details || null,
+    refund_percentage: booking.refund_percentage ?? booking.services?.cancellation?.refund_percentage ?? null,
+    refund_amount: booking.refund_amount ?? booking.services?.cancellation?.refund_amount ?? null,
+    cancellation_charge: booking.cancellation_charge ?? booking.services?.cancellation?.cancellation_charge ?? null,
+    cancelled_by: booking.cancelled_by || booking.services?.cancellation?.cancelled_by || null,
+    cancelled_at: booking.cancelled_at || booking.services?.cancellation?.cancelled_at || null,
+    refund_status: booking.refund_status || booking.services?.cancellation?.refund_status || null,
+    rebooking: booking.services?.rebooking || null,
   };
 
   return formatted;

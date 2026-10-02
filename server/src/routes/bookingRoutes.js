@@ -5,7 +5,12 @@ const {
     createBooking,
     getMyBookings,
     getBookingById,
+    getBookingSummary,
+    getCancellationPolicy,
+    getCancelQuote,
     cancelBooking,
+    rebookQuote,
+    rebookBooking,
     assignAssistant,
     processPayment,
     updateBooking,
@@ -14,11 +19,20 @@ const {
 
 const { bookingCancellationLimiter } = require('../middleware/financialRateLimiter');
 
+// Policy route (unparameterized)
+router.get('/cancellation-policy', getCancellationPolicy);
+
 router.post('/', protect, createBooking);
 router.get('/my-bookings', protect, getMyBookings);
+router.get('/:id/summary', protect, getBookingSummary);
 router.get('/:id', protect, getBookingById);
 router.put('/:id', protect, updateBooking);
+
+// Cancellation & Rebooking Routes
+router.post('/:id/cancel-quote', protect, getCancelQuote);
 router.post('/:id/cancel', bookingCancellationLimiter, protect, cancelBooking);
+router.post('/:id/rebook-quote', protect, rebookQuote);
+router.post('/:id/rebook', protect, rebookBooking);
 
 // ONECOOLIE Backend Pipeline Routes
 router.put('/:id/assign', protect, assignAssistant);

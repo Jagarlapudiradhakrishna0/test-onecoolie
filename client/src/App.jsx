@@ -21,6 +21,7 @@ const PassengerDashboard = lazy(() => import('./pages/PassengerDashboard'));
 const AssistantDashboard = lazy(() => import('./pages/AssistantDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const BookingLive = lazy(() => import('./pages/BookingLive'));
+const TripSummaryPage = lazy(() => import('./pages/TripSummaryPage'));
 const HelpSupportPage = lazy(() => import('./pages/HelpSupportPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 
@@ -210,6 +211,18 @@ export default function App() {
                   allowedRoles={['passenger']}
                 >
                   <BookingLive />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Passenger Trip Summary */}
+            <Route
+              path="/trip-summary/:bookingId"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['passenger']}
+                >
+                  <TripSummaryPage />
                 </ProtectedRoute>
               }
             />
