@@ -418,6 +418,54 @@ export default function PassengerDashboard() {
   const [editBerth, setEditBerth] = useState('Lower');
   const [editLoading, setEditLoading] = useState(false);
 
+  const playConfirmationSound = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      // Tone 1: C5 (523.25 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
+      gain1.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.35);
+
+      // Tone 2: G5 (783.99 Hz)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(783.99, ctx.currentTime + 0.12);
+      gain2.gain.setValueAtTime(0.35, ctx.currentTime + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 0.12);
+      osc2.stop(ctx.currentTime + 0.6);
+    } catch (e) {
+      console.error('Audio chime error:', e);
+    }
+  }, []);
+
+  const fetchBookings = useCallback(async () => {
+    try {
+      setFetchError(null);
+      const { data } = await axios.get('/bookings/my-bookings');
+      const tripsList = Array.isArray(data) ? data : (data?.trips || []);
+      setBookings(tripsList);
+    } catch (e) {
+      console.error('Failed to fetch user trips:', e);
+      setFetchError('Unable to load your trips. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Restore active payment session if user returns from another tab/app after page reload
   useEffect(() => {
     let isMounted = true;
@@ -478,41 +526,8 @@ export default function PassengerDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [fetchBookings]);
+  }, [fetchBookings, playConfirmationSound]);
 
-  const playConfirmationSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-
-      // Tone 1: C5 (523.25 Hz)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
-      gain1.gain.setValueAtTime(0.25, ctx.currentTime);
-      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(ctx.currentTime);
-      osc1.stop(ctx.currentTime + 0.35);
-
-      // Tone 2: G5 (783.99 Hz)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(783.99, ctx.currentTime + 0.12);
-      gain2.gain.setValueAtTime(0.35, ctx.currentTime + 0.12);
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(ctx.currentTime + 0.12);
-      osc2.stop(ctx.currentTime + 0.6);
-    } catch (e) {
-      console.error('Audio chime error:', e);
-    }
-  };
 
   const getLuggageTotalCost = () =>
     (luggageCounts.small || 0) * 30 +
@@ -763,19 +778,6 @@ export default function PassengerDashboard() {
     }
   };
 
-  const fetchBookings = useCallback(async () => {
-    try {
-      setFetchError(null);
-      const { data } = await axios.get('/bookings/my-bookings');
-      const tripsList = Array.isArray(data) ? data : (data?.trips || []);
-      setBookings(tripsList);
-    } catch (e) {
-      console.error('Failed to fetch user trips:', e);
-      setFetchError('Unable to load your trips. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     fetchBookings();
