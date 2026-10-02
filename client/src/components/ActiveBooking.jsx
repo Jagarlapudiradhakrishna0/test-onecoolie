@@ -49,6 +49,7 @@ import {
   fetchRemoteChat,
   persistRemoteChat
 } from '../utils/chatSync';
+import { handleContactSupport, isMobileDevice } from '../services/supportService';
 
 /* ============================================================
    ACTIVE BOOKING / TRIP DETAILS PAGE (SWISS-INSPIRED MINIMAL REDESIGN)
@@ -1213,13 +1214,23 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                     {booking.assistant.phone && (
-                      <a
-                        href={`tel:${booking.assistant.phone}`}
-                        className="p-2.5 rounded-full bg-white hover:bg-blue-50 text-[#1463FF] border border-slate-200/80 shadow-2xs transition-colors"
-                        title="Call Assistant"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isMobileDevice()) {
+                            window.location.href = `tel:${booking.assistant.phone}`;
+                          } else {
+                            if (navigator.clipboard?.writeText) {
+                              navigator.clipboard.writeText(booking.assistant.phone);
+                            }
+                            toast.success(`Assistant phone: ${booking.assistant.phone} copied!`);
+                          }
+                        }}
+                        className="p-2.5 rounded-full bg-white hover:bg-blue-50 text-[#1463FF] border border-slate-200/80 shadow-2xs transition-colors cursor-pointer"
+                        title={isMobileDevice() ? "Call Assistant" : `Assistant phone: ${booking.assistant.phone}`}
                       >
                         <Phone className="w-4 h-4" />
-                      </a>
+                      </button>
                     )}
                     <button
                       type="button"
@@ -1480,10 +1491,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
             <button
               type="button"
-              onClick={() => {
-                toast.success('Connecting to OneCoolie 24/7 Helpline: 1800-COOLIE');
-                window.location.href = 'tel:1800-COOLIE';
-              }}
+              onClick={() => handleContactSupport(navigate)}
               className="w-full py-3 px-5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
             >
               <span>Contact Support</span>

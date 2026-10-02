@@ -26,6 +26,9 @@ try {
 // Real support tickets only - zero initial demo or mock tickets
 export const INITIAL_TICKETS = [];
 
+// Official OneCoolie 24/7 Helpline constant
+export { SUPPORT_PHONE, SUPPORT_PHONE_DIALABLE, SUPPORT_PHONE_NUMERIC } from '../services/supportService';
+
 /**
  * Get all support tickets from localStorage
  */

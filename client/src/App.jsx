@@ -230,24 +230,13 @@ export default function App() {
             {/* Help & Support */}
             <Route
               path="/help"
-              element={
-                <ProtectedRoute
-                  allowedRoles={['passenger', 'assistant']}
-                >
-                  <HelpSupportPage />
-                </ProtectedRoute>
-              }
+              element={<HelpSupportPage />}
             />
 
-            {/* Passenger Support redirect */}
+            {/* Support Page */}
             <Route
               path="/support"
-              element={
-                <Navigate
-                  to="/dashboard?tab=support"
-                  replace
-                />
-              }
+              element={<HelpSupportPage />}
             />
 
             {/* Assistant */}

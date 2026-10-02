@@ -14,6 +14,7 @@ import { getTickets, subscribeToSupportUpdates, fetchServerTickets } from '../..
 import { FAQ_CATEGORIES, FAQ_QUESTIONS } from '../../utils/supportFaqData';
 import ProfileMenu from '../../context/ProfileMenu';
 import PassengerNotifications from '../PassengerNotifications';
+import SupportHeroCard from './SupportHeroCard';
 
 export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDashboard = false }) {
   const navigate = useNavigate();
@@ -284,6 +285,9 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
 
           </div>
         </section>
+
+        {/* ── 2B. DEDICATED 24/7 PASSENGER SUPPORT CARD ──────────── */}
+        <SupportHeroCard onNavigate={onNavigate} />
 
         {/* ── 3. THREE PRIMARY SUPPORT ACTION CARDS (MATCHING REFERENCE MOCKUP) ── */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
