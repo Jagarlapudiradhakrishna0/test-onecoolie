@@ -230,10 +230,17 @@ export async function fetchServerTickets() {
     const res = await axios.get('/support/tickets');
     const list = Array.isArray(res.data) ? res.data : [];
     saveTickets(list);
-    return list;
+    return {
+      success: true,
+      tickets: list
+    };
   } catch (err) {
     console.warn('Unable to fetch server tickets:', err.message);
-    throw err;
+    return {
+      success: false,
+      tickets: [],
+      error: err?.response?.data?.message || err?.message || 'Unable to load support tickets'
+    };
   }
 }
 

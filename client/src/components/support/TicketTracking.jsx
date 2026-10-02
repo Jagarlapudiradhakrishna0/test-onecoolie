@@ -1,46 +1,127 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Clock, CheckCircle, Search, 
   Train, ChevronRight, FileText, ArrowRight 
 } from 'lucide-react';
 import oneCoolieLogo from '../../assets/onecoolie-logo.png';
-import { getTickets, subscribeToSupportUpdates } from '../../utils/supportStore';
-
+import { getTickets, saveTickets, subscribeToSupportUpdates } from '../../utils/supportStore';
+import { useAuth } from '../../context/AuthContext';
 import axios from '../../api/axios';
 
 export default function TicketTracking({ onNavigate, user }) {
   const navigate = useNavigate();
+  const { user: authUser, authLoading } = useAuth();
+  const currentUser = user || authUser;
+
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
 
-  const fetchUserTickets = async (isManual = false) => {
-    if (isManual) setLoading(true);
-    setError(null);
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
+
+  const fetchUserTickets = useCallback(async (isManual = false) => {
+    // Abort previous in-flight request to eliminate race conditions
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const reqId = ++requestIdRef.current;
+
+    if (isManual) {
+      setLoading(true);
+      setError(null);
+    }
+
     try {
-      const res = await axios.get('/support/tickets');
+      const res = await axios.get('/support/tickets', {
+        signal: controller.signal
+      });
+
+      // Ignore stale requests if a newer request was dispatched
+      if (reqId !== requestIdRef.current) return;
+
       const list = Array.isArray(res.data) ? res.data : [];
       setTickets(list);
       saveTickets(list);
+      setError(null);
       setLoading(false);
     } catch (e) {
+      // Silently ignore aborted requests
+      if (axios.isCancel(e) || e.name === 'CanceledError' || e.name === 'AbortError') {
+        return;
+      }
+
+      // Ignore if a newer request has taken over
+      if (reqId !== requestIdRef.current) return;
+
       console.error('Backend ticket fetch error:', e);
       setError('Unable to load your support tickets.');
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchUserTickets();
-    const unsubscribe = subscribeToSupportUpdates(() => fetchUserTickets(false));
-    const interval = setInterval(() => fetchUserTickets(false), 5000);
-    return () => {
-      unsubscribe();
-      clearInterval(interval);
+    // Wait until authentication is resolved before requesting tickets
+    if (authLoading) return;
+
+    // Single initial fetch
+    fetchUserTickets(true);
+
+    // Cross-tab broadcast sync (reads latest local store without refetch storm)
+    const unsubscribeBroadcast = subscribeToSupportUpdates(() => {
+      const current = getTickets();
+      if (Array.isArray(current)) {
+        setTickets(current);
+      }
+    });
+
+    // Real-time socket event handlers for live ticket creation/status updates
+    const handleNewTicket = (newTicket) => {
+      if (!newTicket || !newTicket.id) return;
+      setTickets((prev) => {
+        if (prev.some((t) => String(t.id) === String(newTicket.id))) return prev;
+        const updated = [newTicket, ...prev];
+        saveTickets(updated);
+        return updated;
+      });
     };
-  }, []);
+
+    const handleStatusUpdate = (payload) => {
+      const ticketId = payload?.ticketId || payload?.ticket?.id;
+      const newStatus = payload?.status || payload?.ticket?.status;
+      if (!ticketId) return;
+
+      setTickets((prev) => {
+        const updated = prev.map((t) =>
+          String(t.id).toLowerCase() === String(ticketId).toLowerCase()
+            ? { ...t, status: newStatus || t.status }
+            : t
+        );
+        saveTickets(updated);
+        return updated;
+      });
+    };
+
+    if (typeof window !== 'undefined' && window.socket) {
+      window.socket.on('new_support_ticket', handleNewTicket);
+      window.socket.on('ticket_status_updated', handleStatusUpdate);
+    }
+
+    return () => {
+      unsubscribeBroadcast();
+      if (typeof window !== 'undefined' && window.socket) {
+        window.socket.off('new_support_ticket', handleNewTicket);
+        window.socket.off('ticket_status_updated', handleStatusUpdate);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [authLoading, fetchUserTickets]);
 
   const inProgressCount = tickets.filter(t => ['open', 'in_progress', 'bot_escalated'].includes(t.status)).length;
   const resolvedCount = tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length;

@@ -25,7 +25,8 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
 
   useEffect(() => {
     setTickets(getTickets());
-    fetchServerTickets().then((data) => {
+    fetchServerTickets().then((res) => {
+      const data = res?.tickets ?? (Array.isArray(res) ? res : []);
       if (Array.isArray(data)) setTickets(data);
     }).catch(() => {
       // Keep existing local tickets if offline
