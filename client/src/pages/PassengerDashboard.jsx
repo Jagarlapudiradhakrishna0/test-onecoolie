@@ -406,8 +406,6 @@ export default function PassengerDashboard() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
-  const [confirmCancel, setConfirmCancel] = useState(null);
-  const [isCancelling, setIsCancelling] = useState(false);
   const [activeCancelBooking, setActiveCancelBooking] = useState(null);
   const [activeRebookBooking, setActiveRebookBooking] = useState(null);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
@@ -1067,42 +1065,7 @@ export default function PassengerDashboard() {
     }
   };
 
-  const doCancel = async () => {
-    if (!confirmCancel || isCancelling) return;
-    const cancelTargetId = confirmCancel;
-    const targetBooking = bookings.find((b) => b.id === cancelTargetId || b.booking_id === cancelTargetId);
-    const targetStatus = (targetBooking?.booking_status || targetBooking?.status || '').toLowerCase();
-    if (['in_service', 'completed', 'cancelled'].includes(targetStatus)) {
-      setConfirmCancel(null);
-      return toast.error('This booking cannot be cancelled in its current status.');
-    }
-    setIsCancelling(true);
-    try {
-      const res = await axios.post(`/bookings/${cancelTargetId}/cancel`);
-      const updatedBooking = res.data?.booking || res.data;
-
-      // Immediately update bookings state optimistically / from backend response
-      setBookings((prev) =>
-        prev.map((b) => (b.id === cancelTargetId || b.booking_id === cancelTargetId
-          ? {
-              ...b,
-              booking_status: 'cancelled',
-              payment_status: updatedBooking?.payment_status || (b.payment_method === 'cash' ? 'cancelled' : b.payment_status),
-              ...updatedBooking
-            }
-          : b
-        ))
-      );
-
-      setConfirmCancel(null);
-      toast.success(res.data?.message || 'Assistance booking cancelled');
-      fetchBookings();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Cancellation failed');
-    } finally {
-      setIsCancelling(false);
-    }
-  };
+  // Legacy doCancel removed — all cancellations now go through CancellationModal
 
   const totalSelectedCount = SERVICE_META.filter((s) =>
     s.key === 'luggage' ? getLuggageTotalCount() > 0 : s.qty ? services[s.key] > 0 : services[s.key]
@@ -4196,17 +4159,7 @@ export default function PassengerDashboard() {
         />
       )}
 
-      {/* Legacy Cancel Dialog Fallback */}
-      <ConfirmDialog
-        open={Boolean(confirmCancel)}
-        loading={isCancelling}
-        title="Cancel Assistance Booking"
-        message="Are you sure you want to cancel this station assistance request? Your allocated assistant will be released back to the platform pool."
-        confirmText="Yes, Cancel Booking"
-        cancelText="Keep Booking"
-        onConfirm={doCancel}
-        onCancel={() => !isCancelling && setConfirmCancel(null)}
-      />
+      {/* Legacy ConfirmDialog removed — CancellationModal is the single authoritative cancellation path */}
     </div>
   );
 }

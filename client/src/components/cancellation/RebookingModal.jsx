@@ -80,6 +80,7 @@ export default function RebookingModal({
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
+    if (isSubmitting) return; // Hard guard against double-submission
     if (!journeyDate) {
       setErrorMessage('Please select a valid journey date.');
       return;
