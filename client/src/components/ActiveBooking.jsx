@@ -29,7 +29,10 @@ import {
   Accessibility,
   Languages,
   Coffee,
-  Car
+  Car,
+  Sparkles,
+  Briefcase,
+  RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from '../api/axios';
