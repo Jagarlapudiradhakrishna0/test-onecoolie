@@ -192,27 +192,12 @@ async function runTests() {
   // TEST 11: Test payment endpoint unavailable in production
   // ----------------------------------------------------
   {
-    const prevEnv = process.env.NODE_ENV;
-    const prevMode = process.env.PAYMENT_MODE;
-    process.env.NODE_ENV = 'production';
-    process.env.PAYMENT_MODE = 'live';
-
-    let testConfirmStatus = null;
-    const req = { user: { id: 'u1', role: 'passenger' }, body: { booking_id: 'b1' } };
-    const res = {
-      status: (code) => {
-        testConfirmStatus = code;
-        return { json: (d) => d };
-      }
-    };
-    await confirmTestPayment(req, res);
-    assert.strictEqual(testConfirmStatus, 404, 'confirmTestPayment must return 404 in production');
-
-    // Restore env
-    process.env.NODE_ENV = prevEnv;
-    process.env.PAYMENT_MODE = prevMode;
-    pass(11, 'Test payment endpoint unavailable in production (Fails Closed 404)');
+    assert.strictEqual(typeof confirmTestPayment, 'undefined', 'confirmTestPayment must be completely removed');
+    const paymentRoutes = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'paymentRoutes.js'), 'utf8');
+    assert.strictEqual(paymentRoutes.includes('/test-confirm'), false, 'test-confirm route must not exist in paymentRoutes.js');
+    pass(11, 'Test payment endpoint completely removed from production codebase');
   }
+
 
   // ----------------------------------------------------
   // TEST 12: Frontend cannot mark payment as paid (HMAC required)
@@ -341,7 +326,10 @@ async function runTests() {
   // TEST 21: Direct Supabase client access cannot bypass ownership (RLS scoped to service_role)
   // ----------------------------------------------------
   {
-    const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'supabase_complete_production_schema.sql'), 'utf8');
+    const masterPath = path.join(__dirname, 'supabase', 'ONECOOLIE_MASTER_SCHEMA.sql');
+    const legacyPath = path.join(__dirname, '..', 'supabase_complete_production_schema.sql');
+    const schemaFile = fs.existsSync(masterPath) ? masterPath : legacyPath;
+    const schemaSql = fs.readFileSync(schemaFile, 'utf8');
     assert.strictEqual(schemaSql.includes('FOR ALL TO service_role USING (true) WITH CHECK (true);'), true, 'RLS universal policies must be strictly scoped TO service_role');
     assert.strictEqual(schemaSql.includes('CREATE POLICY "Users can view own profile" ON public.users'), true, 'Client users policy must enforce auth.uid() = id');
     assert.strictEqual(schemaSql.includes('CREATE POLICY "Users can view own bookings" ON public.bookings'), true, 'Client bookings policy must enforce ownership');

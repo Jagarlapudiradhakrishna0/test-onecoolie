@@ -35,10 +35,18 @@ const getRazorpayMode = () => {
   return 'none';
 };
 
+const CANONICAL_PRODUCTION_ORIGINS = [
+  'https://onecoolie.in',
+  'https://www.onecoolie.in',
+  'https://onecoolie.vercel.app'
+];
+
 /**
  * Parses and returns the sanitized list of allowed CORS origins.
  * Trims whitespace, strips trailing slashes, and filters wildcards.
  * Localhost origins are included ONLY in non-production environments.
+ * Authoritatively ensures all canonical production origins (onecoolie.in, www.onecoolie.in, onecoolie.vercel.app)
+ * are permitted.
  * @returns {string[]}
  */
 const getAllowedOrigins = () => {
@@ -60,10 +68,12 @@ const getAllowedOrigins = () => {
       if (!origins.includes(o)) origins.push(o);
     });
 
-  // Default to configured CLIENT_URL or deployed frontend
-  if (origins.length === 0) {
-    origins.push(process.env.CLIENT_URL || 'https://onecoolie.vercel.app');
-  }
+  // Authoritatively include canonical production frontend origins
+  CANONICAL_PRODUCTION_ORIGINS.forEach((canonical) => {
+    if (!origins.includes(canonical)) {
+      origins.push(canonical);
+    }
+  });
 
   return origins;
 };

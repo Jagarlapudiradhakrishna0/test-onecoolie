@@ -13,7 +13,7 @@ import { useLanguage } from '../context/LanguageContext';
    ============================================================ */
 
 export default function ProfileMenu({ role, onNavigate }) {
-  const { user, logout, logoutAll, getSessions, updateUserPhone, getPhoneStatus } = useAuth();
+  const { user, logout, logoutAll, getSessions, revokeUserSession, updateUserPhone, getPhoneStatus } = useAuth();
   const { theme, setTheme } = useTheme();
   const { lang, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
@@ -26,6 +26,7 @@ export default function ProfileMenu({ role, onNavigate }) {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState('');
   const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [revokingSessionId, setRevokingSessionId] = useState(null);
 
   // Security telemetry events (Phase 6.7)
   const [securityEvents, setSecurityEvents] = useState([]);
@@ -151,6 +152,82 @@ export default function ProfileMenu({ role, onNavigate }) {
       setLoggingOutAll(false);
     }
   };
+
+  const handleRevokeSingleSession = async (sessionId) => {
+    if (!sessionId) return;
+    setRevokingSessionId(sessionId);
+    try {
+      if (revokeUserSession) {
+        await revokeUserSession(sessionId);
+      } else {
+        await axios.post(`/auth/sessions/${sessionId}/revoke`);
+      }
+      setSessionsList((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (err) {
+      setSessionsError(err.response?.data?.message || 'Failed to revoke session. Please try again.');
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
+
+  const formatSessionDate = (val) => {
+    if (!val) return 'Just now';
+    try {
+      const d = new Date(val);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = d.toLocaleString('en-US', { month: 'short' });
+      const year = d.getFullYear();
+      const time = d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      return `${day} ${month} ${year}, ${time}`;
+    } catch (e) {
+      return String(val);
+    }
+  };
+
+  const getDeviceLabel = (s) => {
+    const raw = (s.device_info || s.deviceInfo || s.user_agent || s.userAgent || '').toLowerCase();
+    const isMobile = raw.includes('mobile') || raw.includes('android') || raw.includes('iphone');
+    const browser = raw.includes('chrome') ? 'Chrome' : raw.includes('safari') ? 'Safari' : raw.includes('firefox') ? 'Firefox' : raw.includes('edge') ? 'Edge' : 'Browser';
+    return isMobile ? `📱 Mobile / ${browser}` : `💻 Desktop / ${browser}`;
+  };
+
+  const recentSecurityList = useMemo(() => {
+    if (securityEvents && securityEvents.length > 0) {
+      return securityEvents.map((evt) => {
+        let title = evt.label || evt.eventType || 'Security Activity';
+        const lower = String(title).toLowerCase();
+        if (lower.includes('login') || lower.includes('sign-in')) title = 'Successful login';
+        else if (lower.includes('session') || lower.includes('created')) title = 'Session created';
+        return {
+          id: evt.id || `evt_${Math.random()}`,
+          title,
+          date: evt.timestamp || evt.created_at,
+          ip: evt.sourceIp || evt.source_ip || evt.ip_address || 'xxx.xxx.xxx.xxx'
+        };
+      });
+    }
+
+    if (sessionsList && sessionsList.length > 0) {
+      const items = [];
+      sessionsList.forEach((s) => {
+        items.push({
+          id: `login_${s.id}`,
+          title: 'Successful login',
+          date: s.createdAt || s.created_at,
+          ip: s.ipAddress || s.ip_address || 'xxx.xxx.xxx.xxx'
+        });
+        items.push({
+          id: `sess_${s.id}`,
+          title: 'Session created',
+          date: s.createdAt || s.created_at,
+          ip: s.ipAddress || s.ip_address || 'xxx.xxx.xxx.xxx'
+        });
+      });
+      return items.slice(0, 10);
+    }
+
+    return [];
+  }, [securityEvents, sessionsList]);
 
   const menuItems =
     role === 'assistant'
@@ -446,42 +523,46 @@ export default function ProfileMenu({ role, onNavigate }) {
                       <p className="text-xs text-zinc-400 text-center py-4">No active sessions found.</p>
                     ) : (
                       sessionsList.map((s) => {
-                        const isMobile = (s.device_info || s.deviceInfo || '').toLowerCase().includes('mobile') ||
-                                         (s.user_agent || '').toLowerCase().includes('mobile');
-                        const Icon = isMobile ? Smartphone : Laptop;
+                        const isCurrent = Boolean(s.is_current || s.isCurrent);
                         return (
                           <div
                             key={s.id}
                             className={`p-3.5 rounded-2xl border transition-all ${
-                              s.is_current || s.isCurrent
+                              isCurrent
                                 ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800'
                                 : 'bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700'
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-start gap-3 min-w-0">
-                                <div className="p-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shrink-0 mt-0.5">
-                                  <Icon className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
-                                </div>
-                                <div className="min-w-0 space-y-0.5">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
-                                      {s.device_info || s.deviceInfo || 'Authorized Browser Session'}
-                                    </p>
-                                    {(s.is_current || s.isCurrent) && (
-                                      <span className="px-2 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-600 text-white">
-                                        This Device
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
-                                    IP: {s.ip_address || s.ipAddress || 'Protected Telemetry'}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                                    {getDeviceLabel(s)}
                                   </p>
-                                  <p className="text-[10px] text-zinc-400">
-                                    Last Active: {new Date(s.last_activity_at || s.lastActivityAt || s.created_at).toLocaleString()}
-                                  </p>
+                                  {isCurrent && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-600 text-white">
+                                      THIS DEVICE
+                                    </span>
+                                  )}
                                 </div>
+                                <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                                  IP: {s.ip_address || s.ipAddress || 'xxx.xxx.xxx.xxx'}
+                                </p>
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                                  Last active: {formatSessionDate(s.last_activity_at || s.lastActivityAt || s.created_at)}
+                                </p>
                               </div>
+
+                              {!isCurrent && (
+                                <button
+                                  type="button"
+                                  disabled={revokingSessionId === s.id}
+                                  onClick={() => handleRevokeSingleSession(s.id)}
+                                  className="px-2.5 py-1 rounded-xl text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-900 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+                                >
+                                  {revokingSessionId === s.id ? 'Revoking...' : '[Revoke]'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -498,59 +579,37 @@ export default function ProfileMenu({ role, onNavigate }) {
                       Recent Security Activity
                     </h4>
                   </div>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3">
-                    Continuously monitored security-relevant events recorded on your account.
-                  </p>
 
                   {securityEventsLoading ? (
                     <div className="py-4 text-center text-xs text-zinc-400 space-y-1">
                       <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
                       <p className="text-[10px]">Loading audit events...</p>
                     </div>
-                  ) : securityEvents.length === 0 ? (
+                  ) : recentSecurityList.length === 0 ? (
                     <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 text-center">
-                      <p className="text-[11px] text-zinc-400">No recent security anomalies recorded.</p>
+                      <p className="text-[11px] text-zinc-400">No recent security activity recorded.</p>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[25vh] overflow-y-auto pr-1">
-                      {securityEvents.map((evt) => {
-                        const isSevere = evt.severity === 'critical' || evt.severity === 'high';
-                        const isWarn = evt.severity === 'medium';
-                        const badgeBg = isSevere
-                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                          : isWarn
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
-                        
-                        const formatEventType = (type) => {
-                          if (!type) return 'Security Event';
-                          return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                        };
-
-                        return (
-                          <div
-                            key={evt.id}
-                            className="p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/30 flex items-center justify-between text-xs"
-                          >
-                            <div className="min-w-0 flex-1 pr-2">
-                              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${badgeBg}`}>
-                                  {evt.severity || 'info'}
-                                </span>
-                                <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">
-                                  {formatEventType(evt.event_type)}
-                                </span>
-                              </div>
-                              <p className="text-[10px] font-mono text-zinc-400">
-                                IP: {evt.ip_address || 'Protected'}
-                              </p>
-                            </div>
-                            <span className="text-[10px] text-zinc-400 shrink-0">
-                              {new Date(evt.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                    <div className="space-y-2.5 max-h-[30vh] overflow-y-auto pr-1">
+                      {recentSecurityList.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/30 flex items-start gap-2.5 text-xs"
+                        >
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm shrink-0 leading-none mt-0.5">✓</span>
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <p className="font-bold text-xs text-zinc-900 dark:text-zinc-100">
+                              {item.title}
+                            </p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                              {formatSessionDate(item.date)}
+                            </p>
+                            <p className="text-[10px] font-mono text-zinc-400">
+                              IP: {item.ip}
+                            </p>
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

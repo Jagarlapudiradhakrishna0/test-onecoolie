@@ -33,8 +33,8 @@ Configure production environment variables on the backend hosting provider (e.g.
 
 - [ ] `NODE_ENV=production`
 - [ ] `PORT=5000` (or host-assigned port)
-- [ ] `CLIENT_URL=https://onecoolie.in`
-- [ ] `ALLOWED_ORIGINS=https://onecoolie.in,https://admin.onecoolie.in` (no trailing slashes, no wildcards in production)
+- [ ] `ALLOWED_ORIGINS=https://onecoolie.in,https://www.onecoolie.in,https://onecoolie.vercel.app` (no trailing slashes, no wildcards in production)
+- [ ] `CORS_ORIGINS=https://onecoolie.in,https://www.onecoolie.in,https://onecoolie.vercel.app`
 - [ ] `SUPABASE_URL=https://<your-project-ref>.supabase.co`
 - [ ] `SUPABASE_KEY=<publishable-anon-key>`
 - [ ] `SUPABASE_SECRET_KEY=<service-role-secret-key>` (REQUIRED: do not use anon key for backend)

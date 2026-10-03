@@ -1,5 +1,205 @@
 [
   {
+    "id": "OC-66992",
+    "ticket_number": "OC-66992",
+    "created_by": "3b033583-f007-456b-a8b8-f897c4579efb",
+    "passenger_id": "3b033583-f007-456b-a8b8-f897c4579efb",
+    "assistant_id": null,
+    "booking_id": "9f5e4d4c-85f4-463d-8a5d-b7a12c5f1ed3",
+    "type": "passenger",
+    "subject": "Trip Support: Train 18520",
+    "category": "General",
+    "issueType": "General",
+    "desc": "Trip Support: Train 18520",
+    "description": "Trip Support: Train 18520",
+    "priority": "high",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "vikas",
+    "passengerPhone": "+91 94946 28724",
+    "passengerEmail": "globalxvikas@gmail.com",
+    "trip": {
+      "id": "9f5e4d4c-85f4-463d-8a5d-b7a12c5f1ed3",
+      "seat": "Seat 45 (Lower)",
+      "coach": "Coach S4",
+      "route": "KZJ → KZJ",
+      "isReal": true,
+      "source": "KZJ",
+      "status": "PENDING",
+      "dateDay": "02",
+      "service": "Luggage Assistance (1 item)",
+      "trainNo": "18520",
+      "dateYear": "2026",
+      "platform": "1",
+      "dateMonth": "OCT",
+      "trainName": "LTT VSKP EXPRESS",
+      "dateDayName": "FRI",
+      "destination": "KZJ"
+    },
+    "aiSummary": "Passenger reported: \"View Trip Progress →\".\nTrip context: Train 18520 (KZJ → KZJ), Coach Coach S4, Seat Seat 45 (Lower), Service: Luggage Assistance (1 item).\nAI attempted automated assignment & telemetry check.\nIssue was unresolved automatically. Ticket escalated for immediate human assistance.",
+    "conversation": [
+      {
+        "id": "msg-welcome",
+        "name": "OneCoolie Support Assistant",
+        "text": "Hi! I'm your OneCoolie Support Assistant. Ask me anything about your booking, assistant, luggage, payment or journey. How can I help?",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Payment issue"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Cancel my booking"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Refund status"
+          },
+          {
+            "type": "suggested_question",
+            "label": "Train delay"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to support"
+          }
+        ],
+        "tripCard": null,
+        "timestamp": "01:43 AM"
+      },
+      {
+        "id": "msg-1790972014714",
+        "name": "vikas",
+        "text": "Where is my assistant?",
+        "sender": "passenger",
+        "timestamp": "01:43 AM"
+      },
+      {
+        "id": "msg-1790972015419",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've checked your booking details.\n\nTrain: 18520 (LTT VSKP EXPRESS)\nCoach: Coach S4 • Seat: Seat 45 (Lower)\nStation: Secunderabad\n\nYour assistant has not been assigned yet. We are currently searching for the nearest available assistant at the concourse.\n\nYou'll be notified automatically as soon as an assistant is assigned. ✓",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "track_trip",
+            "label": "View Trip Progress →"
+          }
+        ],
+        "tripCard": {
+          "id": "9f5e4d4c-85f4-463d-8a5d-b7a12c5f1ed3",
+          "seat": "Seat 45 (Lower)",
+          "coach": "Coach S4",
+          "route": "KZJ → KZJ",
+          "isReal": true,
+          "source": "KZJ",
+          "status": "PENDING",
+          "dateDay": "02",
+          "service": "Luggage Assistance (1 item)",
+          "trainNo": "18520",
+          "dateYear": "2026",
+          "platform": "1",
+          "dateMonth": "OCT",
+          "trainName": "LTT VSKP EXPRESS",
+          "dateDayName": "FRI",
+          "destination": "KZJ"
+        },
+        "timestamp": "01:43 AM",
+        "showFeedback": true
+      },
+      {
+        "id": "msg-1790972020291",
+        "name": "vikas",
+        "text": "View Trip Progress →",
+        "sender": "passenger",
+        "timestamp": "01:43 AM"
+      },
+      {
+        "id": "msg-1790972020994",
+        "name": "OneCoolie Support Assistant",
+        "text": "I've analyzed your question regarding your journey on Train 18520 (KZJ → KZJ).\n\nOur platform assistants handle station porterage, wheelchair escort, and berth guidance seamlessly.\n\nIf this doesn't fully resolve what you need, let me know or click below to connect directly with our 24/7 human support team.",
+        "sender": "bot",
+        "actions": [
+          {
+            "type": "suggested_question",
+            "label": "Where is my assistant?"
+          },
+          {
+            "type": "escalate_support",
+            "label": "Talk to a support agent →"
+          }
+        ],
+        "tripCard": null,
+        "timestamp": "01:43 AM",
+        "showFeedback": true
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-10-02T20:13:44.422365+00:00",
+    "updated_at": "2026-10-02T20:13:44.422365+00:00",
+    "createdAt": "2026-10-02T20:13:44.422365+00:00",
+    "updatedAt": "2026-10-02T20:13:44.422365+00:00"
+  },
+  {
+    "id": "OC-27451",
+    "ticket_number": "OC-27451",
+    "created_by": "554193da-67b9-4eca-80e0-888ea7d1a35b",
+    "passenger_id": "554193da-67b9-4eca-80e0-888ea7d1a35b",
+    "assistant_id": null,
+    "booking_id": "39c7e383-4b55-496d-9533-56f4465df305",
+    "type": "passenger",
+    "subject": "payment",
+    "category": "Booking",
+    "issueType": "Booking",
+    "desc": "vadcz",
+    "description": "vadcz",
+    "priority": "medium",
+    "status": "open",
+    "station": "KZJ",
+    "pnr": "N/A",
+    "passengerName": "test",
+    "passengerPhone": "+91 7032304118",
+    "passengerEmail": "kandagatlasaipraneeth02@gmail.com",
+    "trip": {
+      "id": "39c7e383-4b55-496d-9533-56f4465df305",
+      "seat": "Seat 50 (Middle)",
+      "coach": "Coach S3",
+      "route": "KZJ → KZJ",
+      "isReal": true,
+      "source": "KZJ",
+      "status": "COMPLETED",
+      "dateDay": "01",
+      "service": "Luggage Assistance (2 items)",
+      "trainNo": "12252",
+      "dateYear": "2026",
+      "platform": "2",
+      "dateMonth": "NOV",
+      "trainName": "WAINGANGA EXP",
+      "dateDayName": "SUN",
+      "destination": "KZJ"
+    },
+    "aiSummary": "Booking: vadcz",
+    "conversation": [
+      {
+        "id": "msg-1790954522151",
+        "name": "test",
+        "text": "payment\n\nvadcz",
+        "sender": "passenger",
+        "timestamp": "20:52"
+      }
+    ],
+    "resolution_notes": "",
+    "created_at": "2026-10-02T15:22:08.938931+00:00",
+    "updated_at": "2026-10-02T15:22:08.938931+00:00",
+    "createdAt": "2026-10-02T15:22:08.938931+00:00",
+    "updatedAt": "2026-10-02T15:22:08.938931+00:00"
+  },
+  {
     "id": "OC-10557",
     "ticket_number": "OC-10557",
     "created_by": "554193da-67b9-4eca-80e0-888ea7d1a35b",

@@ -82,10 +82,16 @@ function csrfProtection(req, res, next) {
     const cleanOrigin = origin.trim().replace(/\/+$/, '');
 
     let originAllowed = false;
-    for (const a of allowed) {
-      if (cleanOrigin.startsWith(a.replace(/\/+$/, ''))) {
-        originAllowed = true;
-        break;
+    try {
+      const parsedOrigin = new URL(cleanOrigin).origin;
+      originAllowed = allowed.includes(parsedOrigin);
+    } catch (e) {
+      for (const a of allowed) {
+        const cleanAllowed = a.replace(/\/+$/, '');
+        if (cleanOrigin === cleanAllowed || cleanOrigin.startsWith(cleanAllowed + '/')) {
+          originAllowed = true;
+          break;
+        }
       }
     }
 

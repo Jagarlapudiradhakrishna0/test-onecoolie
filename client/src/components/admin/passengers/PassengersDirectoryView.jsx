@@ -739,159 +739,6 @@ function PassengerProfileModal({ passenger, isOpen, onClose, onViewTrips }) {
 }
 
 // ── 8. MASTER PASSENGERS DIRECTORY VIEW (DEFAULT EXPORT) ───────────────────
-const FALLBACK_PASSENGERS = [
-  {
-    id: 'usr_sec_admin_02',
-    name: 'Secondary Administrator 02',
-    email: 'admin02@onecoolie.in',
-    phone: '+91 9876543202',
-    role: 'admin',
-    created_at: '2026-09-10T11:00:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_test_pass_01',
-    name: 'Test Passenger',
-    email: 'test_pass_1788974161259@onecoolie.com',
-    phone: '',
-    role: 'passenger',
-    created_at: '2026-09-09T14:30:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_safe_test_asst',
-    name: 'Safe Test Assistant',
-    email: 'test_assistant_1788974161259@onecoolie.com',
-    phone: '+91 9876543211',
-    role: 'assistant',
-    created_at: '2026-09-09T12:15:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_safe_test_pass',
-    name: 'Safe Test Passenger',
-    email: 'test_passenger_1788974159728@onecoolie.com',
-    phone: '+91 9876543210',
-    role: 'passenger',
-    created_at: '2026-09-09T10:00:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_test_user',
-    name: 'test',
-    email: 'kandagatlasaipraneeth02@gmail.com',
-    phone: '+91 7032304118',
-    role: 'passenger',
-    created_at: '2026-09-08T09:45:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_vikas_a',
-    name: 'Vikas -A',
-    email: 'vikasmusham07@gmail.com',
-    phone: '+91 9494628724',
-    role: 'assistant',
-    created_at: '2026-09-07T16:20:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_hareesh_c',
-    name: 'Hareesh Chitikena',
-    email: 'harsha.chitikena@gmail.com',
-    phone: '+91 8125614543',
-    role: 'passenger',
-    created_at: '2026-09-07T11:10:00.000Z',
-    bookings_count: 1,
-    total_spent: 0
-  },
-  {
-    id: 'usr_niharika_r',
-    name: 'Niharika Reddy',
-    email: 'niharikareddy2422@gmail.com',
-    phone: '+91 8179404816',
-    role: 'passenger',
-    created_at: '2026-09-07T08:30:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_sai',
-    name: 'Sai',
-    email: 'thallamsaitthrisshoolkumar@gmail.com',
-    phone: '',
-    role: 'passenger',
-    created_at: '2026-09-06T19:00:00.000Z',
-    bookings_count: 1,
-    total_spent: 0
-  },
-  {
-    id: 'usr_prim_admin_01',
-    name: 'Primary Administrator 01',
-    email: 'admin01@onecoolie.in',
-    phone: '+919876543210',
-    role: 'admin',
-    created_at: '2026-09-06T14:00:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  },
-  {
-    id: 'usr_rk',
-    name: 'rk',
-    email: '2303a52055@sru.edu.in',
-    phone: '+91 9398553191',
-    role: 'passenger',
-    created_at: '2026-09-06T12:00:00.000Z',
-    bookings_count: 9,
-    total_spent: 60
-  },
-  {
-    id: 'usr_vikas_global',
-    name: 'vikas',
-    email: 'globalxvikas@gmail.com',
-    phone: '+91 94946 28724',
-    role: 'passenger',
-    created_at: '2026-09-06T10:15:00.000Z',
-    bookings_count: 7,
-    total_spent: 300
-  },
-  {
-    id: 'usr_rohith',
-    name: 'Rohith',
-    email: 'thatipallyrohith4@gmail.com',
-    phone: '+91 8897270414',
-    role: 'passenger',
-    created_at: '2026-09-06T09:00:00.000Z',
-    bookings_count: 3,
-    total_spent: 250
-  },
-  {
-    id: 'usr_kavita_s',
-    name: 'Kavita Sharma',
-    email: 'kavita.sharma@gmail.com',
-    phone: '+91 9820154321',
-    role: 'passenger',
-    created_at: '2026-09-05T15:20:00.000Z',
-    bookings_count: 1,
-    total_spent: 80
-  },
-  {
-    id: 'usr_anand_v',
-    name: 'Anand Verma',
-    email: 'anand.verma@techmail.in',
-    phone: '+91 9711245890',
-    role: 'passenger',
-    created_at: '2026-09-04T18:40:00.000Z',
-    bookings_count: 0,
-    total_spent: 0
-  }
-];
-
 export default function PassengersDirectoryView({
   usersList = [],
   bookings = [],
@@ -900,10 +747,10 @@ export default function PassengersDirectoryView({
   onViewPassengerSupport
 }) {
   const rawPassengers = useMemo(() => {
-    if (Array.isArray(usersList) && usersList.length > 0) {
+    if (Array.isArray(usersList)) {
       return usersList;
     }
-    return FALLBACK_PASSENGERS;
+    return [];
   }, [usersList]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -924,16 +771,15 @@ export default function PassengersDirectoryView({
     ).length;
 
     const totalBookingsSum = rawPassengers.reduce((sum, p) => sum + (p.bookings_count || 0), 0);
-    const finalBookings = Math.max(totalBookingsSum, bookings.length || 21);
+    const finalBookings = Math.max(totalBookingsSum, Array.isArray(bookings) ? bookings.length : 0);
 
     const totalSpendSum = rawPassengers.reduce((sum, p) => sum + (Number(p.total_spent) || 0), 0);
-    const finalSpend = totalSpendSum > 0 ? totalSpendSum : 690;
 
     return {
-      totalPassengers: totalCount || 15,
-      activeTravelers: activeCount > 0 ? activeCount : 12,
+      totalPassengers: totalCount,
+      activeTravelers: activeCount,
       totalBookings: finalBookings,
-      totalSpend: finalSpend
+      totalSpend: totalSpendSum
     };
   }, [rawPassengers, bookings]);
 

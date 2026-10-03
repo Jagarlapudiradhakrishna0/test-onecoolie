@@ -291,7 +291,7 @@ function PayoutStatusTabs({ currentFilter = 'ALL', onFilterChange, counts }) {
 }
 
 // ── 4. EMPTY STATE ─────────────────────────────────────────────────────────
-function PayoutEmptyState({ onProcessMockPayout, onOpenGuidelines }) {
+function PayoutEmptyState({ onOpenGuidelines }) {
   return (
     <div className="py-16 px-4 text-center max-w-md mx-auto">
       <div className="w-14 h-14 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 text-[#2563EB] dark:text-blue-400 flex items-center justify-center mx-auto mb-4 border border-blue-100 dark:border-blue-900/50 shadow-xs">
@@ -306,14 +306,6 @@ function PayoutEmptyState({ onProcessMockPayout, onOpenGuidelines }) {
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-        <button
-          type="button"
-          onClick={onProcessMockPayout}
-          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-        >
-          <span>+ Process Mock Payout</span>
-        </button>
-
         <button
           type="button"
           onClick={onOpenGuidelines}
@@ -1311,41 +1303,9 @@ export default function SahayakPayoutsView({
   const [dateRange, setDateRange] = useState('ALL');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Local simulated payouts (in case dev backend has 0 records)
-  const [mockPayouts, setMockPayouts] = useState([]);
-
   const allPayouts = useMemo(() => {
-    if (payoutsList && payoutsList.length > 0) {
-      return payoutsList;
-    }
-    return mockPayouts;
-  }, [payoutsList, mockPayouts]);
-
-  const handleProcessMockPayout = () => {
-    const mock = {
-      id: `PAY-${Math.floor(10000 + Math.random() * 90000)}`,
-      status: 'requested',
-      amount: 840,
-      bookings_count: 12,
-      booking_ids: Array.from({ length: 12 }, (_, i) => `BK-00${i + 1}`),
-      assistant: {
-        id: 'ast-mock-01',
-        name: 'Ravi Kumar',
-        phone: '+91 98480 22338',
-        station_code: 'KZJ',
-      },
-      assistant_id: 'ast-mock-01',
-      payout_method: 'upi',
-      payment_details: {
-        upi_id: 'ravikumar.porter@okhdfcbank',
-      },
-      created_at: new Date().toISOString(),
-      requested_at: new Date().toISOString(),
-    };
-
-    setMockPayouts((prev) => [mock, ...prev]);
-    toast.success('Demonstration payout request initialized');
-  };
+    return Array.isArray(payoutsList) ? payoutsList : [];
+  }, [payoutsList]);
 
   // Filter tab counts
   const counts = useMemo(() => {
@@ -1407,61 +1367,12 @@ export default function SahayakPayoutsView({
     });
   }, [allPayouts, payoutsFilter, searchQuery, dateRange]);
 
-  // Action delegators supporting both backend APIs and test records
-  const onApprove = (id) => {
-    if (mockPayouts.some((m) => m.id === id)) {
-      setMockPayouts((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: 'approved' } : m))
-      );
-      toast.success('Payout sign-off approved.');
-    } else {
-      handleApprovePayout?.(id);
-    }
-  };
-
-  const onReject = (id) => {
-    if (mockPayouts.some((m) => m.id === id)) {
-      setMockPayouts((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: 'rejected' } : m))
-      );
-      toast.success('Payout rejected.');
-    } else {
-      handleRejectPayout?.(id);
-    }
-  };
-
-  const onProcess = (id) => {
-    if (mockPayouts.some((m) => m.id === id)) {
-      setMockPayouts((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: 'processing' } : m))
-      );
-      toast.success('Payout dispatched to processing.');
-    } else {
-      handleProcessingPayout?.(id);
-    }
-  };
-
-  const onPaid = (payout) => {
-    if (mockPayouts.some((m) => m.id === payout.id)) {
-      setMockPayouts((prev) =>
-        prev.map((m) => (m.id === payout.id ? { ...m, status: 'paid', payout_reference: 'NEFT-MOCK-99182' } : m))
-      );
-      toast.success('Payout settled & marked paid!');
-    } else {
-      handlePaidPayout?.(payout);
-    }
-  };
-
-  const onFailed = (id) => {
-    if (mockPayouts.some((m) => m.id === id)) {
-      setMockPayouts((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: 'failed' } : m))
-      );
-      toast.success('Payout marked failed.');
-    } else {
-      handleFailedPayout?.(id);
-    }
-  };
+  // Action delegators supporting real backend APIs
+  const onApprove = (id) => handleApprovePayout?.(id);
+  const onReject = (id) => handleRejectPayout?.(id);
+  const onProcess = (id) => handleProcessingPayout?.(id);
+  const onPaid = (payout) => handlePaidPayout?.(payout);
+  const onFailed = (id) => handleFailedPayout?.(id);
 
   return (
     <div className="space-y-6 animate-fade-in text-zinc-800 dark:text-zinc-200">
@@ -1553,7 +1464,6 @@ export default function SahayakPayoutsView({
         <div className="pt-1">
           {filteredPayouts.length === 0 ? (
             <PayoutEmptyState
-              onProcessMockPayout={handleProcessMockPayout}
               onOpenGuidelines={() => setIsGuidelinesOpen(true)}
             />
           ) : (

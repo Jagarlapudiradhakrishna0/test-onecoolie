@@ -2182,4 +2182,55 @@ exports.getMySessionsHandler = async (req, res) => {
     console.error('GET MY SESSIONS ERROR:', err);
     return res.status(500).json({ message: 'Error retrieving sessions.' });
   }
-};
+};
+
+/**
+ * POST /api/auth/sessions/:sessionId/revoke
+ * DELETE /api/auth/sessions/:sessionId
+ *
+ * Allows an authenticated user to revoke one of their own non-current sessions.
+ * Strictly verifies ownership (session.user_id === req.user.id) preventing BOLA.
+ */
+exports.revokeMySessionHandler = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { sessionId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    if (!sessionId) {
+      return res.status(400).json({ success: false, message: 'Session ID is required.' });
+    }
+
+    // 1. Fetch the session to verify ownership
+    const { data: session, error: fetchErr } = await supabase
+      .from('user_sessions')
+      .select('id, user_id, revoked_at')
+      .eq('id', sessionId)
+      .maybeSingle();
+
+    if (fetchErr || !session) {
+      return res.status(404).json({ success: false, message: 'Session not found.' });
+    }
+
+    // Strict ownership verification: cannot revoke another user's session
+    if (session.user_id !== userId) {
+      return res.status(403).json({ success: false, message: 'Not authorized to revoke this session.' });
+    }
+
+    // 2. Revoke the session
+    const sessionService = require('../services/sessionService');
+    await sessionService.revokeSession(sessionId, 'user_revoked', supabase);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Session revoked successfully.'
+    });
+  } catch (err) {
+    console.error('REVOKE MY SESSION ERROR:', err);
+    return res.status(500).json({ success: false, message: 'Failed to revoke session.' });
+  }
+};
+

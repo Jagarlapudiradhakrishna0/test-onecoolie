@@ -43,7 +43,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
   const [qrKey, setQrKey] = useState(0);
   const [bookingRef, setBookingRef] = useState('OC386022');
   const [activeBooking, setActiveBooking] = useState(null);
-  const [isTestMode, setIsTestMode] = useState(false);
   const [initializingOrder, setInitializingOrder] = useState(false);
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
@@ -61,7 +60,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
             setBookingRef(saved.bookingRef || 'OC386022');
             setPaymentStep(saved.paymentStep || 'online');
             if (saved.activeBooking) setActiveBooking(saved.activeBooking);
-            if (saved.isTestMode !== undefined) setIsTestMode(Boolean(saved.isTestMode));
             const remaining = Math.max(0, Math.floor((saved.expireAt - Date.now()) / 1000));
             setTimeLeft(remaining);
             return;
@@ -77,7 +75,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
       setTimeLeft(899);
       setPaymentStep('select');
       setActiveBooking(null);
-      setIsTestMode(false);
     }
   }, [open]);
 
@@ -246,7 +243,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
       if (orderRes && orderRes.booking) {
         setActiveBooking(orderRes.booking);
         setBookingRef(orderRes.booking.booking_id || bookingRef);
-        setIsTestMode(Boolean(orderRes.isTestMode));
 
         sessionStorage.setItem('onecoolie_active_payment', JSON.stringify({
           active: true,
@@ -254,7 +250,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
           bookingId: orderRes.booking.id,
           bookingRef: orderRes.booking.booking_id || bookingRef,
           activeBooking: orderRes.booking,
-          isTestMode: Boolean(orderRes.isTestMode),
           expireAt: expireTimestamp,
           total,
           ...(bookingData || {})
@@ -266,39 +261,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
       setPaymentError(err.response?.data?.message || 'Unable to connect to payment server. Please retry.');
     } finally {
       setInitializingOrder(false);
-    }
-  };
-
-  const handleTestPaymentConfirm = async () => {
-    if (!activeBooking?.id) {
-      toast.error('Booking order not yet initialized. Please wait a moment.');
-      return;
-    }
-    setProcessing(true);
-    setPaymentError(null);
-    try {
-      const { data } = await axios.post('/payments/test-confirm', {
-        booking_id: activeBooking.id,
-        test_transaction_ref: `TEST-${Date.now()}`
-      });
-
-      if (data.success) {
-        setPaymentVerified(true);
-        toast.success('Test payment verified successfully!');
-        try {
-          sessionStorage.removeItem('onecoolie_active_payment');
-        } catch (e) { }
-        setTimeout(async () => {
-          await onPaid('online', data.booking || activeBooking);
-        }, 600);
-      }
-    } catch (err) {
-      console.error('Test payment confirmation error:', err);
-      const msg = err.response?.data?.message || 'Test payment confirmation failed';
-      setPaymentError(msg);
-      toast.error(msg);
-    } finally {
-      setProcessing(false);
     }
   };
 
@@ -829,36 +791,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 </span>
               </div>
 
-              {/* Development Test Mode Panel (strictly hidden in production) */}
-              {isTestMode && (
-                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-left animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-full">
-                      🧪 Development Test Mode Active
-                    </span>
-                    <span className="text-[10px] text-amber-700 font-mono">
-                      #{bookingRef}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-amber-800 leading-snug">
-                    Testing UPI payment? Click below to verify payment via the backend development verification endpoint.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleTestPaymentConfirm}
-                    disabled={processing}
-                    className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                  >
-                    {processing ? (
-                      <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    )}
-                    <span>Simulate Verified Payment (Dev Only)</span>
-                  </button>
-                </div>
-              )}
-
               {/* Action Button: Launch Razorpay Checkout */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-xl p-2 text-center font-medium">
@@ -1033,36 +965,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     Auto-detecting
                   </span>
                 </div>
-
-                {/* Development Test Mode Panel (strictly hidden in production) */}
-                {isTestMode && (
-                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-left animate-fade-in">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-full">
-                        🧪 Development Test Mode Active
-                      </span>
-                      <span className="text-[10px] text-amber-700 font-mono">
-                        #{bookingRef}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-amber-800 leading-snug">
-                      Testing UPI payment? Click below to verify payment via the backend development verification endpoint.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleTestPaymentConfirm}
-                      disabled={processing}
-                      className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                    >
-                      {processing ? (
-                        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      )}
-                      <span>Simulate Verified Payment (Dev Only)</span>
-                    </button>
-                  </div>
-                )}
 
                 {/* Primary Action Button: "Proceed to Pay with Razorpay" */}
                 <div className="space-y-2">

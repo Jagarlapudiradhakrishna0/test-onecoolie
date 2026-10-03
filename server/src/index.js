@@ -97,8 +97,6 @@ app.use(
 // --------------------------------------------------
 // CORS
 // --------------------------------------------------
-const allowedOrigins = getAllowedOrigins();
-
 const corsOriginHandler = (origin, callback) => {
   // Allow requests with no origin (e.g. mobile apps, curl, server-to-server health probes)
   if (!origin) return callback(null, true);
@@ -107,7 +105,8 @@ const corsOriginHandler = (origin, callback) => {
   const normalized = origin.trim().replace(/\/+$/, '');
 
   // Match explicit allowlist
-  if (allowedOrigins.includes(normalized)) {
+  const currentAllowed = getAllowedOrigins();
+  if (currentAllowed.includes(normalized)) {
     return callback(null, true);
   }
 

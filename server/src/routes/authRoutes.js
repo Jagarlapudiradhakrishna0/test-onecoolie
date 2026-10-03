@@ -24,7 +24,8 @@ const {
   refreshTokenHandler,
   logoutHandler,
   logoutAllHandler,
-  getMySessionsHandler
+  getMySessionsHandler,
+  revokeMySessionHandler
 } = require('../controllers/authController');
 
 /*
@@ -211,6 +212,10 @@ router.post('/logout-all', protect, csrfProtection, logoutAllHandler);
 
 // List active & past sessions for authenticated user
 router.get('/sessions', protect, getMySessionsHandler);
+
+// Revoke a specific session belonging to authenticated user
+router.post('/sessions/:sessionId/revoke', protect, csrfProtection, revokeMySessionHandler);
+router.delete('/sessions/:sessionId', protect, csrfProtection, revokeMySessionHandler);
 
 // Account Profile & Phone Management
 router.put('/update-phone', protect, updatePhoneNumber);

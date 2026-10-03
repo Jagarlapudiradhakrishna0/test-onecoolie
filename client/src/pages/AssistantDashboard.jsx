@@ -94,6 +94,7 @@ export default function AssistantDashboard() {
   const [ticketPriority, setTicketPriority] = useState('normal');
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketSuccess, setTicketSuccess] = useState('');
+  const [ticketError, setTicketError] = useState('');
   const [expandedFaq, setExpandedFaq] = useState(null);
   const [supportTickets, setSupportTickets] = useState(() => {
     try {
@@ -102,18 +103,7 @@ export default function AssistantDashboard() {
     } catch (err) {
       console.error(err);
     }
-    return [
-      {
-        id: 'KZJ-SUP-9102',
-        category: 'Luggage Assistance Dispute',
-        pnr: '2489012431',
-        desc: 'Passenger luggage exceeded 45kg; guidance provided for excess baggage tariff.',
-        priority: 'normal',
-        status: 'Resolved by Station Master',
-        station: 'KZJ',
-        createdAt: '03:15 AM',
-      },
-    ];
+    return [];
   });
 
   /* ── Auto-dismiss Success Banner ────────────────────────── */
@@ -746,28 +736,18 @@ export default function AssistantDashboard() {
 
       setTicketDesc('');
       setTicketPnr('');
+      setTicketError('');
       setTicketSuccess(`Ticket #${serverTicket.id} dispatched to ${currentStationObj.name} Station Supervisor Desk.`);
     } catch (err) {
-      console.warn('Backend ticket dispatch failed, saving locally:', err);
-      const fallbackId = `${station}-SUP-${Math.floor(1000 + Math.random() * 9000)}`;
-      const fallbackTicket = {
-        id: fallbackId,
-        category: resolvedCategory,
-        pnr: ticketPnr.trim() || 'N/A',
-        desc: ticketDesc.trim(),
-        priority: ticketPriority,
-        status: 'Dispatched to Station Supervisor',
-        station: station,
-        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      const updated = [fallbackTicket, ...supportTickets];
-      setSupportTickets(updated);
-      setTicketDesc('');
-      setTicketPnr('');
-      setTicketSuccess(`Ticket #${fallbackId} recorded & queued for Station Supervisor.`);
+      console.error('Backend ticket dispatch failed:', err);
+      setTicketSuccess('');
+      setTicketError('Ticket submission failed. Please check your connection and try again.');
     } finally {
       setTicketSubmitting(false);
-      setTimeout(() => setTicketSuccess(''), 6000);
+      setTimeout(() => {
+        setTicketSuccess('');
+        setTicketError('');
+      }, 6000);
     }
   };
 
@@ -2027,6 +2007,16 @@ export default function AssistantDashboard() {
                           <span>{ticketSuccess}</span>
                         </div>
                         <button type="button" onClick={() => setTicketSuccess('')} className="text-xs underline">✕</button>
+                      </div>
+                    )}
+
+                    {ticketError && (
+                      <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+                        <div className="flex items-center gap-2.5">
+                          <AlertTriangle size={18} className="text-rose-600 shrink-0" />
+                          <span>{ticketError}</span>
+                        </div>
+                        <button type="button" onClick={() => setTicketError('')} className="text-xs underline">✕</button>
                       </div>
                     )}
 

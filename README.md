@@ -58,9 +58,9 @@ ONECOOLIE/
 │   ├── DEPLOYMENT_SECURITY_CHECKLIST.md  # Security controls & audit verification
 │   └── DISASTER_RECOVERY_RUNBOOK.md      # Disaster recovery & business continuity
 │
-├── 20260301_add_rbac.sql                     # RBAC database migration
-├── supabase_complete_production_schema.sql  # Master database production schema
-├── supabase_existing_database_upgrade.sql   # Database upgrade migration script
+├── server/supabase/
+│   ├── ONECOOLIE_MASTER_SCHEMA.sql      # Single authoritative consolidated database schema
+│   └── archive/                         # Archived legacy migrations
 ├── render.yaml                               # Render web service deployment configuration
 ├── package.json                              # Root orchestration & Render build/start scripts
 └── README.md                                 # Project documentation
@@ -136,18 +136,11 @@ Key variables:
 
 ## 🗄 Database Initialization & Migrations
 
-1. Apply the master schema:
-   ```bash
-   psql -d <YOUR_DB_CONNECTION_STRING> -f supabase_complete_production_schema.sql
-   ```
-2. Apply the RBAC migration:
-   ```bash
-   psql -d <YOUR_DB_CONNECTION_STRING> -f 20260301_add_rbac.sql
-   ```
-3. For existing databases requiring an upgrade, run:
-   ```bash
-   psql -d <YOUR_DB_CONNECTION_STRING> -f supabase_existing_database_upgrade.sql
-   ```
+Execute the consolidated master schema in your Supabase SQL Editor or via CLI:
+```bash
+psql -d <YOUR_DB_CONNECTION_STRING> -f server/supabase/ONECOOLIE_MASTER_SCHEMA.sql
+```
+*(All legacy migrations are archived in `server/supabase/archive/`)*
 
 ---
 
@@ -157,7 +150,7 @@ Key variables:
 | :--- | :--- | :--- | :--- |
 | **Frontend** | Vercel | `client/vercel.json` | `https://onecoolie.vercel.app` |
 | **Backend API** | Render | `render.yaml` & root `package.json` | `https://onecoolie.onrender.com` |
-| **Database** | Supabase | `supabase_complete_production_schema.sql` | Hosted PostgreSQL |
+| **Database** | Supabase | `server/supabase/ONECOOLIE_MASTER_SCHEMA.sql` | Hosted PostgreSQL |
 | **Payment Gateway** | Razorpay | Configured via `server/src/config/razorpay.js` | UPI QR, Cards, Netbanking |
 | **Realtime Engine** | Socket.IO | Verified via JWT session middleware | WebSocket & Polling transports |
 

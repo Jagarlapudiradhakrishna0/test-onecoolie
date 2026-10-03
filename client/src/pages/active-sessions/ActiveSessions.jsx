@@ -239,16 +239,14 @@ export default function ActiveSessions({
       if (onRevokeSession) {
         await onRevokeSession(revokingSession.id);
       } else {
-        await axios.post(`/admin/sessions/${revokingSession.id}/revoke`).catch(() => {});
+        await axios.post(`/admin/sessions/${revokingSession.id}/revoke`);
       }
       setRevokedSessionIds((prev) => new Set([...prev, revokingSession.id]));
       toast.success(`Session ${revokingSession.id} forcibly revoked`);
       setRevokingSession(null);
     } catch (err) {
-      // Fallback local update if offline or simulated
-      setRevokedSessionIds((prev) => new Set([...prev, revokingSession.id]));
-      toast.success('Session terminated successfully');
-      setRevokingSession(null);
+      console.error('Session revocation error:', err);
+      toast.error('Failed to revoke session on server. Please try again.');
     } finally {
       setActionInProgress(false);
     }
@@ -262,7 +260,7 @@ export default function ActiveSessions({
       if (onRevokeUserSessions) {
         await onRevokeUserSessions(revokingAllUser.user_id, revokingAllUser.user?.email);
       } else {
-        await axios.post(`/admin/users/${revokingAllUser.user_id}/revoke-sessions`).catch(() => {});
+        await axios.post(`/admin/users/${revokingAllUser.user_id}/revoke-sessions`);
       }
       // Revoke all sessions belonging to this user
       const idsToRevoke = rawSessions
@@ -273,13 +271,8 @@ export default function ActiveSessions({
       setRevokingAllUser(null);
       setActiveMenuSessionId(null);
     } catch (err) {
-      const idsToRevoke = rawSessions
-        .filter((s) => s.user_id === revokingAllUser.user_id)
-        .map((s) => s.id);
-      setRevokedSessionIds((prev) => new Set([...prev, ...idsToRevoke]));
-      toast.success('All user sessions revoked successfully');
-      setRevokingAllUser(null);
-      setActiveMenuSessionId(null);
+      console.error('All sessions revocation error:', err);
+      toast.error('Failed to revoke session on server. Please try again.');
     } finally {
       setActionInProgress(false);
     }

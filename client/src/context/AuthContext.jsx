@@ -2,7 +2,6 @@ import { createContext, useState, useEffect, useContext } from 'react';
 import axios from '../api/axios';
 
 import { clearStoredTokens, setStoredTokens, initCsrfToken } from '../api/axios';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 export const AuthContext = createContext();
 
@@ -302,7 +301,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // UPDATE PHONE NUMBER (With Monthly 2-Change Limit & Supabase Fallback)
+  // ============================================================
+  // UPDATE PHONE NUMBER
   // ============================================================
   const updateUserPhone = async (newPhone) => {
     if (user?.role === 'assistant') {
@@ -322,138 +322,17 @@ export const AuthProvider = ({ children }) => {
       err.response = { data: { message: err.message } };
       throw err;
     }
-    const formattedPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
 
-    // 2. Attempt Express backend route first
-    try {
-      const { data } = await axios.put('/auth/update-phone', { phone: cleanPhone });
-      if (data && data.phone) {
-        const stored = localStorage.getItem('userInfo');
-        const parsed = stored ? JSON.parse(stored) : {};
-        const updated = { ...parsed, ...(user || {}), phone: data.phone };
-        localStorage.setItem('userInfo', JSON.stringify(updated));
-        setUser(updated);
-      }
-      return data;
-    } catch (error) {
-      // If server explicitly returned 429 monthly limit exceeded, propagate immediately
-      if (error.response?.status === 429) {
-        throw error;
-      }
-
-      console.warn('Backend /auth/update-phone route unavailable, falling back to direct Supabase update...', error.message);
-
-      // 3. Fallback directly to Supabase REST
-      try {
-        const userId = user?.id || user?._id || user?.passenger_id || user?.assistant_id;
-        const userEmail = user?.email;
-
-        if (!userId && !userEmail) {
-          throw new Error('User session not found. Please log in again.');
-        }
-
-        const queryFilter = userId ? `id=eq.${userId}` : `email=eq.${encodeURIComponent(userEmail)}`;
-        const userUrl = `${SUPABASE_URL}/rest/v1/users?${queryFilter}&select=id,name,email,phone,role,station_code,is_approved,kyc_status,kyc_documents`;
-
-        const getRes = await fetch(userUrl, {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-        });
-
-        if (!getRes.ok) {
-          throw new Error('Unable to connect to database to verify account.');
-        }
-
-        const rows = await getRes.json();
-        const currentUser = rows && rows[0];
-        if (!currentUser) {
-          throw new Error('User account record not found in database.');
-        }
-
-        const kycDocs = typeof currentUser.kyc_documents === 'object' && currentUser.kyc_documents !== null
-          ? currentUser.kyc_documents
-          : {};
-        const history = Array.isArray(kycDocs.phone_change_history) ? kycDocs.phone_change_history : [];
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        const changesThisMonth = history.filter((h) => h && typeof h.date === 'string' && h.date.startsWith(currentMonth));
-        const MAX_MONTHLY_CHANGES = 2;
-
-        if (changesThisMonth.length >= MAX_MONTHLY_CHANGES) {
-          const limitErr = new Error('Monthly limit reached: You can only update your phone number 2 times per calendar month.');
-          limitErr.response = {
-            status: 429,
-            data: {
-              message: 'Monthly limit reached: You can only update your phone number 2 times per calendar month.',
-              changesRemaining: 0,
-              changesUsed: changesThisMonth.length,
-              limit: MAX_MONTHLY_CHANGES,
-              currentPhone: currentUser.phone,
-            },
-          };
-          throw limitErr;
-        }
-
-        // Append audit history
-        const newRecord = {
-          date: new Date().toISOString(),
-          from: currentUser.phone || user?.phone || null,
-          to: formattedPhone,
-        };
-        const updatedHistory = [...history, newRecord];
-        const updatedKycDocs = {
-          ...kycDocs,
-          phone_change_history: updatedHistory,
-        };
-
-        // Update database via Supabase PATCH
-        const updateUrl = `${SUPABASE_URL}/rest/v1/users?id=eq.${currentUser.id}`;
-        const patchRes = await fetch(updateUrl, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            Prefer: 'return=representation',
-          },
-          body: JSON.stringify({
-            phone: formattedPhone,
-            kyc_documents: updatedKycDocs,
-            updated_at: new Date().toISOString(),
-          }),
-        });
-
-        if (!patchRes.ok) {
-          const errBody = await patchRes.text();
-          throw new Error(`Database update failed: ${errBody}`);
-        }
-
-        const patchData = await patchRes.json();
-        const updatedDbUser = (patchData && patchData[0]) || { ...user, phone: formattedPhone };
-
-        // Update local session
-        const stored = localStorage.getItem('userInfo');
-        const parsed = stored ? JSON.parse(stored) : {};
-        const merged = { ...parsed, ...(user || {}), phone: formattedPhone };
-        localStorage.setItem('userInfo', JSON.stringify(merged));
-        setUser(merged);
-
-        const changesRemaining = MAX_MONTHLY_CHANGES - (changesThisMonth.length + 1);
-
-        return {
-          message: 'Phone number updated successfully.',
-          phone: formattedPhone,
-          changesRemaining,
-          changesUsed: changesThisMonth.length + 1,
-          limit: MAX_MONTHLY_CHANGES,
-          user: updatedDbUser,
-        };
-      } catch (fallbackErr) {
-        console.error('SUPABASE FALLBACK UPDATE PHONE ERROR:', fallbackErr);
-        throw fallbackErr;
-      }
+    // 2. Call Express backend route directly
+    const { data } = await axios.put('/auth/update-phone', { phone: cleanPhone });
+    if (data && data.phone) {
+      const stored = localStorage.getItem('userInfo');
+      const parsed = stored ? JSON.parse(stored) : {};
+      const updated = { ...parsed, ...(user || {}), phone: data.phone };
+      localStorage.setItem('userInfo', JSON.stringify(updated));
+      setUser(updated);
     }
+    return data;
   };
 
   const getPhoneStatus = async () => {
@@ -461,48 +340,13 @@ export const AuthProvider = ({ children }) => {
       const { data } = await axios.get('/auth/phone-status');
       return data;
     } catch (error) {
-      // Fallback directly to Supabase
-      try {
-        const userId = user?.id || user?._id || user?.passenger_id || user?.assistant_id;
-        const userEmail = user?.email;
-        if (!userId && !userEmail) return null;
-
-        const queryFilter = userId ? `id=eq.${userId}` : `email=eq.${encodeURIComponent(userEmail)}`;
-        const userUrl = `${SUPABASE_URL}/rest/v1/users?${queryFilter}&select=id,phone,kyc_documents`;
-
-        const res = await fetch(userUrl, {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-        });
-
-        if (!res.ok) throw new Error('Supabase query failed');
-        const rows = await res.json();
-        const u = rows && rows[0];
-        if (!u) return null;
-
-        const kycDocs = typeof u.kyc_documents === 'object' && u.kyc_documents !== null ? u.kyc_documents : {};
-        const history = Array.isArray(kycDocs.phone_change_history) ? kycDocs.phone_change_history : [];
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        const changesThisMonth = history.filter((h) => h && typeof h.date === 'string' && h.date.startsWith(currentMonth));
-        const MAX_MONTHLY_CHANGES = 2;
-        const changesRemaining = Math.max(0, MAX_MONTHLY_CHANGES - changesThisMonth.length);
-
-        return {
-          phone: u.phone || user?.phone || null,
-          changesUsed: changesThisMonth.length,
-          changesRemaining,
-          limit: MAX_MONTHLY_CHANGES,
-        };
-      } catch (fbErr) {
-        return {
-          phone: user?.phone || null,
-          changesUsed: 0,
-          changesRemaining: 2,
-          limit: 2,
-        };
-      }
+      console.warn('Failed to load phone status:', error.message);
+      return {
+        phone: user?.phone || null,
+        changesUsed: 0,
+        changesRemaining: 2,
+        limit: 2,
+      };
     }
   };
 
@@ -606,6 +450,11 @@ export const AuthProvider = ({ children }) => {
     return data; // { count, sessions }
   };
 
+  const revokeUserSession = async (sessionId) => {
+    const { data } = await axios.post(`/auth/sessions/${sessionId}/revoke`);
+    return data;
+  };
+
   const refreshSession = async () => {
     const rt = localStorage.getItem('refreshToken');
     if (!rt) throw new Error('No refresh token available');
@@ -632,6 +481,7 @@ export const AuthProvider = ({ children }) => {
         setupAdminMfa,
         verifyAdminMfaEnrollment,
         getSessions,
+        revokeUserSession,
         refreshSession,
         updateUserPhone,
         getPhoneStatus,
