@@ -210,7 +210,9 @@ function formatBooking(booking, { includeOTP = false } = {}) {
           terms_version: booking.journey_protection.terms_version,
           terms_accepted_at: booking.journey_protection.terms_accepted_at,
           activated_at: booking.journey_protection.activated_at,
-          payment_method: booking.journey_protection.payment_method || (booking.payment_method ? (['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(String(booking.payment_method).toLowerCase()) ? 'cash' : 'online') : null)
+          payment_method: booking.journey_protection.payment_method || (booking.payment_method ? (['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(String(booking.payment_method).toLowerCase()) ? 'cash' : 'online') : null),
+          bag_category: booking.journey_protection.bag_category || null,
+          proposed_protection_limit: booking.journey_protection.proposed_protection_limit != null ? Number(booking.journey_protection.proposed_protection_limit) : null
         }
       : null,
   };

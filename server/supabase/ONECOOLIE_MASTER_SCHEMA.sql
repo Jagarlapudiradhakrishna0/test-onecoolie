@@ -953,11 +953,15 @@ CREATE TABLE IF NOT EXISTS public.journey_protection (
     payment_id UUID REFERENCES public.payments(id) ON DELETE SET NULL,
     gateway_order_id TEXT,
     gateway_payment_id TEXT,
-    terms_version TEXT NOT NULL DEFAULT 'ONECOOLIE-PROTECTION-PRELAUNCH-v1',
+    terms_version TEXT NOT NULL DEFAULT 'ONECOOLIE-PROTECTION-PRELAUNCH-v2',
     terms_accepted BOOLEAN NOT NULL DEFAULT TRUE,
     terms_accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     activated_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
+    bag_category TEXT DEFAULT NULL,
+    bag_weight NUMERIC(10, 2) DEFAULT NULL,
+    baggage_reference TEXT DEFAULT NULL,
+    proposed_protection_limit NUMERIC(10, 2) DEFAULT NULL,
     provider_id TEXT DEFAULT NULL,
     provider_name TEXT DEFAULT NULL,
     provider_policy_reference TEXT DEFAULT NULL,
@@ -975,11 +979,15 @@ ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS payment_id UUID R
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS gateway_order_id TEXT;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS gateway_payment_id TEXT;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'online';
-ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS terms_version TEXT DEFAULT 'ONECOOLIE-PROTECTION-PRELAUNCH-v1';
+ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS terms_version TEXT DEFAULT 'ONECOOLIE-PROTECTION-PRELAUNCH-v2';
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS terms_accepted BOOLEAN DEFAULT TRUE;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS bag_category TEXT DEFAULT NULL;
+ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS bag_weight NUMERIC(10, 2) DEFAULT NULL;
+ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS baggage_reference TEXT DEFAULT NULL;
+ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS proposed_protection_limit NUMERIC(10, 2) DEFAULT NULL;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS provider_id TEXT DEFAULT NULL;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS provider_name TEXT DEFAULT NULL;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS provider_policy_reference TEXT DEFAULT NULL;

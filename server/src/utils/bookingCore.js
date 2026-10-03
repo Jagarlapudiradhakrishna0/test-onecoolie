@@ -12,7 +12,11 @@
 
 const { calculateBookingPrice } = require('../config/pricing');
 const { normalizePaymentMethod, isValidPaymentMethod } = require('./paymentClassification');
-const { JOURNEY_PROTECTION_CONFIG, generateProtectionId } = require('./protectionConfig');
+const {
+  JOURNEY_PROTECTION_CONFIG,
+  generateProtectionId,
+  calculateProposedProtectionTier
+} = require('./protectionConfig');
 
 /**
  * Generates a human-readable booking identifier (e.g. RM-MK19Z-99B1A).
@@ -313,6 +317,7 @@ async function createBookingRecordInDB(supabase, userId, payload) {
   if (journey_protection) {
     try {
       const protectionId = generateProtectionId();
+      const bagTier = calculateProposedProtectionTier(booking);
       const protPayload = {
         protection_id: protectionId,
         booking_id: booking.id,
@@ -327,6 +332,8 @@ async function createBookingRecordInDB(supabase, userId, payload) {
         gateway_order_id: null,
         gateway_payment_id: null,
         activated_at: null,
+        bag_category: bagTier.tier,
+        proposed_protection_limit: bagTier.proposedLimitInr,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

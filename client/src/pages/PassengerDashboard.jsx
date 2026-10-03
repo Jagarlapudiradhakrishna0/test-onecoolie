@@ -1080,7 +1080,7 @@ export default function PassengerDashboard() {
           platform: selectedTrain?.platform || '2',
           journey_protection: journeyProtectionOptedIn,
           terms_accepted: journeyProtectionOptedIn,
-          terms_version: 'ONECOOLIE-PROTECTION-PRELAUNCH-v1'
+          terms_version: 'ONECOOLIE-PROTECTION-PRELAUNCH-v2'
         });
         data = res.data;
       }

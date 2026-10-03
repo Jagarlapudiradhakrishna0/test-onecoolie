@@ -211,9 +211,9 @@ async function main() {
   });
 
   // Test 14: Accepted terms version is stored
-  runTest('14. Accepted terms version is stored (ONECOOLIE-PROTECTION-PRELAUNCH-v1)', () => {
+  runTest('14. Accepted terms version is stored (ONECOOLIE-PROTECTION-PRELAUNCH-v2)', () => {
     const termsVersion = PROTECTION_CONFIG.CURRENT_TERMS_VERSION;
-    assert.strictEqual(termsVersion, 'ONECOOLIE-PROTECTION-PRELAUNCH-v1');
+    assert.strictEqual(termsVersion, 'ONECOOLIE-PROTECTION-PRELAUNCH-v2');
   });
 
   // Test 15: Accepted timestamp is stored
@@ -226,10 +226,10 @@ async function main() {
   // Test 16: Historical terms version remains associated with protection
   runTest('16. Historical terms version remains immutable when updated', () => {
     const historicalRecord = { id: 'prot_old', terms_version: 'ONECOOLIE-PROTECTION-PRELAUNCH-v1' };
-    const futureSystemTermsVersion = 'ONECOOLIE-PROTECTION-v2';
-    // Historical record must retain its originally accepted version
+    const currentTermsVersion = PROTECTION_CONFIG.CURRENT_TERMS_VERSION;
+    // Historical record must retain its originally accepted version v1
     assert.strictEqual(historicalRecord.terms_version, 'ONECOOLIE-PROTECTION-PRELAUNCH-v1');
-    assert.notStrictEqual(historicalRecord.terms_version, futureSystemTermsVersion);
+    assert.notStrictEqual(historicalRecord.terms_version, currentTermsVersion);
   });
 
   // Test 17: Protection cancellation follows configured rules
@@ -286,7 +286,7 @@ async function main() {
   runTest('22. No fake insurer is displayed', () => {
     const terms = PRE_LAUNCH_POLICY_TERMS;
     const json = JSON.stringify(terms);
-    assert.strictEqual(json.includes('LIC'), false);
+    assert.strictEqual(/\bLIC\b/.test(json), false, 'Must not reference LIC insurer');
     assert.strictEqual(json.includes('HDFC ERGO'), false);
     assert.strictEqual(json.includes('ICICI Lombard'), false);
     assert.strictEqual(json.includes('Bajaj Allianz'), false);
@@ -303,8 +303,9 @@ async function main() {
 
   // Test 24: No fake claim settlement occurs
   runTest('24. No fake claim settlement occurs', () => {
-    const sec8 = PRE_LAUNCH_POLICY_TERMS.sections.find((s) => s.number === 8);
-    assert.strictEqual(sec8.content.includes('no real insurance claim adjudication or financial payout takes place'), true);
+    const secClaim = PRE_LAUNCH_POLICY_TERMS.sections.find((s) => s.number === 19 || s.title.includes('Claim'));
+    assert.ok(secClaim, 'Claim process section must exist');
+    assert.strictEqual(secClaim.content.includes('no real claim adjudication or payout takes place'), true);
   });
 
   // Test 25: No service-role credentials are exposed to frontend
@@ -360,10 +361,98 @@ async function main() {
     assert.strictEqual(rlsSql.includes('"Service role full access on journey_protection"'), true);
   });
 
+  // Test 33: Baggage Protection Limits match 4 pre-launch tiers
+  runTest('33. Baggage Protection Limits match 4 proposed tiers (₹2.5k, ₹5k, ₹10k, ₹15k)', () => {
+    const { BAGGAGE_PROTECTION_LIMITS } = require('./src/utils/protectionConfig');
+    assert.strictEqual(BAGGAGE_PROTECTION_LIMITS.length, 4);
+    const small = BAGGAGE_PROTECTION_LIMITS.find(t => t.tier === 'small');
+    const medium = BAGGAGE_PROTECTION_LIMITS.find(t => t.tier === 'medium');
+    const large = BAGGAGE_PROTECTION_LIMITS.find(t => t.tier === 'large');
+    const extraLarge = BAGGAGE_PROTECTION_LIMITS.find(t => t.tier === 'extra_large');
+
+    assert.strictEqual(small.proposedLimitInr, 2500);
+    assert.strictEqual(medium.proposedLimitInr, 5000);
+    assert.strictEqual(large.proposedLimitInr, 10000);
+    assert.strictEqual(extraLarge.proposedLimitInr, 15000);
+  });
+
+  // Test 34: Baggage Protection Tier calculation is server-authoritative
+  runTest('34. Baggage Protection Tier calculation is server-authoritative', () => {
+    const { calculateProposedProtectionTier } = require('./src/utils/protectionConfig');
+    const bookingSmall = { services: { luggageCounts: { small: 2 } } };
+    const bookingLarge = { services: { luggageCounts: { small: 1, large: 1 } } };
+    const bookingXL = { services: { luggageCounts: { extra_large: 1 } } };
+    const bookingGeneral = { services: {} };
+
+    assert.strictEqual(calculateProposedProtectionTier(bookingSmall).tier, 'small');
+    assert.strictEqual(calculateProposedProtectionTier(bookingLarge).tier, 'large');
+    assert.strictEqual(calculateProposedProtectionTier(bookingXL).tier, 'extra_large');
+    assert.strictEqual(calculateProposedProtectionTier(bookingGeneral).tier, 'small');
+  });
+
+  // Test 35: Damage terms table covers 13 points and excludes minor / normal wear
+  runTest('35. Damage terms table covers 13 points with correct exclusion rules', () => {
+    const { DAMAGE_TERMS_TABLE } = require('./src/utils/protectionConfig');
+    assert.strictEqual(DAMAGE_TERMS_TABLE.length, 13);
+    const minorScratches = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Minor scratches');
+    const damagedWheel = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Damaged wheel');
+    const brokenHandle = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Broken handle');
+    const crackedShell = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Cracked shell');
+    const normalWear = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Normal wear and tear');
+    const preExisting = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Pre-existing damage');
+    const excludedValuables = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Damage to excluded valuables');
+
+    assert.strictEqual(minorScratches.treatment, 'Not covered');
+    assert.strictEqual(normalWear.treatment, 'Not covered');
+    assert.strictEqual(preExisting.treatment, 'Not covered');
+    assert.strictEqual(excludedValuables.treatment, 'Not covered');
+    assert.strictEqual(damagedWheel.treatment, 'May be considered');
+    assert.strictEqual(brokenHandle.treatment, 'May be considered');
+    assert.strictEqual(crackedShell.treatment, 'May be considered');
+  });
+
+  // Test 36: Valuable items passenger responsibility statement and exclusions are defined
+  runTest('36. Valuable items passenger responsibility statement and exclusions defined', () => {
+    const { VALUABLE_EXCLUDED_ITEMS, PRE_LAUNCH_POLICY_TERMS } = require('./src/utils/protectionConfig');
+    assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('cash'));
+    assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('jewelry'));
+    assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('laptops'));
+    assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('passports'));
+    assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('mobile phones'));
+
+    const sec11 = PRE_LAUNCH_POLICY_TERMS.sections.find(s => s.number === 11);
+    assert.ok(sec11.content.includes('VALUABLE ITEMS — PASSENGER RESPONSIBILITY'));
+    assert.ok(sec11.content.includes('ONECOOLIE is not responsible for loss, theft, disappearance, or damage to items that are excluded'));
+  });
+
+  // Test 37: Incident reporting & claims architecture supports loss, damage, and theft
+  runTest('37. Claims architecture supports loss, damage, theft with CLM- ID format', () => {
+    const schemaSql = fs.readFileSync(path.join(__dirname, 'supabase', 'ONECOOLIE_JOURNEY_PROTECTION_SCHEMA.sql'), 'utf8');
+    assert.ok(schemaSql.includes('claim_type TEXT DEFAULT \'damage\''));
+    assert.ok(schemaSql.includes('incident_date DATE'));
+    assert.ok(schemaSql.includes('damage_type TEXT'));
+    assert.ok(schemaSql.includes('damage_severity TEXT'));
+    assert.ok(schemaSql.includes('evidence JSONB'));
+    assert.ok(schemaSql.includes('claim_id TEXT'));
+  });
+
+  // Test 38: Zero references to ₹1 lakh, 100000, or 1 lakh across policy terms and passenger UI
+  runTest('38. Universal accidental payout amount (₹1 lakh) is absent from protection', () => {
+    const termsCode = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionTermsModal.jsx'), 'utf8');
+    const cardCode = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionCard.jsx'), 'utf8');
+    const configCode = fs.readFileSync(path.join(__dirname, 'src', 'utils', 'protectionConfig.js'), 'utf8');
+
+    [termsCode, cardCode, configCode].forEach((content) => {
+      assert.strictEqual(content.includes('100000'), false);
+      assert.strictEqual(content.includes('1,00,000'), false);
+      assert.strictEqual(content.includes('1 lakh'), false);
+    });
+  });
+
   console.log('\n================================================================');
   console.log(`RESULTS: ${passedTests} / ${totalTests} TESTS PASSED`);
   if (passedTests === totalTests) {
-    console.log('STATUS: ALL 32 JOURNEY PROTECTION TESTS PASSED SUCCESSFULLY! ✓');
+    console.log(`STATUS: ALL ${totalTests} JOURNEY PROTECTION TESTS PASSED SUCCESSFULLY! ✓`);
   } else {
     console.error(`STATUS: ${totalTests - passedTests} TESTS FAILED.`);
     process.exit(1);

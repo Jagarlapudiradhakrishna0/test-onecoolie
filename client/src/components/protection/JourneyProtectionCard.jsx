@@ -26,7 +26,7 @@ export default function JourneyProtectionCard({
   const isPending = protection?.status === 'pending_payment';
   const protectionId = protection?.protection_id;
   const activatedAt = protection?.activated_at;
-  const termsVersion = protection?.terms_version || 'ONECOOLIE-PROTECTION-PRELAUNCH-v1';
+  const termsVersion = protection?.terms_version || 'ONECOOLIE-PROTECTION-PRELAUNCH-v2';
   const isCash = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(
     String(protection?.payment_method || paymentMethod).toLowerCase()
   );
@@ -56,7 +56,7 @@ export default function JourneyProtectionCard({
               </span>
             </div>
             <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
-              Optional protection for your journey.
+              Optional protection for your journey and eligible baggage.
             </p>
           </div>
         </div>
@@ -101,6 +101,14 @@ export default function JourneyProtectionCard({
             <span className="text-zinc-500 text-[11px]">Price:</span>
             <span className="font-bold text-zinc-900">₹0.50</span>
           </div>
+          {protection?.proposed_protection_limit != null && (
+            <div className="flex items-center justify-between font-mono">
+              <span className="text-zinc-500 text-[11px]">Proposed Limit:</span>
+              <span className="font-bold text-zinc-800">
+                Up to ₹{Number(protection.proposed_protection_limit).toLocaleString('en-IN')} (Proposed)
+              </span>
+            </div>
+          )}
           {activatedAt && (
             <div className="flex items-center justify-between font-mono">
               <span className="text-zinc-500 text-[11px]">Activated:</span>

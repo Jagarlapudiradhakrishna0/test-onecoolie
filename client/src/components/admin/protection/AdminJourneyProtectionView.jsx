@@ -185,8 +185,9 @@ export default function AdminJourneyProtectionView() {
                   <th className="py-3.5 px-4">Passenger</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Payment Method</th>
+                  <th className="py-3.5 px-4">Proposed Tier</th>
                   <th className="py-3.5 px-4">Price</th>
-                  <th className="py-3.5 px-4">Activated At</th>
+                  <th className="py-3.5 px-4">Terms Version</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -235,11 +236,20 @@ export default function AdminJourneyProtectionView() {
                           {isCash ? 'CASH / COD' : 'ONLINE'}
                         </span>
                       </td>
+                      <td className="py-3.5 px-4 font-mono text-zinc-800 text-[11px]">
+                        {p.proposed_protection_limit != null ? (
+                          <span className="font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                            Up to ₹{Number(p.proposed_protection_limit).toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400">Baseline (₹2,500)</span>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-zinc-900">
                         ₹{Number(p.price || 0.5).toFixed(2)}
                       </td>
-                      <td className="py-3.5 px-4 text-zinc-600 text-[11px]">
-                        {p.activated_at ? new Date(p.activated_at).toLocaleString() : '--'}
+                      <td className="py-3.5 px-4 text-zinc-500 font-mono text-[10px] truncate max-w-[120px]" title={p.terms_version}>
+                        {p.terms_version || 'v2'}
                       </td>
                       <td className="py-3.5 px-4 text-right space-x-2">
                         {isPending && isCash && (

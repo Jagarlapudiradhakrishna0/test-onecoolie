@@ -155,3 +155,30 @@ export async function confirmProtectionCashCollection(bookingId) {
   return res.data;
 }
 
+/**
+ * Submits an incident report / claim under the pre-launch verification workflow
+ * @param {object} claimData
+ * @returns {Promise<object>}
+ */
+export async function submitIncidentClaim(claimData) {
+  const res = await axios.post('/protection/claim', claimData);
+  return res.data;
+}
+
+/**
+ * Fetches incident claims for a booking
+ * @param {string} bookingId
+ * @returns {Promise<Array>}
+ */
+export async function fetchBookingClaims(bookingId) {
+  if (!bookingId) return [];
+  try {
+    const res = await axios.get(`/protection/claims/${bookingId}`);
+    return res.data?.claims || [];
+  } catch (err) {
+    console.error('[PROTECTION] Error fetching claims:', err);
+    return [];
+  }
+}
+
+

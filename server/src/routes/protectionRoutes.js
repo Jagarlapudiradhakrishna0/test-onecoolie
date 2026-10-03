@@ -15,7 +15,9 @@ const {
   getProtectionTerms,
   cancelProtection,
   getAdminProtections,
-  confirmCashCollection
+  confirmCashCollection,
+  submitProtectionClaim,
+  getClaimsForBooking
 } = require('../controllers/protectionController');
 
 // Public terms route (pre-launch policy terms documentation)
@@ -36,6 +38,10 @@ router.get('/booking/:bookingId', protect, getProtectionForBooking);
 
 // Protected: Cancel Protection
 router.post('/:protectionId/cancel', protect, cancelProtection);
+
+// Protected: Incident Reporting & Claims (Pre-Launch verification flow)
+router.post('/claim', protect, submitProtectionClaim);
+router.get('/claims/:bookingId', protect, getClaimsForBooking);
 
 // Admin: List all Protection records
 router.get('/admin/list', protect, getAdminProtections);

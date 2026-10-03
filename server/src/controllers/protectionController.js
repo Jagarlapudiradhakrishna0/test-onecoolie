@@ -17,11 +17,13 @@ const crypto = require('crypto');
 const supabase = require('../config/db');
 const getSupabase = () => supabase;
 const { isRazorpayConfigured, getRazorpayClient, formatRazorpayAmount } = require('../config/razorpay');
+const { resolveBooking } = require('../utils/bookingResolver');
 const { recordFinancialAudit } = require('../utils/auditService');
 const { recordAdminAudit } = require('../services/adminAuditService');
 const {
   PROTECTION_CONFIG,
   generateProtectionId,
+  calculateProposedProtectionTier,
   PRE_LAUNCH_POLICY_TERMS
 } = require('../utils/protectionConfig');
 
@@ -129,6 +131,7 @@ async function createProtectionOrder(req, res) {
 
     if (!protectionRecord) {
       const newProtectionId = generateProtectionId();
+      const bagTier = calculateProposedProtectionTier(booking);
       const { data: inserted, error: insErr } = await supabase
         .from('journey_protection')
         .insert({
@@ -139,7 +142,9 @@ async function createProtectionOrder(req, res) {
           status: PROTECTION_CONFIG.STATUSES.PENDING_PAYMENT,
           terms_version: PROTECTION_CONFIG.CURRENT_TERMS_VERSION,
           terms_accepted: true,
-          terms_accepted_at: nowIso
+          terms_accepted_at: nowIso,
+          bag_category: bagTier.tier,
+          proposed_protection_limit: bagTier.proposedLimitInr
         })
         .select()
         .single();
@@ -494,7 +499,7 @@ async function getProtectionForBooking(req, res) {
     // 2. Fetch Journey Protection (favoring active status)
     const { data: protections, error: pErr } = await supabase
       .from('journey_protection')
-      .select('id, protection_id, booking_id, passenger_id, price, status, terms_version, terms_accepted, terms_accepted_at, activated_at, created_at')
+      .select('id, protection_id, booking_id, passenger_id, price, status, terms_version, terms_accepted, terms_accepted_at, activated_at, created_at, bag_category, proposed_protection_limit')
       .eq('booking_id', booking.id)
       .order('created_at', { ascending: false });
 
@@ -528,7 +533,9 @@ async function getProtectionForBooking(req, res) {
         terms_version: active.terms_version,
         terms_accepted_at: active.terms_accepted_at,
         activated_at: active.activated_at,
-        created_at: active.created_at
+        created_at: active.created_at,
+        bag_category: active.bag_category || null,
+        proposed_protection_limit: active.proposed_protection_limit != null ? Number(active.proposed_protection_limit) : null
       }
     });
 
@@ -667,6 +674,8 @@ async function getAdminProtections(req, res) {
         terms_version,
         terms_accepted_at,
         activated_at,
+        bag_category,
+        proposed_protection_limit,
         created_at,
         users:passenger_id (id, name, email, phone),
         bookings:booking_id (id, booking_id, train_number, station_code, journey_date, payment_method, payment_status)
@@ -945,6 +954,237 @@ async function confirmCashCollection(req, res) {
   }
 }
 
+/**
+ * Generates a unique, server-authoritative Claim ID.
+ * Format: CLM-XXXXXXXX
+ */
+function generateClaimId() {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const bytes = crypto.randomBytes(8);
+  let id = '';
+  for (let i = 0; i < 8; i++) {
+    id += chars[bytes[i] % chars.length];
+  }
+  return `CLM-${id}`;
+}
+
+/**
+ * Submits an incident claim report for an active Journey Protection.
+ * POST /api/protection/claim
+ *
+ * PRE-LAUNCH ENFORCEMENT:
+ * - Requires active protection.
+ * - Submits report as 'submitted' for verification review.
+ * - ZERO automatic approval, fake settlement, or payout generation.
+ */
+async function submitProtectionClaim(req, res) {
+  try {
+    const supabase = getSupabase();
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required to submit an incident report.'
+      });
+    }
+
+    const {
+      booking_id,
+      protection_id,
+      claim_type,
+      incident_date,
+      incident_time,
+      incident_location,
+      baggage_reference,
+      damage_type,
+      damage_severity,
+      description,
+      incident_description,
+      evidence
+    } = req.body;
+
+    if (!booking_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid booking_id is required.'
+      });
+    }
+
+    // Validate incident/claim type
+    const validClaimTypes = ['loss', 'damage', 'theft_unaccounted'];
+    const normalizedType = String(claim_type || 'damage').toLowerCase();
+    if (!validClaimTypes.includes(normalizedType)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid claim type. Allowed types are: ${validClaimTypes.join(', ')}.`
+      });
+    }
+
+    // 1. Verify booking ownership
+    const { booking, error: bErr } = await resolveBooking(supabase, booking_id, 'id, passenger_id, booking_status');
+    if (bErr || !booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking record not found.'
+      });
+    }
+
+    if (booking.passenger_id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: Booking belongs to another passenger.'
+      });
+    }
+
+    // 2. Fetch Journey Protection (must be ACTIVE)
+    let pQuery = supabase.from('journey_protection').select('*').eq('booking_id', booking.id);
+    if (protection_id) {
+      pQuery = pQuery.or(`protection_id.eq.${protection_id},id.eq.${protection_id}`);
+    }
+    const { data: protections, error: pErr } = await pQuery;
+
+    if (pErr || !protections || protections.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No Journey Protection record found for this booking.'
+      });
+    }
+
+    const activeProt = protections.find(p => p.status === PROTECTION_CONFIG.STATUSES.ACTIVE);
+    if (!activeProt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Incident reports can only be submitted for bookings with ACTIVE Journey Protection.'
+      });
+    }
+
+    // 3. Construct and insert claim
+    const claimId = generateClaimId();
+    const finalDescription = (description || incident_description || '').trim();
+    const nowIso = new Date().toISOString();
+
+    const claimPayload = {
+      claim_id: claimId,
+      protection_id: activeProt.id,
+      booking_id: booking.id,
+      user_id: userId,
+      claim_type: normalizedType,
+      incident_date: incident_date || nowIso.split('T')[0],
+      incident_time: incident_time || null,
+      incident_location: incident_location || null,
+      baggage_reference: baggage_reference || null,
+      damage_type: damage_type || null,
+      damage_severity: damage_severity || null,
+      incident_description: finalDescription,
+      evidence: Array.isArray(evidence) ? evidence : (evidence ? [evidence] : []),
+      status: 'submitted',
+      provider_reference: null,
+      created_at: nowIso,
+      updated_at: nowIso
+    };
+
+    const { data: insertedClaim, error: cErr } = await supabase
+      .from('protection_claims')
+      .insert([claimPayload])
+      .select('*')
+      .single();
+
+    if (cErr) {
+      console.error('[PROTECTION] Error inserting claim record:', cErr);
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to record incident claim report.'
+      });
+    }
+
+    // 4. Audit Log: CLAIM_SUBMITTED
+    await recordFinancialAudit(supabase, {
+      actor_id: userId,
+      actor_role: req.user.role || 'passenger',
+      action: 'CLAIM_SUBMITTED',
+      entity_type: 'claim',
+      entity_id: insertedClaim.id,
+      booking_id: booking.id,
+      amount: 0,
+      metadata: {
+        claim_id: insertedClaim.claim_id,
+        protection_id: activeProt.protection_id,
+        claim_type: normalizedType,
+        status: 'submitted',
+        pre_launch: true
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Incident report submitted for review. ONECOOLIE Journey Protection is currently a pre-launch demonstration product. Claims will be verified in accordance with future authorized terms.',
+      claim: {
+        claim_id: insertedClaim.claim_id,
+        booking_id: insertedClaim.booking_id,
+        protection_id: activeProt.protection_id,
+        claim_type: insertedClaim.claim_type,
+        status: insertedClaim.status,
+        incident_date: insertedClaim.incident_date,
+        damage_type: insertedClaim.damage_type,
+        damage_severity: insertedClaim.damage_severity,
+        created_at: insertedClaim.created_at
+      }
+    });
+
+  } catch (err) {
+    console.error('[PROTECTION] submitProtectionClaim error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to submit incident report.'
+    });
+  }
+}
+
+/**
+ * Gets claims for a specific booking
+ * GET /api/protection/claims/:bookingId
+ */
+async function getClaimsForBooking(req, res) {
+  try {
+    const supabase = getSupabase();
+    const userId = req.user?.id;
+    const { bookingId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    const { booking, error: bErr } = await resolveBooking(supabase, bookingId, 'id, passenger_id');
+    if (bErr || !booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    if (booking.passenger_id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Unauthorized.' });
+    }
+
+    const { data: claims, error: cErr } = await supabase
+      .from('protection_claims')
+      .select('id, claim_id, claim_type, status, incident_date, incident_time, incident_location, baggage_reference, damage_type, damage_severity, incident_description, created_at')
+      .eq('booking_id', booking.id)
+      .order('created_at', { ascending: false });
+
+    if (cErr) {
+      return res.status(500).json({ success: false, message: 'Unable to retrieve claims.' });
+    }
+
+    return res.json({
+      success: true,
+      claims: claims || []
+    });
+
+  } catch (err) {
+    console.error('[PROTECTION] getClaimsForBooking error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve claims.' });
+  }
+}
+
 module.exports = {
   createProtectionOrder,
   verifyProtectionPayment,
@@ -952,6 +1192,9 @@ module.exports = {
   getProtectionTerms,
   cancelProtection,
   getAdminProtections,
-  confirmCashCollection
+  confirmCashCollection,
+  submitProtectionClaim,
+  getClaimsForBooking
 };
+
 
