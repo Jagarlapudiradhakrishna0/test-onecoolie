@@ -12,6 +12,7 @@
 
 const { calculateBookingPrice } = require('../config/pricing');
 const { normalizePaymentMethod, isValidPaymentMethod } = require('./paymentClassification');
+const { JOURNEY_PROTECTION_CONFIG, generateProtectionId } = require('./protectionConfig');
 
 /**
  * Generates a human-readable booking identifier (e.g. RM-MK19Z-99B1A).
@@ -112,6 +113,14 @@ const normalizeBookingPayload = (body) => {
   const services = body.services;
   const payment_method = body.payment_method;
 
+  const journey_protection = Boolean(
+    body.journey_protection ?? body.journeyProtection ?? body.services?.journey_protection ?? false
+  );
+  const terms_accepted = Boolean(
+    body.terms_accepted ?? body.termsAccepted ?? body.services?.terms_accepted ?? false
+  );
+  const terms_version = body.terms_version || JOURNEY_PROTECTION_CONFIG.TERMS_VERSION;
+
   return {
     train_number,
     train_no: train_number,
@@ -126,7 +135,10 @@ const normalizeBookingPayload = (body) => {
     pnr,
     platform,
     services,
-    payment_method
+    payment_method,
+    journey_protection,
+    terms_accepted,
+    terms_version
   };
 };
 
@@ -154,7 +166,10 @@ async function createBookingRecordInDB(supabase, userId, payload) {
     pnr,
     platform,
     services,
-    payment_method
+    payment_method,
+    journey_protection,
+    terms_accepted,
+    terms_version
   } = normalizeBookingPayload(payload);
 
   const selectedTrainNumber = train_number || train_no;
@@ -173,8 +188,30 @@ async function createBookingRecordInDB(supabase, userId, payload) {
     };
   }
 
+  // If Journey Protection is selected, terms must be explicitly accepted
+  if (journey_protection && !terms_accepted) {
+    throw {
+      status: 400,
+      message: 'Journey Protection terms must be accepted before adding protection.'
+    };
+  }
+
   // 1. Authoritative price calculation (ignoring any client total_price / amount)
   const pricingResult = calculateBookingPrice(services);
+
+  // If Journey Protection opted in, authoritatively add ₹0.50 customer price
+  let finalTotalPrice = pricingResult.total;
+  if (journey_protection) {
+    finalTotalPrice = Number((pricingResult.total + JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE).toFixed(2));
+    pricingResult.total = finalTotalPrice;
+    pricingResult.breakdown.push({
+      service: 'journey_protection',
+      label: 'ONECOOLIE Journey Protection (Pre-Launch)',
+      quantity: 1,
+      unit_price: JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE,
+      total: JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE
+    });
+  }
 
   // 2. Build service labels and description
   const selectedServices = buildServiceData(services);
@@ -213,10 +250,11 @@ async function createBookingRecordInDB(supabase, userId, payload) {
       action_type: action_type || services?.action_type || 'load_to_seat',
       pnr: pnr || services?.pnr || null,
       platform: platform || services?.platform || null,
-      pricing_breakdown: pricingResult.breakdown
+      pricing_breakdown: pricingResult.breakdown,
+      has_journey_protection: journey_protection
     },
     service_description: serviceDescription,
-    total_price: pricingResult.total,
+    total_price: finalTotalPrice,
     payment_method: normalizedPaymentMethod,
     payment_status: 'pending',
     payment_id: null,
@@ -242,14 +280,15 @@ async function createBookingRecordInDB(supabase, userId, payload) {
       .insert([{
         booking_id: booking.id,
         passenger_id: userId,
-        amount: pricingResult.total,
+        amount: finalTotalPrice,
         currency: 'INR',
         payment_method: normalizedPaymentMethod,
         status: 'pending',
         metadata: {
           breakdown: pricingResult.breakdown,
           subtotal: pricingResult.subtotal,
-          discount: pricingResult.discount
+          discount: pricingResult.discount,
+          has_journey_protection: journey_protection
         }
       }])
       .select()
@@ -268,6 +307,44 @@ async function createBookingRecordInDB(supabase, userId, payload) {
     }
   } catch (payInsertErr) {
     console.warn('Payment ledger insert notice:', payInsertErr.message);
+  }
+
+  // 5. If Journey Protection opted in, create pending journey_protection record
+  if (journey_protection) {
+    try {
+      const protectionId = generateProtectionId();
+      const protPayload = {
+        protection_id: protectionId,
+        booking_id: booking.id,
+        passenger_id: userId,
+        price: JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE,
+        status: 'pending_payment',
+        terms_version: terms_version || JOURNEY_PROTECTION_CONFIG.TERMS_VERSION,
+        terms_accepted: true,
+        terms_accepted_at: new Date().toISOString(),
+        payment_method: normalizedPaymentMethod,
+        payment_id: paymentRecord?.id || null,
+        gateway_order_id: null,
+        gateway_payment_id: null,
+        activated_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: createdProt, error: protErr } = await supabase
+        .from('journey_protection')
+        .insert([protPayload])
+        .select('*')
+        .single();
+
+      if (!protErr && createdProt) {
+        booking.journey_protection = createdProt;
+      } else {
+        console.warn('Journey protection record insertion warning:', protErr?.message);
+      }
+    } catch (protInsertEx) {
+      console.warn('Journey protection record insertion exception:', protInsertEx.message);
+    }
   }
 
   return {

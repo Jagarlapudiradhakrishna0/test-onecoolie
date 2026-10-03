@@ -209,7 +209,8 @@ function formatBooking(booking, { includeOTP = false } = {}) {
           price: Number(booking.journey_protection.price) || 0.5,
           terms_version: booking.journey_protection.terms_version,
           terms_accepted_at: booking.journey_protection.terms_accepted_at,
-          activated_at: booking.journey_protection.activated_at
+          activated_at: booking.journey_protection.activated_at,
+          payment_method: booking.journey_protection.payment_method || (booking.payment_method ? (['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(String(booking.payment_method).toLowerCase()) ? 'cash' : 'online') : null)
         }
       : null,
   };

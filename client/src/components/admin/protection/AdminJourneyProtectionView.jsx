@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../api/axios';
-import { ShieldCheck, RefreshCw, AlertCircle, FileText, Check, Clock, Search, ExternalLink } from 'lucide-react';
+import { ShieldCheck, RefreshCw, AlertCircle, FileText, Check, Clock, Search, ExternalLink, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import JourneyProtectionTermsModal from '../../protection/JourneyProtectionTermsModal';
 
@@ -8,6 +8,7 @@ import JourneyProtectionTermsModal from '../../protection/JourneyProtectionTerms
    ADMIN JOURNEY PROTECTION VIEW (PRE-LAUNCH AUDIT CONSOLE)
    • Strict compliance: No fake insurers, no fake claims, no fake payouts
    • Prominent demonstration disclaimer
+   • Supports CASH / COD and Online payment tracking & authoritative confirmation
    ============================================================ */
 
 export default function AdminJourneyProtectionView() {
@@ -33,6 +34,23 @@ export default function AdminJourneyProtectionView() {
   useEffect(() => {
     fetchProtections();
   }, []);
+
+  const handleConfirmCash = async (protection) => {
+    const bookingId = protection.booking_id;
+    if (!bookingId) return;
+    const confirmPrompt = window.confirm(
+      `Confirm cash collection for booking ${protection.bookings?.booking_id || bookingId} and activate Journey Protection?`
+    );
+    if (!confirmPrompt) return;
+
+    try {
+      await axios.post(`/protection/${bookingId}/cash-collect`);
+      toast.success('Cash collection recorded and protection activated.');
+      fetchProtections();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to record cash collection.');
+    }
+  };
 
   const filtered = protections.filter((p) => {
     const matchesStatus = statusFilter === 'ALL' || String(p.status).toUpperCase() === statusFilter;
@@ -101,32 +119,34 @@ export default function AdminJourneyProtectionView() {
               {protections.filter((p) => p.status === 'active').length}
             </div>
           </div>
-          <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100">
-            <span className="text-[10px] font-bold uppercase text-blue-700 font-mono">Protection Fee</span>
-            <div className="text-2xl font-black text-blue-800 mt-0.5">₹0.50</div>
+          <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-100">
+            <span className="text-[10px] font-bold uppercase text-amber-700 font-mono">Pending Cash</span>
+            <div className="text-2xl font-black text-amber-800 mt-0.5">
+              {protections.filter((p) => p.status === 'pending_payment').length}
+            </div>
           </div>
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <span className="text-[10px] font-bold uppercase text-zinc-400 font-mono">Terms Version</span>
-            <div className="text-xs font-mono font-bold text-zinc-900 mt-2 truncate">PRELAUNCH-v1</div>
+            <span className="text-[10px] font-bold uppercase text-zinc-400 font-mono">Pre-Launch Tariff</span>
+            <div className="text-2xl font-black text-zinc-900 mt-0.5">₹0.50</div>
           </div>
         </div>
       </div>
 
-      {/* ── 2. FILTER & SEARCH TOOLBAR ── */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
-        <div className="relative w-full sm:w-80">
+      {/* ── 2. SEARCH & FILTER CONTROLS ── */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search ID, booking, passenger..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-black"
+            placeholder="Search Protection ID, Booking, Passenger..."
+            className="w-full pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:border-black focus:outline-none transition-colors"
           />
         </div>
 
-        <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
-          {['ALL', 'ACTIVE', 'PENDING_PAYMENT', 'CANCELLED'].map((st) => (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          {['ALL', 'ACTIVE', 'PENDING_PAYMENT', 'CANCELLED', 'EXPIRED'].map((st) => (
             <button
               key={st}
               type="button"
@@ -164,8 +184,8 @@ export default function AdminJourneyProtectionView() {
                   <th className="py-3.5 px-4">Booking Ref</th>
                   <th className="py-3.5 px-4">Passenger</th>
                   <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4">Payment Method</th>
                   <th className="py-3.5 px-4">Price</th>
-                  <th className="py-3.5 px-4">Payment Order ID</th>
                   <th className="py-3.5 px-4">Activated At</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
@@ -173,6 +193,10 @@ export default function AdminJourneyProtectionView() {
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((p) => {
                   const isActive = p.status === 'active';
+                  const isCash = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(
+                    String(p.payment_method || p.bookings?.payment_method).toLowerCase()
+                  );
+                  const isPending = p.status === 'pending_payment';
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-bold text-zinc-900 select-all">
@@ -194,22 +218,39 @@ export default function AdminJourneyProtectionView() {
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
                             ACTIVE
                           </span>
+                        ) : isPending ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            PENDING PAYMENT
+                          </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-zinc-600 border border-slate-200">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-zinc-600 border border-slate-200">
                             {p.status}
                           </span>
                         )}
                       </td>
+                      <td className="py-3.5 px-4 font-semibold text-zinc-700">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          isCash ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-800 border border-blue-200'
+                        }`}>
+                          {isCash ? 'CASH / COD' : 'ONLINE'}
+                        </span>
+                      </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-zinc-900">
                         ₹{Number(p.price || 0.5).toFixed(2)}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-[11px] text-zinc-500">
-                        {p.gateway_order_id || '--'}
                       </td>
                       <td className="py-3.5 px-4 text-zinc-600 text-[11px]">
                         {p.activated_at ? new Date(p.activated_at).toLocaleString() : '--'}
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right space-x-2">
+                        {isPending && isCash && (
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmCash(p)}
+                            className="text-emerald-700 hover:text-emerald-900 font-bold text-xs bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <span>Confirm Cash</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setSelectedTermsProtection(p)}
@@ -228,14 +269,14 @@ export default function AdminJourneyProtectionView() {
         )}
       </div>
 
-      {/* Terms Modal */}
+      {/* ── 4. TERMS INSPECTION MODAL ── */}
       {selectedTermsProtection && (
         <JourneyProtectionTermsModal
           open={Boolean(selectedTermsProtection)}
           onClose={() => setSelectedTermsProtection(null)}
           protectionId={selectedTermsProtection.protection_id}
-          bookingRef={selectedTermsProtection.bookings?.booking_id || selectedTermsProtection.booking_id}
-          acceptedAt={selectedTermsProtection.activated_at || selectedTermsProtection.terms_accepted_at}
+          bookingRef={selectedTermsProtection.bookings?.booking_id}
+          acceptedAt={selectedTermsProtection.terms_accepted_at || selectedTermsProtection.activated_at}
           hasAccepted={true}
         />
       )}

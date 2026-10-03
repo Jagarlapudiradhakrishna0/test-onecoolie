@@ -572,6 +572,10 @@ export default function TripSummaryPage() {
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
                   ACTIVE
                 </span>
+              ) : journeyProtection && journeyProtection.status === 'pending_payment' ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                  PENDING PAYMENT
+                </span>
               ) : (
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-zinc-600 border border-slate-200">
                   NOT ADDED
@@ -580,8 +584,12 @@ export default function TripSummaryPage() {
             </div>
           </div>
 
-          {journeyProtection && journeyProtection.status === 'active' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-blue-50/50 border border-blue-100/80 text-xs">
+          {journeyProtection ? (
+            <div className={`grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 rounded-2xl ${
+              journeyProtection.status === 'active'
+                ? 'bg-blue-50/50 border border-blue-100/80'
+                : 'bg-amber-50/40 border border-amber-200/60'
+            } text-xs`}>
               <div>
                 <span className="text-[11px] text-zinc-400 font-medium block">Protection ID</span>
                 <span className="font-mono font-bold text-zinc-900 select-all">{journeyProtection.protection_id}</span>
@@ -591,8 +599,11 @@ export default function TripSummaryPage() {
                 <span className="font-bold text-zinc-900">₹0.50</span>
               </div>
               <div>
-                <span className="text-[11px] text-zinc-400 font-medium block">Terms Version</span>
-                <span className="font-mono text-zinc-700">{journeyProtection.terms_version || 'PRE-LAUNCH-v1'}</span>
+                <span className="text-[11px] text-zinc-400 font-medium block">Status / Terms</span>
+                <span className={`font-mono font-bold block ${journeyProtection.status === 'active' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {journeyProtection.status === 'active' ? 'ACTIVE' : 'PENDING CASH PAYMENT'}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-mono">{journeyProtection.terms_version || 'PRE-LAUNCH-v1'}</span>
               </div>
               <div className="flex items-center sm:justify-end">
                 <button

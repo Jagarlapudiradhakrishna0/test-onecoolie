@@ -14,7 +14,8 @@ const {
   getProtectionForBooking,
   getProtectionTerms,
   cancelProtection,
-  getAdminProtections
+  getAdminProtections,
+  confirmCashCollection
 } = require('../controllers/protectionController');
 
 // Public terms route (pre-launch policy terms documentation)
@@ -27,6 +28,9 @@ router.post('/create-order', paymentOrderLimiter, protect, createProtectionOrder
 // Protected: Verify Payment and Activate Protection
 router.post('/verify-payment', paymentVerifyLimiter, protect, verifyProtectionPayment);
 
+// Protected: Confirm Cash Collection & Activate Protection
+router.post('/:bookingId/cash-collect', protect, confirmCashCollection);
+
 // Protected: Lookup Journey Protection for a Booking
 router.get('/booking/:bookingId', protect, getProtectionForBooking);
 
@@ -37,3 +41,4 @@ router.post('/:protectionId/cancel', protect, cancelProtection);
 router.get('/admin/list', protect, getAdminProtections);
 
 module.exports = router;
+

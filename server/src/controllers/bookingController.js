@@ -647,6 +647,20 @@ exports.cancelBooking = async (req, res) => {
       } catch (payCancelErr) {}
     }
 
+    // 9b. Update Journey Protection status to cancelled if present
+    try {
+      await supabase
+        .from('journey_protection')
+        .update({
+          status: 'cancelled',
+          updated_at: nowIso
+        })
+        .eq('booking_id', booking.id)
+        .in('status', ['pending_payment', 'active']);
+    } catch (protCancelErr) {
+      console.warn('Journey protection cancellation notice:', protCancelErr.message);
+    }
+
     // 10. Reverse any pending assistant earnings & release assistant
     if (booking.assistant_id) {
       await reverseAssistantEarning(supabase, booking.id, 'Passenger cancelled booking');

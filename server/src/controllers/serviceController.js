@@ -67,6 +67,23 @@ async function fetchBookingForAssistant(bookingId, assistantId) {
     return { error: { status: 403, message: 'You are not assigned to this job.' } };
   }
 
+  if (booking) {
+    try {
+      const { data: protRecord } = await supabase
+        .from('journey_protection')
+        .select('*')
+        .eq('booking_id', booking.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (protRecord) {
+        booking.journey_protection = protRecord;
+      }
+    } catch (e) {
+      // non-blocking
+    }
+  }
+
   return { booking };
 }
 
@@ -430,6 +447,53 @@ exports.markPaid = async (req, res) => {
 
     if (!data) {
       return res.status(409).json({ message: 'Payment was already recorded (concurrent request).' });
+    }
+
+    // ── Journey Protection Cash Activation (Server Authoritative) ──
+    try {
+      const { data: protRecord } = await supabase
+        .from('journey_protection')
+        .select('*')
+        .eq('booking_id', booking.id)
+        .eq('status', 'pending_payment')
+        .maybeSingle();
+
+      if (protRecord) {
+        const { data: activatedProt } = await supabase
+          .from('journey_protection')
+          .update({
+            status: 'active',
+            payment_id: paymentRecordId,
+            payment_method: normalizedMethod,
+            activated_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', protRecord.id)
+          .eq('status', 'pending_payment') // atomic guard
+          .select('*')
+          .maybeSingle();
+
+        if (activatedProt) {
+          data.journey_protection = activatedProt;
+          console.log('[AUDIT] Journey protection activated on cash collection:', {
+            event: 'PROTECTION_ACTIVATED',
+            booking_id: booking.id,
+            protection_id: activatedProt.protection_id,
+            collector_id: req.user.id,
+            payment_method: normalizedMethod
+          });
+        }
+      } else {
+        const { data: existingActive } = await supabase
+          .from('journey_protection')
+          .select('*')
+          .eq('booking_id', booking.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (existingActive) data.journey_protection = existingActive;
+      }
+    } catch (protActivationErr) {
+      console.warn('Journey protection cash activation notice:', protActivationErr.message);
     }
 
     const formatted = formatBooking(data);

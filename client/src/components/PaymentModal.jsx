@@ -538,7 +538,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   AMOUNT
                 </span>
                 <span className="text-2xl sm:text-3xl font-black text-[#1463FF] tracking-tight font-sans">
-                  ₹{total}
+                  ₹{Number(total) % 1 === 0 ? total : Number(total).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -624,6 +624,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
                           Station Assistant QR
                         </span>
+                        {bookingData?.journeyProtection && (
+                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
+                            + ₹0.50 Journey Protection
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

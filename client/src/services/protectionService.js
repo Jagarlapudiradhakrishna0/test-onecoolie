@@ -143,3 +143,15 @@ export async function purchaseJourneyProtection({
     if (onError) onError(err);
   }
 }
+
+/**
+ * Confirms cash collection for an authorized collector/admin.
+ * @param {string} bookingId
+ * @returns {Promise<object>}
+ */
+export async function confirmProtectionCashCollection(bookingId) {
+  if (!bookingId) throw new Error('Booking ID is required.');
+  const res = await axios.post(`/protection/${bookingId}/cash-collect`);
+  return res.data;
+}
+

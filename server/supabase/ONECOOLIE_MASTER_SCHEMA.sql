@@ -974,6 +974,7 @@ ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS status TEXT DEFAU
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS payment_id UUID REFERENCES public.payments(id) ON DELETE SET NULL;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS gateway_order_id TEXT;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS gateway_payment_id TEXT;
+ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'online';
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS terms_version TEXT DEFAULT 'ONECOOLIE-PROTECTION-PRELAUNCH-v1';
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS terms_accepted BOOLEAN DEFAULT TRUE;
 ALTER TABLE public.journey_protection ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ DEFAULT NOW();

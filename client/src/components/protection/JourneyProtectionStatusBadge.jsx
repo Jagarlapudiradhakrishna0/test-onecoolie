@@ -18,6 +18,10 @@ export default function JourneyProtectionStatusBadge({ status = 'active', protec
     badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
     label = 'Protection Active';
     Icon = ShieldCheck;
+  } else if (norm === 'pending_payment' || norm === 'pending') {
+    badgeClass = 'bg-amber-50 text-amber-800 border-amber-200';
+    label = 'Pending Payment';
+    Icon = Clock;
   } else if (norm === 'cancelled' || norm === 'refunded') {
     badgeClass = 'bg-slate-100 text-slate-600 border-slate-200';
     label = 'Protection Cancelled';

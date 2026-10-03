@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Info, Check, ExternalLink, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Info, Check, ExternalLink, AlertCircle, FileText, CheckCircle2, Clock } from 'lucide-react';
 import JourneyProtectionTermsModal from './JourneyProtectionTermsModal';
 
 /* ============================================================
@@ -8,6 +8,7 @@ import JourneyProtectionTermsModal from './JourneyProtectionTermsModal';
    • Status: PRE-LAUNCH (Demonstration only)
    • Explicit opt-in & versioned terms acceptance
    • STRICT: ZERO display of any benefit, coverage, or payout amounts
+   • Supports CASH / COD Pending Payment state with clear activation notice
    ============================================================ */
 
 export default function JourneyProtectionCard({
@@ -15,18 +16,23 @@ export default function JourneyProtectionCard({
   onToggle,
   protection = null,
   disabled = false,
-  bookingRef = null
+  bookingRef = null,
+  paymentMethod = 'online'
 }) {
   const [showTerms, setShowTerms] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(selected);
 
   const isAlreadyActive = protection?.status === 'active';
+  const isPending = protection?.status === 'pending_payment';
   const protectionId = protection?.protection_id;
   const activatedAt = protection?.activated_at;
   const termsVersion = protection?.terms_version || 'ONECOOLIE-PROTECTION-PRELAUNCH-v1';
+  const isCash = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(
+    String(protection?.payment_method || paymentMethod).toLowerCase()
+  );
 
   const handleCheckboxChange = (e) => {
-    if (disabled || isAlreadyActive) return;
+    if (disabled || isAlreadyActive || isPending) return;
     const checked = e.target.checked;
     setTermsAccepted(checked);
     if (onToggle) onToggle(checked);
@@ -55,12 +61,17 @@ export default function JourneyProtectionCard({
           </div>
         </div>
 
-        {/* Price / Active Status Badge */}
+        {/* Price / Active / Pending Status Badge */}
         <div className="text-right shrink-0">
           {isAlreadyActive ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
               <Check className="w-3 h-3 stroke-[3]" />
               <span>ACTIVE</span>
+            </span>
+          ) : isPending ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200">
+              <Clock className="w-3 h-3 stroke-[2.5]" />
+              <span>PENDING PAYMENT</span>
             </span>
           ) : (
             <div>
@@ -75,7 +86,7 @@ export default function JourneyProtectionCard({
         </div>
       </div>
 
-      {/* Body: Active Telemetry OR Pre-Launch Opt-in Switch */}
+      {/* Body: Active Telemetry OR Pending Cash Telemetry OR Opt-in Switch */}
       {isAlreadyActive ? (
         <div className="bg-white rounded-xl p-3.5 border border-slate-200/70 text-xs space-y-2">
           <div className="flex items-center justify-between font-mono">
@@ -99,6 +110,28 @@ export default function JourneyProtectionCard({
           <div className="flex items-center justify-between font-mono">
             <span className="text-zinc-500 text-[11px]">Terms:</span>
             <span className="text-zinc-600 truncate max-w-[200px]">{termsVersion}</span>
+          </div>
+        </div>
+      ) : isPending ? (
+        <div className="bg-white rounded-xl p-3.5 border border-amber-200/70 text-xs space-y-2.5">
+          <div className="flex items-center justify-between font-mono">
+            <span className="text-zinc-500 text-[11px]">Protection ID:</span>
+            <span className="font-bold text-zinc-900 select-all">{protectionId}</span>
+          </div>
+          <div className="flex items-center justify-between font-mono">
+            <span className="text-zinc-500 text-[11px]">Status:</span>
+            <span className="font-bold text-amber-700">PENDING PAYMENT</span>
+          </div>
+          <div className="flex items-center justify-between font-mono">
+            <span className="text-zinc-500 text-[11px]">Price:</span>
+            <span className="font-bold text-zinc-900">₹0.50</span>
+          </div>
+          <div className="flex items-center justify-between font-mono">
+            <span className="text-zinc-500 text-[11px]">Payment:</span>
+            <span className="font-bold text-zinc-800">{isCash ? 'CASH / COD' : 'Pending Gateway'}</span>
+          </div>
+          <div className="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+            Journey Protection will become active after the applicable cash payment is successfully collected and recorded.
           </div>
         </div>
       ) : (
@@ -164,10 +197,10 @@ export default function JourneyProtectionCard({
           setTermsAccepted(true);
           if (onToggle) onToggle(true);
         }}
-        hasAccepted={selected || isAlreadyActive}
+        hasAccepted={selected || isAlreadyActive || isPending}
         protectionId={protectionId}
         bookingRef={bookingRef}
-        acceptedAt={activatedAt}
+        acceptedAt={activatedAt || protection?.terms_accepted_at}
       />
     </div>
   );

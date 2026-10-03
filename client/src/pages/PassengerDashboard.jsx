@@ -1069,6 +1069,9 @@ export default function PassengerDashboard() {
           action_type: actionType,
           pnr: pnrInput.trim(),
           platform: selectedTrain?.platform || '2',
+          journey_protection: journeyProtectionOptedIn,
+          terms_accepted: journeyProtectionOptedIn,
+          terms_version: 'ONECOOLIE-PROTECTION-PRELAUNCH-v1'
         });
         data = res.data;
       }
@@ -4066,6 +4069,54 @@ export default function PassengerDashboard() {
                   <span className="font-mono font-black text-xs tracking-widest text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
                     {confirmedBooking.start_otp}
                   </span>
+                </div>
+              )}
+
+              {/* Row 6: Payment Method & Total */}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
+                <div className="flex items-center gap-2 text-zinc-600">
+                  <span className="w-6.5 h-6.5 rounded-lg bg-slate-100 text-zinc-700 flex items-center justify-center shrink-0">
+                    <Banknote className="w-3.5 h-3.5" />
+                  </span>
+                  <span className="font-semibold text-zinc-600">Payment Method</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold text-zinc-900 block text-xs">
+                    {['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(String(confirmedBooking.payment_method).toLowerCase())
+                      ? 'CASH / COD'
+                      : 'ONLINE'}
+                  </span>
+                  <span className="font-mono font-black text-emerald-700 text-xs">
+                    ₹{confirmedBooking.total_price}
+                  </span>
+                </div>
+              </div>
+
+              {/* Row 7: Journey Protection (if opted in) */}
+              {confirmedBooking.journey_protection && (
+                <div className="border-t border-slate-100 pt-2.5 space-y-1.5 bg-blue-50/40 p-2.5 rounded-xl border border-blue-100/60 mt-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-blue-600" />
+                      <span className="font-bold text-zinc-900 text-[11px]">Journey Protection (₹0.50)</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                      confirmedBooking.journey_protection.status === 'active'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                    }`}>
+                      {confirmedBooking.journey_protection.status === 'active' ? 'ACTIVE' : 'PENDING PAYMENT'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500">
+                    <span>Protection ID:</span>
+                    <span className="font-bold text-zinc-800 select-all">{confirmedBooking.journey_protection.protection_id}</span>
+                  </div>
+                  {confirmedBooking.journey_protection.status !== 'active' && (
+                    <p className="text-[10px] text-amber-800 bg-amber-50/80 rounded-md p-1.5 leading-relaxed border border-amber-200/50">
+                      Protection will activate after cash payment is successfully collected and recorded.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

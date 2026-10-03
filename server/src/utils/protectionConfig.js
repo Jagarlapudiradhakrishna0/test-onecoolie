@@ -18,6 +18,8 @@ const PROTECTION_CONFIG = {
   CUSTOMER_FACING_DESCRIPTION: 'Optional protection for your journey.',
   PRICE_INR: 0.50,
   PRICE_PAISE: 50,
+  CUSTOMER_PRICE: 0.50,
+  TERMS_VERSION: 'ONECOOLIE-PROTECTION-PRELAUNCH-v1',
   STATUS_PRE_LAUNCH: 'PRE-LAUNCH',
   CURRENT_TERMS_VERSION: 'ONECOOLIE-PROTECTION-PRELAUNCH-v1',
   PRE_LAUNCH_DISCLAIMER: 'This feature is currently a pre-launch product demonstration and does not constitute an insurance policy or guarantee of payment. Actual insurance coverage will be introduced only after the required regulatory, underwriting, and insurance-provider arrangements are completed.',
@@ -129,6 +131,7 @@ const PRE_LAUNCH_POLICY_TERMS = {
 
 module.exports = {
   PROTECTION_CONFIG,
+  JOURNEY_PROTECTION_CONFIG: PROTECTION_CONFIG,
   generateProtectionId,
   PRE_LAUNCH_POLICY_TERMS
 };

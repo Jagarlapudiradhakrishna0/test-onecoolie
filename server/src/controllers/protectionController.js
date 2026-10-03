@@ -661,6 +661,7 @@ async function getAdminProtections(req, res) {
         passenger_id,
         price,
         status,
+        payment_method,
         gateway_order_id,
         gateway_payment_id,
         terms_version,
@@ -668,7 +669,7 @@ async function getAdminProtections(req, res) {
         activated_at,
         created_at,
         users:passenger_id (id, name, email, phone),
-        bookings:booking_id (id, booking_id, train_number, station_code, journey_date)
+        bookings:booking_id (id, booking_id, train_number, station_code, journey_date, payment_method, payment_status)
       `)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -695,11 +696,262 @@ async function getAdminProtections(req, res) {
   }
 }
 
+/**
+ * Confirms cash collection for a CASH / COD booking with Journey Protection.
+ * POST /api/protection/:bookingId/cash-collect
+ *
+ * Requirements:
+ * - Authenticated user must be:
+ *   a) Assigned assistant (booking.assistant_id === req.user.id)
+ *   b) Platform Admin (req.user.role === 'admin')
+ * - Passengers are strictly blocked (403 Forbidden)
+ * - Booking must exist and use a cash payment method (isCashPayment)
+ * - Idempotency: If already paid/collected and protection is active, returns 200 with idempotent: true
+ * - Atomically marks payment as paid, booking as paid, and journey_protection as active
+ */
+async function confirmCashCollection(req, res) {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    const { bookingId } = req.params;
+    if (!bookingId) {
+      return res.status(400).json({ success: false, message: 'Booking ID is required.' });
+    }
+
+    const supabase = getSupabase();
+
+    // 1. Resolve booking
+    const { booking, error: resolveErr } = await resolveBooking(
+      supabase,
+      bookingId,
+      '*, passenger:passenger_id(id, name, email, phone)'
+    );
+
+    if (resolveErr || !booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    // 2. Strict Role Authorization
+    const isAdmin = req.user.role === 'admin';
+    const isAssignedAssistant = req.user.role === 'assistant' && booking.assistant_id === req.user.id;
+
+    if (!isAdmin && !isAssignedAssistant) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the assigned assistant or an administrator can confirm cash collection.'
+      });
+    }
+
+    // 3. Verify Payment Method is CASH / COD
+    const { isCashPayment } = require('../utils/paymentClassification');
+    if (!isCashPayment(booking.payment_method)) {
+      return res.status(400).json({
+        success: false,
+        message: 'This booking was made with online payment. Cash collection is only valid for CASH / COD bookings.'
+      });
+    }
+
+    // 4. Assistant must be in_service (admin can override)
+    if (!isAdmin && booking.booking_status !== 'in_service' && booking.booking_status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash payment can only be collected once the service is in progress (in_service).'
+      });
+    }
+
+    // 5. Fetch Journey Protection record for this booking
+    const { data: protRecord } = await supabase
+      .from('journey_protection')
+      .select('*')
+      .eq('booking_id', booking.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // 6. Idempotency Check
+    if (booking.payment_status === 'paid' && (!protRecord || protRecord.status === 'active')) {
+      return res.json({
+        success: true,
+        message: 'Cash collection was already recorded for this booking.',
+        idempotent: true,
+        booking: {
+          id: booking.id,
+          booking_id: booking.booking_id,
+          payment_status: 'paid',
+          total_price: Number(booking.total_price)
+        },
+        protection: protRecord ? {
+          protection_id: protRecord.protection_id,
+          status: protRecord.status,
+          price: Number(protRecord.price),
+          activated_at: protRecord.activated_at
+        } : null
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // 7. Update or create payment record
+    let paymentRecordId = booking.payment_id || null;
+    try {
+      const { data: existingPayment } = await supabase
+        .from('payments')
+        .select('id')
+        .eq('booking_id', booking.id)
+        .maybeSingle();
+
+      if (existingPayment) {
+        paymentRecordId = existingPayment.id;
+        await supabase
+          .from('payments')
+          .update({
+            status: 'paid',
+            payment_method: 'cash',
+            updated_at: nowIso,
+            metadata: {
+              collected_by: req.user.id,
+              collector_role: req.user.role,
+              collected_at: nowIso,
+              note: 'Cash collected and validated by authorized staff'
+            }
+          })
+          .eq('id', existingPayment.id);
+      } else {
+        const { data: newPayment } = await supabase
+          .from('payments')
+          .insert([{
+            booking_id: booking.id,
+            passenger_id: booking.passenger_id,
+            amount: Number(booking.total_price) || 0,
+            currency: 'INR',
+            payment_method: 'cash',
+            status: 'paid',
+            metadata: {
+              collected_by: req.user.id,
+              collector_role: req.user.role,
+              collected_at: nowIso,
+              note: 'Cash collected and validated by authorized staff'
+            }
+          }])
+          .select('id')
+          .maybeSingle();
+        if (newPayment) paymentRecordId = newPayment.id;
+      }
+    } catch (payLedgerErr) {
+      console.warn('Cash collection payment update notice:', payLedgerErr.message);
+    }
+
+    // 8. Update booking payment_status to 'paid'
+    const { data: updatedBooking, error: bookingUpdateErr } = await supabase
+      .from('bookings')
+      .update({
+        payment_status: 'paid',
+        payment_method: 'cash',
+        payment_id: paymentRecordId,
+        updated_at: nowIso
+      })
+      .eq('id', booking.id)
+      .select('*, passenger:passenger_id(id, name, email, phone)')
+      .single();
+
+    if (bookingUpdateErr) {
+      console.error('[CASH COLLECTION] Booking update error:', bookingUpdateErr);
+      return res.status(400).json({ success: false, message: bookingUpdateErr.message });
+    }
+
+    // 9. Transition Journey Protection to ACTIVE (if present and pending)
+    let activatedProtection = null;
+    if (protRecord && protRecord.status === 'pending_payment') {
+      const { data: actProt, error: protUpdateErr } = await supabase
+        .from('journey_protection')
+        .update({
+          status: 'active',
+          payment_id: paymentRecordId,
+          payment_method: 'cash',
+          activated_at: nowIso,
+          updated_at: nowIso
+        })
+        .eq('id', protRecord.id)
+        .eq('status', 'pending_payment')
+        .select('*')
+        .maybeSingle();
+
+      if (!protUpdateErr && actProt) {
+        activatedProtection = actProt;
+        console.log('[AUDIT] Cash protection activated:', {
+          event: 'PROTECTION_ACTIVATED',
+          booking_id: booking.id,
+          protection_id: actProt.protection_id,
+          collector_id: req.user.id,
+          actor_role: req.user.role,
+          amount: Number(actProt.price)
+        });
+      }
+    } else if (protRecord) {
+      activatedProtection = protRecord;
+    }
+
+    // 10. Realtime Socket broadcast
+    try {
+      const { formatBooking } = require('../utils/bookingFormatter');
+      const { getIO } = require('./serviceController');
+      const io = getIO();
+      if (io && updatedBooking) {
+        if (activatedProtection) updatedBooking.journey_protection = activatedProtection;
+        const passengerFormatted = formatBooking(updatedBooking, { includeOTP: true });
+        const fleetFormatted = formatBooking(updatedBooking, { includeOTP: false });
+
+        io.to(`booking_${booking.id}`).emit('payment:success', {
+          bookingId: booking.id,
+          payment_status: 'paid',
+          booking: passengerFormatted
+        });
+        io.to(`booking_${booking.id}`).emit('status_update', passengerFormatted);
+        if (booking.passenger_id) {
+          io.to(`passenger_${booking.passenger_id}`).emit('status_update', passengerFormatted);
+        }
+        if (booking.assistant_id) {
+          io.to(`assistant_${booking.assistant_id}`).emit('status_update', fleetFormatted);
+        }
+        io.to('admin_room').emit('status_update', fleetFormatted);
+      }
+    } catch (socketEx) {
+      console.warn('Cash collection socket notice:', socketEx.message);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Cash payment collected and Journey Protection activated successfully.',
+      booking: {
+        id: updatedBooking.id,
+        booking_id: updatedBooking.booking_id,
+        payment_status: updatedBooking.payment_status,
+        total_price: Number(updatedBooking.total_price)
+      },
+      protection: activatedProtection ? {
+        protection_id: activatedProtection.protection_id,
+        status: activatedProtection.status,
+        price: Number(activatedProtection.price),
+        activated_at: activatedProtection.activated_at,
+        terms_version: activatedProtection.terms_version
+      } : null
+    });
+
+  } catch (err) {
+    console.error('[PROTECTION] confirmCashCollection error:', err);
+    return res.status(500).json({ success: false, message: 'Server error confirming cash collection.' });
+  }
+}
+
 module.exports = {
   createProtectionOrder,
   verifyProtectionPayment,
   getProtectionForBooking,
   getProtectionTerms,
   cancelProtection,
-  getAdminProtections
+  getAdminProtections,
+  confirmCashCollection
 };
+

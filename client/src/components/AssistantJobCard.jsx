@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   CreditCard,
   Armchair,
+  CheckCircle2,
   X
 } from 'lucide-react';
 import axios from '../api/axios';
@@ -961,23 +962,55 @@ export default function AssistantJobCard({ job, onUpdate }) {
                   Escort passenger to coach/berth. Collect payment and complete service.
                 </p>
 
+                {/* Journey Protection Cash Collection Breakdown */}
+                {job.journey_protection && (
+                  <div className="p-3 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 text-xs space-y-1.5 my-2">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-zinc-400">
+                      <span>Base assistance fare:</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
+                        ₹{(Number(job.total_price) - 0.50).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600 dark:text-zinc-400">
+                      <span className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>Journey Protection (Pre-Launch):</span>
+                      </span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">₹0.50</span>
+                    </div>
+                    <div className="flex items-center justify-between font-black text-slate-900 dark:text-white border-t border-blue-200/80 dark:border-blue-900/60 pt-1.5">
+                      <span>Total cash to collect:</span>
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 text-sm">
+                        ₹{Number(job.total_price).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-zinc-500 font-mono pt-0.5 flex items-center justify-between">
+                      <span>Protection Status:</span>
+                      <span className={paid || job.journey_protection.status === 'active' ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}>
+                        {paid || job.journey_protection.status === 'active' ? 'ACTIVE' : 'PENDING PAYMENT'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {!paid && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="space-y-2 pt-1">
                     <button
                       type="button"
                       onClick={() => collectPayment('cash')}
                       disabled={loading}
-                      className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 text-xs font-bold text-slate-800 dark:text-zinc-200 transition-all cursor-pointer"
+                      className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
                     >
-                      Collect Cash
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Confirm Cash Collected (₹{Number(job.total_price).toFixed(2)})</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => collectPayment('upi')}
                       disabled={loading}
-                      className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 text-xs font-bold text-slate-800 dark:text-zinc-200 transition-all cursor-pointer"
+                      className="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 text-xs font-bold text-slate-700 dark:text-zinc-300 transition-all cursor-pointer"
                     >
-                      Collect UPI
+                      Collect via UPI QR
                     </button>
                   </div>
                 )}
