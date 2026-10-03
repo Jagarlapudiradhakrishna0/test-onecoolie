@@ -9,8 +9,8 @@ export const BAGGAGE_PROTECTION_LIMITS_DEF = [
     weightRange: 'Up to 5 kg',
     labels: {
       en: 'Small Bag',
-      te: 'చిన్న బ్యాగ్ (Small Bag)',
-      hi: 'छोटा बैग (Small Bag)'
+      te: 'చిన్న బ్యాగ్',
+      hi: 'छोटा बैग'
     },
     descriptions: {
       en: 'Light backpacks, small vanity/carry bags, handheld travel kits.',
@@ -25,8 +25,8 @@ export const BAGGAGE_PROTECTION_LIMITS_DEF = [
     weightRange: '>5 kg – 15 kg',
     labels: {
       en: 'Medium Bag',
-      te: 'మధ్యస్థ బ్యాగ్ (Medium Bag)',
-      hi: 'मध्यम बैग (Medium Bag)'
+      te: 'మధ్యస్థ బ్యాగ్',
+      hi: 'मध्यम बैग'
     },
     descriptions: {
       en: 'Standard cabin trolley, overnight duffel, standard travel rucksack.',
@@ -41,8 +41,8 @@ export const BAGGAGE_PROTECTION_LIMITS_DEF = [
     weightRange: '>15 kg – 25 kg',
     labels: {
       en: 'Large Bag',
-      te: 'పెద్ద బ్యాగ్ (Large Bag)',
-      hi: 'बड़ा बैग (Large Bag)'
+      te: 'పెద్ద బ్యాగ్',
+      hi: 'बड़ा बैग'
     },
     descriptions: {
       en: 'Medium to large check-in suitcase, wheeled trunk, heavy luggage.',
@@ -57,8 +57,8 @@ export const BAGGAGE_PROTECTION_LIMITS_DEF = [
     weightRange: '>25 kg',
     labels: {
       en: 'Extra-Large Bag',
-      te: 'అదనపు పెద్ద బ్యాగ్ (Extra-Large Bag)',
-      hi: 'अतिरिक्त बड़ा बैग (Extra-Large Bag)'
+      te: 'అదనపు పెద్ద బ్యాగ్',
+      hi: 'अतिरिक्त बड़ा बैग'
     },
     descriptions: {
       en: 'Oversized heavy cargo trunk, extra-large transit baggage.',

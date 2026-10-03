@@ -755,7 +755,7 @@ export default function ProfileMenu({ role, onNavigate }) {
                     <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
                       {t('profile.appearance')}
                     </label>
-                    <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl" role="group" aria-label={t('profile.appearance')}>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
                       {[
                         { id: 'light', label: t('profile.light') },
                         { id: 'dark', label: t('profile.dark') },
@@ -764,9 +764,8 @@ export default function ProfileMenu({ role, onNavigate }) {
                           key={item.id}
                           type="button"
                           onClick={() => setTheme(item.id)}
-                          aria-pressed={theme === item.id}
-                          className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${theme === item.id
-                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                          className={`py-2 text-xs font-bold rounded-lg transition-all ${theme === item.id
+                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm'
                             : 'text-zinc-500 hover:text-black dark:hover:text-white'
                             }`}
                         >
@@ -777,24 +776,21 @@ export default function ProfileMenu({ role, onNavigate }) {
                   </div>
 
                   <div>
-                    <label id="language-selector-label" className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
                       {t('profile.language')}
                     </label>
-                    <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl" role="radiogroup" aria-labelledby="language-selector-label">
+                    <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
                       {[
-                        { id: 'en', label: 'English', ariaLabel: 'English language' },
-                        { id: 'te', label: 'తెలుగు', ariaLabel: 'Telugu language' },
-                        { id: 'hi', label: 'हिन्दी', ariaLabel: 'Hindi language' },
+                        { id: 'en', label: 'English' },
+                        { id: 'te', label: 'తెలుగు' },
+                        { id: 'hi', label: 'हिन्दी' },
                       ].map((item) => (
                         <button
                           key={item.id}
                           type="button"
-                          role="radio"
-                          aria-checked={lang === item.id}
-                          aria-label={item.ariaLabel}
                           onClick={() => setLanguage(item.id)}
-                          className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${lang === item.id
-                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10 font-black'
+                          className={`py-2 text-xs font-bold rounded-lg transition-all ${lang === item.id
+                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm'
                             : 'text-zinc-500 hover:text-black dark:hover:text-white'
                             }`}
                         >

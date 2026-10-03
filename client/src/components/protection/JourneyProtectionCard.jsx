@@ -92,20 +92,20 @@ export default function JourneyProtectionCard({
       {isAlreadyActive ? (
         <div className="bg-white rounded-xl p-3.5 border border-slate-200/70 text-xs space-y-2">
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.protectionId')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.protectionId')}:</span>
             <span className="font-bold text-zinc-900 select-all">{protectionId}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.status')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.status')}:</span>
             <span className="font-bold text-emerald-600">{t('protection.active')}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.price')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.price')}:</span>
             <span className="font-bold text-zinc-900">₹0.50</span>
           </div>
           {protection?.proposed_protection_limit != null && (
             <div className="flex items-center justify-between font-mono">
-              <span className="text-zinc-500 text-[11px]">{t('protection.proposedLimit')}</span>
+              <span className="text-zinc-500 text-[11px]">{t('protection.proposedLimit')}:</span>
               <span className="font-bold text-zinc-800">
                 Up to ₹{Number(protection.proposed_protection_limit).toLocaleString('en-IN')} (Proposed)
               </span>
@@ -113,31 +113,31 @@ export default function JourneyProtectionCard({
           )}
           {activatedAt && (
             <div className="flex items-center justify-between font-mono">
-              <span className="text-zinc-500 text-[11px]">{t('protection.activated')}</span>
+              <span className="text-zinc-500 text-[11px]">{t('protection.activated')}:</span>
               <span className="text-zinc-700">{formatDate(activatedAt)}</span>
             </div>
           )}
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.termsVersion')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.terms')}:</span>
             <span className="text-zinc-600 truncate max-w-[200px]">{termsVersion}</span>
           </div>
         </div>
       ) : isPending ? (
         <div className="bg-white rounded-xl p-3.5 border border-amber-200/70 text-xs space-y-2.5">
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.protectionId')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.protectionId')}:</span>
             <span className="font-bold text-zinc-900 select-all">{protectionId}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.status')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.status')}:</span>
             <span className="font-bold text-amber-700">{t('protection.pendingPayment')}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.price')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.price')}:</span>
             <span className="font-bold text-zinc-900">₹0.50</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">{t('protection.payment')}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.payment')}:</span>
             <span className="font-bold text-zinc-800">{isCash ? t('payments.cash') : 'Pending Gateway'}</span>
           </div>
           <div className="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
