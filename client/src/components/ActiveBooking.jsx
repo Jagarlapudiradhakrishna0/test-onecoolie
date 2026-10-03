@@ -50,6 +50,9 @@ import {
   persistRemoteChat
 } from '../utils/chatSync';
 import { handleContactSupport, isMobileDevice } from '../services/supportService';
+import JourneyProtectionTermsModal from './protection/JourneyProtectionTermsModal';
+import { fetchBookingProtection, purchaseJourneyProtection } from '../services/protectionService';
+import { useAuth } from '../context/AuthContext';
 
 /* ============================================================
    ACTIVE BOOKING / TRIP DETAILS PAGE (SWISS-INSPIRED MINIMAL REDESIGN)
@@ -57,9 +60,25 @@ import { handleContactSupport, isMobileDevice } from '../services/supportService
    ============================================================ */
 
 export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const bookingUuid = booking?.id || '';
   const bookingCode = booking?.booking_id || '';
+
+  // ── Journey Protection State ──
+  const [journeyProtection, setJourneyProtection] = useState(booking?.journey_protection || null);
+  const [showProtectionTerms, setShowProtectionTerms] = useState(false);
+  const [purchasingProtection, setPurchasingProtection] = useState(false);
+
+  useEffect(() => {
+    if (booking?.journey_protection) {
+      setJourneyProtection(booking.journey_protection);
+    } else if (bookingUuid) {
+      fetchBookingProtection(bookingUuid).then((prot) => {
+        if (prot) setJourneyProtection(prot);
+      });
+    }
+  }, [bookingUuid, booking?.journey_protection]);
 
   // ── 1. Live Chat State ──
   const [chatMsgs, setChatMsgs] = useState(() => {
@@ -1476,8 +1495,112 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             </div>
           </div>
 
+          {/* Card 1.5: ONECOOLIE JOURNEY PROTECTION */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                <h3 className="text-base font-extrabold text-zinc-900">
+                  Journey Protection
+                </h3>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+                PRE-LAUNCH
+              </span>
+            </div>
+
+            {journeyProtection && journeyProtection.status === 'active' ? (
+              <div className="space-y-3">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-400">Protection Status</span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]/60 flex items-center gap-1">
+                      <span>✓</span>
+                      <span>ACTIVE</span>
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-zinc-900 tracking-tight mt-1">
+                    ₹0.50
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-slate-100 text-xs font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 font-sans">Protection ID</span>
+                    <span className="font-bold text-zinc-900 select-all">{journeyProtection.protection_id}</span>
+                  </div>
+                  {journeyProtection.activated_at && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-sans">Activated</span>
+                      <span className="text-zinc-700">{new Date(journeyProtection.activated_at).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 font-sans">Terms</span>
+                    <span className="text-zinc-600 truncate max-w-[140px]">{journeyProtection.terms_version || 'PRE-LAUNCH-v1'}</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowProtectionTerms(true)}
+                  className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-zinc-800 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>View Protection Terms</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <p className="text-zinc-500 leading-relaxed text-[11px]">
+                  Optional protection for your journey. Demonstration concept only.
+                </p>
+                <div className="flex items-center justify-between py-1 border-y border-slate-100">
+                  <span className="text-zinc-500">Price</span>
+                  <span className="font-mono font-bold text-zinc-900">₹0.50 / journey</span>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  {!isCancelled && !isCompleted && (
+                    <button
+                      type="button"
+                      disabled={purchasingProtection}
+                      onClick={() => {
+                        setPurchasingProtection(true);
+                        purchaseJourneyProtection({
+                          bookingId: bookingUuid,
+                          user,
+                          onSuccess: (updated) => {
+                            setJourneyProtection(updated);
+                            setPurchasingProtection(false);
+                            if (onUpdate) onUpdate({ ...booking, journey_protection: updated });
+                          },
+                          onError: () => setPurchasingProtection(false),
+                          onDismiss: () => setPurchasingProtection(false)
+                        });
+                      }}
+                      className="w-full py-2.5 px-4 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{purchasingProtection ? 'Processing...' : 'Add Protection (₹0.50)'}</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowProtectionTerms(true)}
+                    className="w-full py-2 px-3 text-blue-600 hover:text-blue-800 font-bold text-xs text-center cursor-pointer transition-colors"
+                  >
+                    View Terms &amp; Pre-Launch Policy
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Card 2: Need Help? */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 space-y-3">
+
             <div className="flex items-center gap-2">
               <Headphones className="w-4 h-4 text-zinc-900" />
               <h3 className="text-base font-extrabold text-zinc-900">
@@ -1754,6 +1877,16 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
           </div>
         </div>
       )}
+
+      {/* Journey Protection Pre-Launch Terms Modal */}
+      <JourneyProtectionTermsModal
+        open={showProtectionTerms}
+        onClose={() => setShowProtectionTerms(false)}
+        protectionId={journeyProtection?.protection_id}
+        bookingRef={bookingCode || bookingUuid}
+        acceptedAt={journeyProtection?.activated_at || journeyProtection?.terms_accepted_at}
+        hasAccepted={Boolean(journeyProtection)}
+      />
     </div>
   );
-}
+}

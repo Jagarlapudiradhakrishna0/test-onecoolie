@@ -30,8 +30,11 @@ import { useAuth } from '../context/AuthContext';
 import TrainLoader from '../components/TrainLoader';
 import oneCoolieLogo from '../assets/onecoolie-logo.png';
 import ProfileMenu from '../context/ProfileMenu';
+import JourneyProtectionTermsModal from '../components/protection/JourneyProtectionTermsModal';
+import { fetchBookingProtection } from '../services/protectionService';
 
 export default function TripSummaryPage() {
+
   const { bookingId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -41,6 +44,9 @@ export default function TripSummaryPage() {
   const [error, setError] = useState(null);
   const [isNotFound, setIsNotFound] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
+  const [journeyProtection, setJourneyProtection] = useState(null);
+  const [showProtectionTerms, setShowProtectionTerms] = useState(false);
+
 
   // Rating & Feedback inside summary
   const [rating, setRating] = useState(null);
@@ -82,6 +88,13 @@ export default function TripSummaryPage() {
 
       if (data) {
         setBooking(data);
+        if (data.journey_protection) {
+          setJourneyProtection(data.journey_protection);
+        } else {
+          fetchBookingProtection(bookingId).then((prot) => {
+            if (prot) setJourneyProtection(prot);
+          });
+        }
         if (data.rating && Number(data.rating) > 0) {
           setRating(Number(data.rating));
           setComment(data.review || '');
@@ -94,6 +107,7 @@ export default function TripSummaryPage() {
       } else {
         setIsNotFound(true);
       }
+
     } catch (err) {
       console.error('Fetch trip summary error:', err);
       if (err.response?.status === 404) {
@@ -541,8 +555,74 @@ export default function TripSummaryPage() {
           </div>
         </div>
 
+        {/* ── 2.5 JOURNEY PROTECTION SUMMARY (PRE-LAUNCH) ── */}
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 sm:p-8 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
+              <h3 className="font-extrabold text-base text-zinc-900">
+                ONECOOLIE JOURNEY PROTECTION
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+                PRE-LAUNCH
+              </span>
+              {journeyProtection && journeyProtection.status === 'active' ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  ACTIVE
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-zinc-600 border border-slate-200">
+                  NOT ADDED
+                </span>
+              )}
+            </div>
+          </div>
+
+          {journeyProtection && journeyProtection.status === 'active' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-blue-50/50 border border-blue-100/80 text-xs">
+              <div>
+                <span className="text-[11px] text-zinc-400 font-medium block">Protection ID</span>
+                <span className="font-mono font-bold text-zinc-900 select-all">{journeyProtection.protection_id}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-zinc-400 font-medium block">Protection Fee</span>
+                <span className="font-bold text-zinc-900">₹0.50</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-zinc-400 font-medium block">Terms Version</span>
+                <span className="font-mono text-zinc-700">{journeyProtection.terms_version || 'PRE-LAUNCH-v1'}</span>
+              </div>
+              <div className="flex items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowProtectionTerms(true)}
+                  className="px-3 py-1.5 rounded-full bg-white hover:bg-slate-100 text-blue-600 border border-blue-200 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  View Terms
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <p className="text-zinc-500 text-[11px]">
+                No Journey Protection was added to this journey. (₹0.50 / journey)
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowProtectionTerms(true)}
+                className="text-blue-600 hover:text-blue-800 font-bold text-xs cursor-pointer"
+              >
+                View Pre-Launch Terms
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* ── 3. MISSION TIMELINE MILESTONES ── */}
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 sm:p-8 space-y-4">
+
           <h3 className="font-extrabold text-sm sm:text-base text-zinc-900">
             Journey Assistance Milestones
           </h3>
@@ -727,6 +807,17 @@ export default function TripSummaryPage() {
           </button>
         </div>
       </main>
+
+      {/* Journey Protection Pre-Launch Terms Modal */}
+      <JourneyProtectionTermsModal
+        open={showProtectionTerms}
+        onClose={() => setShowProtectionTerms(false)}
+        protectionId={journeyProtection?.protection_id}
+        bookingRef={booking?.booking_id || booking?.id}
+        acceptedAt={journeyProtection?.activated_at || journeyProtection?.terms_accepted_at}
+        hasAccepted={Boolean(journeyProtection)}
+      />
     </div>
   );
 }
+

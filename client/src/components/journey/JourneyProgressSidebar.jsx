@@ -29,8 +29,10 @@ export default function JourneyProgressSidebar({
   getLuggageTotalCount = () => 0,
   getLuggageSummaryLabel = () => '',
   getLuggageTotalCost = () => 0,
-  serviceMeta = []
+  serviceMeta = [],
+  journeyProtectionOptedIn = false
 }) {
+
   const currentStationObj = STATIONS.find((s) => s.code === station) || {
     code: station,
     name: station === 'KZJ' ? 'Kazipet Jn' : station
@@ -192,8 +194,19 @@ export default function JourneyProgressSidebar({
             </div>
           )}
 
+          {journeyProtectionOptedIn && (
+            <div className="flex justify-between items-center text-blue-600 font-semibold pt-1 border-t border-slate-100">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                <span>Journey Protection (Pre-Launch)</span>
+              </span>
+              <span className="font-mono font-bold">₹0.50</span>
+            </div>
+          )}
+
           {/* GST Included line */}
           <div className="flex justify-between text-zinc-600 pt-1 border-t border-slate-100">
+
             <span>GST (Included)</span>
             <span className="font-mono font-bold text-zinc-900">₹0</span>
           </div>

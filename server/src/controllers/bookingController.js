@@ -320,6 +320,21 @@ exports.getBookingById = async (req, res) => {
       }
     }
 
+    try {
+      const { data: protRecord } = await supabase
+        .from('journey_protection')
+        .select('*')
+        .eq('booking_id', booking.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (protRecord) {
+        booking.journey_protection = protRecord;
+      }
+    } catch (pErr) {
+      // Non-blocking protection lookup
+    }
+
     const includeOTP = isPassenger || isAdmin;
 
     return res.json(formatBooking(booking, { includeOTP }));

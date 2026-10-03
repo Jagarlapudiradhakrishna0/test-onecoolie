@@ -79,6 +79,9 @@ import RaiseTicketView from '../components/support/RaiseTicketView';
 import { FAQ_QUESTIONS, FAQ_CATEGORIES } from '../utils/supportFaqData';
 import Footer from '../components/Footer';
 import TrainLoader from '../components/TrainLoader';
+import JourneyProtectionCard from '../components/protection/JourneyProtectionCard';
+import JourneyProtectionTermsModal from '../components/protection/JourneyProtectionTermsModal';
+import { purchaseJourneyProtection } from '../services/protectionService';
 
 /* ============================================================
    PASSENGER DASHBOARD — Swiss Minimal Product with Premium Icons
@@ -235,6 +238,8 @@ export default function PassengerDashboard() {
   };
   const [bookingMode, setBookingMode] = useState('pnr'); // 'pnr' | 'train'
   const [bookingStep, setBookingStep] = useState(1); // 1: Journey | 2: Seat & Luggage | 3: Services | 4: Review & Payment
+  const [journeyProtectionOptedIn, setJourneyProtectionOptedIn] = useState(false);
+  const [activeProtectionModalBooking, setActiveProtectionModalBooking] = useState(null);
 
   // PNR lookup state
   const [pnrInput, setPnrInput] = useState('');
@@ -546,8 +551,8 @@ export default function PassengerDashboard() {
     return parts.length > 0 ? parts.join(', ') : '0 items';
   };
 
-  const calculateTotal = () =>
-    SERVICE_META.reduce((sum, s) => {
+  const calculateTotal = () => {
+    const base = SERVICE_META.reduce((sum, s) => {
       if (s.key === 'luggage') {
         return sum + getLuggageTotalCost();
       }
@@ -555,6 +560,9 @@ export default function PassengerDashboard() {
         ? sum + (services[s.key] || 0) * s.price
         : sum + (services[s.key] ? s.price : 0);
     }, 0);
+    return journeyProtectionOptedIn ? Number((base + 0.5).toFixed(2)) : base;
+  };
+
 
   const handleCardClick = (s, e) => {
     if (e.target.closest('button, select, input')) return;
@@ -2305,9 +2313,16 @@ export default function PassengerDashboard() {
                         </div>
                       </div>
 
+                      {/* Item 4: Journey Protection (Pre-Launch Product) */}
+                      <JourneyProtectionCard
+                        selected={journeyProtectionOptedIn}
+                        onToggle={(opted) => setJourneyProtectionOptedIn(opted)}
+                      />
+
                     </div>
 
                     {/* Bottom Action Row */}
+
                     <div className="pt-6 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-center justify-between gap-3 w-full">
                       <button
                         type="button"
@@ -2353,7 +2368,9 @@ export default function PassengerDashboard() {
                   getLuggageSummaryLabel={getLuggageSummaryLabel}
                   getLuggageTotalCost={getLuggageTotalCost}
                   serviceMeta={SERVICE_META}
+                  journeyProtectionOptedIn={journeyProtectionOptedIn}
                 />
+
               </div>
 
             </div>
@@ -3140,6 +3157,92 @@ export default function PassengerDashboard() {
                             </div>
                           </div>
 
+                          {/* Row 4.5: Journey Protection Section */}
+                          {b.journey_protection && b.journey_protection.status === 'active' ? (
+                            <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-extrabold text-zinc-900 text-xs flex items-center gap-1.5">
+                                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                                    <span>ONECOOLIE JOURNEY PROTECTION</span>
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    ACTIVE
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                    PRE-LAUNCH
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 text-[11px] text-zinc-600 font-mono flex-wrap">
+                                  <span>Protection ID: <strong className="text-zinc-900">{b.journey_protection.protection_id}</strong></span>
+                                  <span>Price: <strong className="text-zinc-900">₹0.50</strong></span>
+                                  {b.journey_protection.activated_at && (
+                                    <span>Activated: {new Date(b.journey_protection.activated_at).toLocaleDateString()}</span>
+                                  )}
+                                  <span>Terms: {b.journey_protection.terms_version || 'PRE-LAUNCH-v1'}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveProtectionModalBooking(b)}
+                                  className="px-3 py-1.5 rounded-full bg-white hover:bg-slate-100 text-blue-600 border border-blue-200 font-bold text-xs transition-colors cursor-pointer"
+                                >
+                                  View Terms
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleContactSupport(navigate)}
+                                  className="px-3 py-1.5 rounded-full bg-white hover:bg-slate-100 text-zinc-700 border border-slate-200 font-semibold text-xs transition-colors cursor-pointer"
+                                >
+                                  Contact Support
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
+                                  <span className="font-bold text-zinc-800 text-xs">ONECOOLIE JOURNEY PROTECTION</span>
+                                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-200 text-zinc-600">PRE-LAUNCH</span>
+                                </div>
+                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                  No Journey Protection has been added to this booking. (₹0.50 / journey)
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveProtectionModalBooking(b)}
+                                  className="text-blue-600 hover:text-blue-800 font-bold text-[11px] cursor-pointer"
+                                >
+                                  View Terms
+                                </button>
+                                {!isCancelled && !isCompleted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      purchaseJourneyProtection({
+                                        bookingId: b.id || b.booking_id,
+                                        user,
+                                        onSuccess: (updatedProt) => {
+                                          b.journey_protection = updatedProt;
+                                          fetchBookings();
+                                        }
+                                      });
+                                    }}
+                                    className="px-3 py-1.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs shadow-2xs transition-colors cursor-pointer"
+                                  >
+                                    Add Protection (₹0.50)
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Row 5: Fee & View Trip CTA */}
                           <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
                             <div>
@@ -3809,8 +3912,10 @@ export default function PassengerDashboard() {
           luggageTotalCount: getLuggageTotalCount(),
           luggageCounts,
           luggageSummaryLabel: getLuggageSummaryLabel(),
+          journeyProtection: journeyProtectionOptedIn,
         }}
       />
+
 
       {/* Booking Confirmed Success Modal */}
       {confirmedBooking && (
@@ -4182,7 +4287,19 @@ export default function PassengerDashboard() {
         />
       )}
 
+      {/* Journey Protection Pre-Launch Policy & Terms Modal */}
+      {Boolean(activeProtectionModalBooking) && (
+        <JourneyProtectionTermsModal
+          open={Boolean(activeProtectionModalBooking)}
+          onClose={() => setActiveProtectionModalBooking(null)}
+          protectionId={activeProtectionModalBooking.journey_protection?.protection_id}
+          bookingRef={activeProtectionModalBooking.booking_id || activeProtectionModalBooking.id}
+          acceptedAt={activeProtectionModalBooking.journey_protection?.activated_at || activeProtectionModalBooking.journey_protection?.terms_accepted_at}
+          hasAccepted={Boolean(activeProtectionModalBooking.journey_protection)}
+        />
+      )}
+
       {/* Legacy ConfirmDialog removed — CancellationModal is the single authoritative cancellation path */}
     </div>
   );
-}
+}

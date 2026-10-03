@@ -216,9 +216,15 @@ export function AdminSidebar({
           icon: CreditCard,
           badge: payoutsCount > 0 ? payoutsCount : undefined,
           badgeColor: 'bg-blue-600 text-white'
+        },
+        {
+          id: 'protection',
+          label: 'Journey Protection',
+          icon: ShieldCheck,
         }
       ]
     },
+
     {
       title: 'FIELD OPERATIONS',
       items: [

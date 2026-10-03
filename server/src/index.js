@@ -693,6 +693,8 @@ app.use('/api/assistant-wallet', assistantWalletRoutes);
 app.use('/api/assistant-payouts', assistantPayoutRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/support-tickets', supportRoutes);
+const protectionRoutes = require('./routes/protectionRoutes');
+app.use('/api/protection', protectionRoutes);
 
 // --------------------------------------------------
 // 404 HANDLER

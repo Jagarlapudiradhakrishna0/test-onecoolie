@@ -199,7 +199,21 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     cancelled_at: booking.cancelled_at || booking.services?.cancellation?.cancelled_at || null,
     refund_status: booking.refund_status || booking.services?.cancellation?.refund_status || null,
     rebooking: booking.services?.rebooking || null,
+
+    // ─── Journey Protection (Pre-Launch Product) ─────────────────────────────
+    journey_protection: booking.journey_protection
+      ? {
+          id: booking.journey_protection.id,
+          protection_id: booking.journey_protection.protection_id,
+          status: booking.journey_protection.status,
+          price: Number(booking.journey_protection.price) || 0.5,
+          terms_version: booking.journey_protection.terms_version,
+          terms_accepted_at: booking.journey_protection.terms_accepted_at,
+          activated_at: booking.journey_protection.activated_at
+        }
+      : null,
   };
+
 
   return formatted;
 }

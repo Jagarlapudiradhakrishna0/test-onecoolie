@@ -38,6 +38,7 @@ import SahayakPayoutsView from '../components/admin/payouts/SahayakPayoutsView';
 import ActiveSessions from './active-sessions/ActiveSessions';
 import SecurityIncidents from './security-incidents/SecurityIncidents';
 import BookingInspectorModal from '../components/admin/booking-inspector/BookingInspectorModal';
+import AdminJourneyProtectionView from '../components/admin/protection/AdminJourneyProtectionView';
 
 
 /* ============================================================
@@ -4340,8 +4341,16 @@ export default function AdminDashboard() {
           )}
 
           {/* ========================================================
+            TAB: JOURNEY PROTECTION LEDGER (PRE-LAUNCH AUDIT CONSOLE)
+            ======================================================== */}
+          {activeTab === 'protection' && (
+            <AdminJourneyProtectionView />
+          )}
+
+          {/* ========================================================
             TAB 5: EMERGENCY SOS CENTER
             ======================================================== */}
+
           {activeTab === 'sos' && (
             <EmergencyIncidentCommandCenter
               sosAlerts={sosAlerts}

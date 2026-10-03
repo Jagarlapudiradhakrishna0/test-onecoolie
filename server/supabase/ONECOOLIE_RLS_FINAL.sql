@@ -299,6 +299,24 @@ CREATE POLICY "Assistants can view own payout items" ON public.assistant_payout_
         )
     );
 
+-- 6.12 Journey Protection: Passengers can only view their own protection records
+DROP POLICY IF EXISTS "Passengers can view own protection" ON public.journey_protection;
+CREATE POLICY "Passengers can view own protection" ON public.journey_protection
+    FOR SELECT TO authenticated
+    USING (auth.uid() = passenger_id);
+
+-- 6.13 Protection Claims: Passengers can only view and create their own claims
+DROP POLICY IF EXISTS "Passengers can view own claims" ON public.protection_claims;
+CREATE POLICY "Passengers can view own claims" ON public.protection_claims
+    FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Passengers can create own claims" ON public.protection_claims;
+CREATE POLICY "Passengers can create own claims" ON public.protection_claims
+    FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = user_id);
+
+
 -- 6.12 SOS Alerts: Passengers can only view their own SOS emergency events
 DROP POLICY IF EXISTS "Passengers can view own sos alerts" ON public.sos_alerts;
 CREATE POLICY "Passengers can view own sos alerts" ON public.sos_alerts
@@ -414,9 +432,15 @@ CREATE POLICY "Service role full access on production_validation_evidence" ON pu
 DROP POLICY IF EXISTS "Service role full access on production_launch_certifications" ON public.production_launch_certifications;
 CREATE POLICY "Service role full access on production_launch_certifications" ON public.production_launch_certifications FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Service role full access on journey_protection" ON public.journey_protection;
+CREATE POLICY "Service role full access on journey_protection" ON public.journey_protection FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on protection_claims" ON public.protection_claims;
+CREATE POLICY "Service role full access on protection_claims" ON public.protection_claims FOR ALL TO service_role USING (true) WITH CHECK (true);
+
 
 -- ==============================================================================
--- SECTION 8 — CONFIRM ROW LEVEL SECURITY IS ACTIVE ON ALL 32 TABLES
+-- SECTION 8 — CONFIRM ROW LEVEL SECURITY IS ACTIVE ON ALL 34 TABLES
 -- ==============================================================================
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -451,6 +475,8 @@ ALTER TABLE public.application_operational_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.production_validation_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.production_validation_evidence ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.production_launch_certifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.journey_protection ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.protection_claims ENABLE ROW LEVEL SECURITY;
 
 
 -- ==============================================================================
