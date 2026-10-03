@@ -234,7 +234,7 @@ export default function ProfileMenu({ role, onNavigate }) {
       ? [
         {
           key: 'jobs',
-          label: t('myJobs') || 'My Jobs',
+          label: t('nav.jobs') || 'My Jobs',
           sub: 'View active dispatches and duty history',
           act: () => onNavigate?.('jobs'),
           icon: Briefcase,
@@ -242,35 +242,35 @@ export default function ProfileMenu({ role, onNavigate }) {
         },
         {
           key: 'earnings',
-          label: t('earnings') || 'Earnings',
+          label: t('nav.earnings') || 'Earnings',
           sub: 'Track payouts and daily earnings',
           act: () => onNavigate?.('history'),
           icon: Sliders,
         },
         {
           key: 'sessions',
-          label: 'Devices & Security',
+          label: t('profile.devicesSecurity'),
           sub: 'Active sessions and sign-out controls',
           act: () => setModal('sessions'),
           icon: Shield,
         },
         {
           key: 'safety',
-          label: t('safety') || 'Safety',
+          label: t('profile.safety'),
           sub: 'Operational safety and duty protocols',
           act: () => setModal('safety'),
           icon: ShieldCheck,
         },
         {
           key: 'help',
-          label: t('help') || 'Help & Support',
+          label: t('nav.support'),
           sub: 'Get assistance anytime',
           act: () => setModal('help'),
           icon: HelpCircle,
         },
         {
           key: 'settings',
-          label: t('settings') || 'Settings',
+          label: t('nav.settings'),
           sub: 'Manage your account preferences',
           act: () => setModal('settings'),
           icon: Sliders,
@@ -279,29 +279,29 @@ export default function ProfileMenu({ role, onNavigate }) {
       : [
         {
           key: 'trips',
-          label: t('myTrips') || 'My Trips',
-          sub: 'View and manage your bookings',
+          label: t('nav.myTrips'),
+          sub: t('dashboard.recentTrips') || 'View and manage your bookings',
           act: () => onNavigate?.('trips'),
           icon: Luggage,
           highlight: true,
         },
         {
           key: 'sessions',
-          label: 'Devices & Security',
+          label: t('profile.devicesSecurity'),
           sub: 'Active sessions and sign-out controls',
           act: () => setModal('sessions'),
           icon: Shield,
         },
         {
           key: 'safety',
-          label: t('safety') || 'Safety',
+          label: t('profile.safety'),
           sub: 'Travel tips and safety guidelines',
           act: () => setModal('safety'),
           icon: ShieldCheck,
         },
         {
           key: 'help',
-          label: t('help') || 'Help & Support',
+          label: t('nav.support'),
           sub: 'Get assistance anytime',
           act: () => {
             if (role === 'passenger') {
@@ -319,7 +319,7 @@ export default function ProfileMenu({ role, onNavigate }) {
         },
         {
           key: 'settings',
-          label: t('settings') || 'Settings',
+          label: t('nav.settings'),
           sub: 'Manage your account preferences',
           act: () => setModal('settings'),
           icon: Sliders,
@@ -356,7 +356,7 @@ export default function ProfileMenu({ role, onNavigate }) {
 
             <div className="min-w-0 flex-1">
               <h3 className="font-extrabold text-base text-zinc-900 truncate leading-snug">
-                Welcome, {user?.name || 'vikas'}
+                {t('dashboard.welcome', { name: user?.name || 'Vikas' })}
               </h3>
               <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium truncate mt-0.5">
                 <span className="truncate">{user?.email || 'globalxvikas@gmail.com'}</span>
@@ -384,7 +384,7 @@ export default function ProfileMenu({ role, onNavigate }) {
                     className="px-2 py-0.5 rounded-full text-[10px] font-bold text-[#1463FF] hover:bg-blue-50 bg-blue-50/70 border border-blue-200/80 cursor-pointer transition-all shrink-0 hover:scale-105"
                     title="Edit Phone Number (Max 2 per month)"
                   >
-                    Edit
+                    {t('common.edit')}
                   </button>
                 ) : (
                   <span
@@ -464,10 +464,10 @@ export default function ProfileMenu({ role, onNavigate }) {
 
                 <div className="min-w-0">
                   <p className="text-xs font-extrabold text-rose-600 truncate">
-                    {t('logout') || 'Logout'}
+                    {t('nav.logout')}
                   </p>
                   <p className="text-[11px] text-zinc-400 font-medium truncate mt-0.5">
-                    See you again soon!
+                    {t('profile.seeYouAgain') || 'See you again soon!'}
                   </p>
                 </div>
               </div>
@@ -706,26 +706,26 @@ export default function ProfileMenu({ role, onNavigate }) {
             {modal === 'settings' && (
               <>
                 <h3 className="text-xl font-bold tracking-tight mb-2">
-                  Preferences
+                  {t('profile.preferences')}
                 </h3>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-6">
-                  Manage display and regional language
+                  {t('profile.manageLanguage')}
                 </p>
 
                 <div className="space-y-5">
                   {/* Account Details */}
                   <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-800 space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Account Details</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{t('profile.accountDetails')}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-500">Name</span>
+                      <span className="text-xs text-zinc-500">{t('profile.name')}</span>
                       <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{user?.name || 'Vikas'}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-500">Email</span>
+                      <span className="text-xs text-zinc-500">{t('profile.email')}</span>
                       <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[200px]">{user?.email || 'vikas@example.com'}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-500">Phone</span>
+                      <span className="text-xs text-zinc-500">{t('profile.phone')}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-[#1463FF] flex items-center gap-1">
                           <Phone className="w-3 h-3" />
@@ -737,7 +737,7 @@ export default function ProfileMenu({ role, onNavigate }) {
                             onClick={() => setModal('edit-phone')}
                             className="text-[10px] font-bold text-[#1463FF] hover:underline cursor-pointer bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200/60 transition-colors"
                           >
-                            Edit
+                            {t('common.edit')}
                           </button>
                         ) : (
                           <span
@@ -753,19 +753,20 @@ export default function ProfileMenu({ role, onNavigate }) {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
-                      Appearance
+                      {t('profile.appearance')}
                     </label>
-                    <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl" role="group" aria-label={t('profile.appearance')}>
                       {[
-                        { id: 'light', label: 'Light' },
-                        { id: 'dark', label: 'Dark' },
+                        { id: 'light', label: t('profile.light') },
+                        { id: 'dark', label: t('profile.dark') },
                       ].map((item) => (
                         <button
                           key={item.id}
                           type="button"
                           onClick={() => setTheme(item.id)}
-                          className={`py-2 text-xs font-bold rounded-lg transition-all ${theme === item.id
-                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm'
+                          aria-pressed={theme === item.id}
+                          className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${theme === item.id
+                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10'
                             : 'text-zinc-500 hover:text-black dark:hover:text-white'
                             }`}
                         >
@@ -776,21 +777,24 @@ export default function ProfileMenu({ role, onNavigate }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
-                      Language
+                    <label id="language-selector-label" className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
+                      {t('profile.language')}
                     </label>
-                    <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+                    <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl" role="radiogroup" aria-labelledby="language-selector-label">
                       {[
-                        { id: 'en', label: 'English' },
-                        { id: 'te', label: 'తెలుగు' },
-                        { id: 'hi', label: 'हिन्दी' },
+                        { id: 'en', label: 'English', ariaLabel: 'English language' },
+                        { id: 'te', label: 'తెలుగు', ariaLabel: 'Telugu language' },
+                        { id: 'hi', label: 'हिन्दी', ariaLabel: 'Hindi language' },
                       ].map((item) => (
                         <button
                           key={item.id}
                           type="button"
+                          role="radio"
+                          aria-checked={lang === item.id}
+                          aria-label={item.ariaLabel}
                           onClick={() => setLanguage(item.id)}
-                          className={`py-2 text-xs font-bold rounded-lg transition-all ${lang === item.id
-                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm'
+                          className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${lang === item.id
+                            ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10 font-black'
                             : 'text-zinc-500 hover:text-black dark:hover:text-white'
                             }`}
                         >
@@ -882,14 +886,14 @@ export default function ProfileMenu({ role, onNavigate }) {
                       disabled={phoneLoading}
                       className="flex-1 py-3 text-xs font-bold rounded-2xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={phoneLoading || editPhone.length !== 10 || phoneStatus?.changesRemaining === 0}
                       className="flex-1 py-3 text-xs font-bold rounded-2xl bg-[#1463FF] hover:bg-[#0d52dd] text-white transition-all cursor-pointer shadow-md shadow-[#1463FF]/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {phoneLoading ? 'Updating...' : 'Save Phone'}
+                      {phoneLoading ? t('common.loading') : t('common.save')}
                     </button>
                   </div>
                 </form>
@@ -903,7 +907,7 @@ export default function ProfileMenu({ role, onNavigate }) {
                   onClick={() => setModal(null)}
                   className="btn-black w-full py-3 text-xs"
                 >
-                  Done
+                  {t('common.done')}
                 </button>
               </div>
             )}

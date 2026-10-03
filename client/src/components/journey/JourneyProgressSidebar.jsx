@@ -7,6 +7,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { STATIONS } from '../../utils/services';
+import { useLanguage } from '../../context/LanguageContext';
 
 /**
  * JourneyProgressSidebar Component
@@ -32,6 +33,7 @@ export default function JourneyProgressSidebar({
   serviceMeta = [],
   journeyProtectionOptedIn = false
 }) {
+  const { t } = useLanguage();
 
   const currentStationObj = STATIONS.find((s) => s.code === station) || {
     code: station,
@@ -45,13 +47,13 @@ export default function JourneyProgressSidebar({
         <div className="flex items-center justify-between border-b border-slate-100 pb-3.5 min-w-0">
           <div>
             <h3 className="text-base font-extrabold tracking-tight text-zinc-900">
-              Booking Summary
+              {t('booking.summaryTitle')}
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">Your journey at a glance</p>
+            <p className="text-xs text-slate-400 mt-0.5">{t('booking.summarySubtitle') || 'Your journey at a glance'}</p>
           </div>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100/90 border border-slate-200/60 text-[11px] font-medium text-slate-600 shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            <span>In Progress</span>
+            <span>{t('common.inProgress') || 'In Progress'}</span>
           </span>
         </div>
 
@@ -166,7 +168,7 @@ export default function JourneyProgressSidebar({
         {/* Pricing / Charges Breakdown */}
         <div className="space-y-2 text-xs">
           <div className="flex items-center justify-between font-bold text-zinc-900">
-            <span>Service Charges</span>
+            <span>{t('booking.serviceCharges') || 'Service Charges'}</span>
             <span className="font-mono font-black text-sm text-blue-600">
               ₹{calculateTotal()}
             </span>
@@ -198,7 +200,7 @@ export default function JourneyProgressSidebar({
             <div className="flex justify-between items-center text-blue-600 font-semibold pt-1 border-t border-slate-100">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                <span>Journey Protection (Pre-Launch)</span>
+                <span>{t('protection.title')} ({t('protection.preLaunch')})</span>
               </span>
               <span className="font-mono font-bold">₹0.50</span>
             </div>
@@ -206,8 +208,7 @@ export default function JourneyProgressSidebar({
 
           {/* GST Included line */}
           <div className="flex justify-between text-zinc-600 pt-1 border-t border-slate-100">
-
-            <span>GST (Included)</span>
+            <span>{t('booking.gstIncluded') || 'GST (Included)'}</span>
             <span className="font-mono font-bold text-zinc-900">₹0</span>
           </div>
         </div>
@@ -215,7 +216,7 @@ export default function JourneyProgressSidebar({
         {/* Total Payable Soft Blue Highlight Box */}
         <div className="p-4 rounded-2xl bg-[#EFF6FF] border border-blue-100/80 text-blue-600 flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-600 block">Total Payable</span>
+            <span className="text-xs font-bold text-slate-600 block">{t('booking.totalPayable') || 'Total Payable'}</span>
             <span className="text-[10px] text-slate-400 font-medium">All platform taxes included</span>
           </div>
           <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-blue-600">

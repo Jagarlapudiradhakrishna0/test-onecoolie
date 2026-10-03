@@ -15,9 +15,11 @@ import { FAQ_CATEGORIES, FAQ_QUESTIONS } from '../../utils/supportFaqData';
 import ProfileMenu from '../../context/ProfileMenu';
 import PassengerNotifications from '../PassengerNotifications';
 import SupportHeroCard from './SupportHeroCard';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDashboard = false }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [tickets, setTickets] = useState([]);
   const [selectedFaqCategory, setSelectedFaqCategory] = useState('all');
@@ -97,7 +99,7 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                 className="flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 text-zinc-600"
               >
                 <Train className="w-3.5 h-3.5" />
-                <span>Book</span>
+                <span>{t('nav.book')}</span>
               </button>
               <button
                 type="button"
@@ -105,7 +107,7 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                 className="flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 text-zinc-600"
               >
                 <Briefcase className="w-3.5 h-3.5" />
-                <span>My Trips</span>
+                <span>{t('nav.myTrips')}</span>
                 <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-black text-white">
                   3
                 </span>
@@ -116,7 +118,7 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                 className="flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 bg-black text-white shadow-xs"
               >
                 <Headphones className="w-3.5 h-3.5" />
-                <span>Help</span>
+                <span>{t('nav.support')}</span>
               </button>
             </div>
           </header>
@@ -143,7 +145,7 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                   className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer text-zinc-600 hover:text-black font-semibold"
                 >
                   <Train className="w-4 h-4" />
-                  <span>Book</span>
+                  <span>{t('nav.book')}</span>
                 </button>
 
                 <button
@@ -152,7 +154,7 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                   className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer text-zinc-600 hover:text-black font-semibold"
                 >
                   <Briefcase className="w-4 h-4" />
-                  <span>My Trips</span>
+                  <span>{t('nav.myTrips')}</span>
                   <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-black text-white">
                     3
                   </span>
@@ -164,7 +166,7 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                   className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer bg-black text-white shadow-xs"
                 >
                   <Headphones className="w-4 h-4" />
-                  <span>Help & Support</span>
+                  <span>{t('nav.support')}</span>
                 </button>
               </div>
 

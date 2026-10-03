@@ -14,6 +14,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
 
 /* ============================================================
    ONECOOLIE PASSENGER NOTIFICATIONS — Real-Time Travel Alerts
@@ -28,6 +29,7 @@ export default function PassengerNotifications({
   buttonClassName = '',
 }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState(() => {
     try {
@@ -267,7 +269,7 @@ export default function PassengerNotifications({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-zinc-900">
-                    Notifications
+                    {t('notifications.title')}
                   </h3>
                   {unreadCount > 0 && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black text-white">
@@ -276,7 +278,7 @@ export default function PassengerNotifications({
                   )}
                 </div>
                 <p className="text-[11px] text-zinc-400 font-medium">
-                  Trip telemetry &amp; station updates
+                  {t('notifications.subtitle') || 'Trip telemetry & station updates'}
                 </p>
               </div>
             </div>
@@ -288,7 +290,7 @@ export default function PassengerNotifications({
                 className="text-[11px] font-bold text-zinc-600 hover:text-black cursor-pointer flex items-center gap-1 transition-colors"
               >
                 <Check className="w-3 h-3" />
-                <span>Clear all</span>
+                <span>{t('notifications.clearAll') || 'Clear all'}</span>
               </button>
             )}
           </div>
@@ -300,9 +302,9 @@ export default function PassengerNotifications({
                 <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-2.5">
                   <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                 </div>
-                <p className="text-xs font-bold text-zinc-800">All caught up!</p>
+                <p className="text-xs font-bold text-zinc-800">{t('notifications.allCaughtUp') || 'All caught up!'}</p>
                 <p className="text-[11px] text-zinc-400 mt-0.5 max-w-[220px] mx-auto">
-                  No pending alerts or notifications for your account.
+                  {t('notifications.noNotifications')}
                 </p>
               </div>
             ) : (
@@ -361,7 +363,7 @@ export default function PassengerNotifications({
                       <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-100/60 text-[10px]">
                         <span className="text-zinc-400 font-mono font-medium">{item.time}</span>
                         <span className="text-black font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                          <span>View</span>
+                          <span>{t('common.view')}</span>
                           <ArrowRight className="w-3 h-3" />
                         </span>
                       </div>
@@ -382,7 +384,7 @@ export default function PassengerNotifications({
               }}
               className="text-xs font-bold text-zinc-700 hover:text-black flex items-center gap-1.5 transition-colors cursor-pointer w-full justify-center py-1.5"
             >
-              <span>Manage All Your Bookings</span>
+              <span>{t('nav.myTrips')}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

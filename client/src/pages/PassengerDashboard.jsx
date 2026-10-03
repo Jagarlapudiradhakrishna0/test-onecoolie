@@ -1144,7 +1144,7 @@ export default function PassengerDashboard() {
               }`}
           >
             <Train className="w-3.5 h-3.5" />
-            <span>Book</span>
+            <span>{t('nav.book')}</span>
           </button>
           <button
             type="button"
@@ -1155,7 +1155,7 @@ export default function PassengerDashboard() {
               }`}
           >
             <Briefcase className="w-3.5 h-3.5" />
-            <span>My Trips</span>
+            <span>{t('nav.myTrips')}</span>
             {activeTripsCount > 0 && (
               <span
                 className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
@@ -1177,7 +1177,7 @@ export default function PassengerDashboard() {
               }`}
           >
             <Headphones className="w-3.5 h-3.5" />
-            <span>Help</span>
+            <span>{t('nav.support')}</span>
           </button>
         </div>
       </header>
@@ -1207,7 +1207,7 @@ export default function PassengerDashboard() {
                 }`}
             >
               <Train className="w-4 h-4" />
-              <span>Book</span>
+              <span>{t('nav.book')}</span>
             </button>
 
             <button
@@ -1219,7 +1219,7 @@ export default function PassengerDashboard() {
                 }`}
             >
               <Briefcase className="w-4 h-4" />
-              <span>My Trips</span>
+              <span>{t('nav.myTrips')}</span>
               {activeTripsCount > 0 && (
                 <span
                   className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tab === 'trips' ? 'bg-white text-black' : 'bg-black text-white'
@@ -1242,7 +1242,7 @@ export default function PassengerDashboard() {
                 }`}
             >
               <Headphones className="w-4 h-4" />
-              <span>Help & Support</span>
+              <span>{t('nav.support')}</span>
             </button>
           </div>
 
@@ -1275,11 +1275,11 @@ export default function PassengerDashboard() {
               <div className="block md:hidden bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3 w-full max-w-full min-w-0 overflow-hidden">
                 <div className="flex items-center justify-between min-w-0">
                   <span className="text-xs font-extrabold text-zinc-900 truncate">
-                    Step {bookingStep} of 4: {[
-                      'Select Journey',
-                      'Coach & Seat Details',
-                      'Assistance Services',
-                      'Review & Confirm Payment'
+                    {t('booking.stepIndicator', { step: bookingStep, total: 4 })}: {[
+                      t('booking.step1'),
+                      t('booking.step2'),
+                      t('booking.step3'),
+                      t('booking.step4')
                     ][bookingStep - 1]}
                   </span>
                   <span className="text-[11px] font-mono font-bold text-zinc-400 shrink-0">
@@ -1296,10 +1296,10 @@ export default function PassengerDashboard() {
                 {/* 4 Step Buttons Row */}
                 <div className="flex items-center justify-between pt-1 gap-1 min-w-0 w-full">
                   {[
-                    { step: 1, label: 'Journey', icon: Train },
-                    { step: 2, label: 'Seat', icon: Luggage },
-                    { step: 3, label: 'Services', icon: LayoutGrid },
-                    { step: 4, label: 'Review', icon: CreditCard },
+                    { step: 1, label: t('booking.step1Short') || 'Journey', icon: Train },
+                    { step: 2, label: t('booking.step2Short') || 'Seat', icon: Luggage },
+                    { step: 3, label: t('booking.step3Short') || 'Services', icon: LayoutGrid },
+                    { step: 4, label: t('booking.step4Short') || 'Review', icon: CreditCard },
                   ].map((s) => {
                     const isDone = s.step < bookingStep || (s.step === 1 && isStep1Valid && bookingStep > 1) || (s.step === 2 && isStep2Valid && bookingStep > 2) || (s.step === 3 && isStep3Valid && bookingStep > 3);
                     const isCurrent = bookingStep === s.step;
@@ -1334,10 +1334,10 @@ export default function PassengerDashboard() {
               {/* Desktop Stepper Steps (>=md) - CENTERED IN MIDDLE */}
               <div className="hidden md:flex items-center justify-center gap-3 sm:gap-4 md:gap-5 lg:gap-6 flex-1 max-w-3xl">
                 {[
-                  { step: 1, label: '1. Journey', desc: 'Current Step', icon: Train },
-                  { step: 2, label: '2. Seat & Luggage', desc: 'Coach & Seat', icon: Luggage },
-                  { step: 3, label: '3. Services', desc: 'Assistance Services', icon: LayoutGrid },
-                  { step: 4, label: '4. Review & Payment', desc: 'Final Review', icon: CreditCard },
+                  { step: 1, label: `1. ${t('booking.step1')}`, desc: t('booking.step1Desc') || 'Journey Details', icon: Train },
+                  { step: 2, label: `2. ${t('booking.step2')}`, desc: t('booking.step2Desc') || 'Coach & Seat', icon: Luggage },
+                  { step: 3, label: `3. ${t('booking.step3')}`, desc: t('booking.step3Desc') || 'Assistance Services', icon: LayoutGrid },
+                  { step: 4, label: `4. ${t('booking.step4')}`, desc: t('booking.step4Desc') || 'Final Review', icon: CreditCard },
                 ].map((s, idx) => {
                   const isDone = s.step < bookingStep || (s.step === 1 && isStep1Valid && bookingStep > 1) || (s.step === 2 && isStep2Valid && bookingStep > 2) || (s.step === 3 && isStep3Valid && bookingStep > 3);
                   const isCurrent = bookingStep === s.step;
@@ -1407,7 +1407,7 @@ export default function PassengerDashboard() {
                           STEP 1 OF 4
                         </span>
                         <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 leading-tight">
-                          Find Your Journey
+                          {t('booking.findJourney')}
                         </h2>
                         <p className="text-xs text-zinc-500 mt-1 font-medium">
                           Start with your 10-digit PNR or search your journey manually.
@@ -1442,7 +1442,7 @@ export default function PassengerDashboard() {
                           }`}
                       >
                         <Ticket className="w-3.5 h-3.5" />
-                        <span>10-Digit PNR</span>
+                        <span>{t('booking.pnrTab')}</span>
                       </button>
                       <button
                         type="button"
@@ -1453,7 +1453,7 @@ export default function PassengerDashboard() {
                           }`}
                       >
                         <Train className="w-3.5 h-3.5" />
-                        <span>Station &amp; Train</span>
+                        <span>{t('booking.trainTab')}</span>
                       </button>
                     </div>
 
@@ -1466,7 +1466,7 @@ export default function PassengerDashboard() {
                             <input
                               type="text"
                               maxLength={10}
-                              placeholder="Enter 10-Digit PNR (e.g. 4523891024)"
+                              placeholder={t('booking.pnrPlaceholder')}
                               value={pnrInput}
                               onChange={(e) => {
                                 const val = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -1491,7 +1491,7 @@ export default function PassengerDashboard() {
                             disabled={pnrLoading || pnrInput.length !== 10}
                             className="bg-black hover:bg-zinc-800 text-white font-bold px-7 py-3.5 rounded-2xl text-xs shrink-0 cursor-pointer disabled:opacity-50 flex items-center gap-2 justify-center shadow-xs transition-all"
                           >
-                            {pnrLoading ? 'Verifying PNR...' : <>Fetch Details <ArrowRight className="w-3.5 h-3.5" /></>}
+                            {pnrLoading ? t('booking.verifyingPnr') : <>{t('booking.fetchDetails')} <ArrowRight className="w-3.5 h-3.5" /></>}
                           </button>
                         </form>
 
@@ -1534,7 +1534,7 @@ export default function PassengerDashboard() {
                             </div>
                             <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                               <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-full border border-emerald-200 flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Train Verified
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> {t('booking.trainVerified')}
                               </span>
                               <button
                                 type="button"
@@ -1545,7 +1545,7 @@ export default function PassengerDashboard() {
                                 }}
                                 className="text-[11px] font-semibold text-rose-600 hover:underline px-2 py-1 cursor-pointer"
                               >
-                                Remove
+                                {t('booking.remove')}
                               </button>
                             </div>
                           </div>
@@ -1597,7 +1597,7 @@ export default function PassengerDashboard() {
                       <div className="space-y-0.5">
                         <label className="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
                           <Calendar className="w-4 h-4 text-blue-600" />
-                          <span>Journey Date</span> <span className="text-rose-500">*</span>
+                          <span>{t('booking.journeyDate')}</span> <span className="text-rose-500">*</span>
                         </label>
                         <p className="text-[11px] text-zinc-500 font-medium">
                           Select your journey date
@@ -1656,7 +1656,7 @@ export default function PassengerDashboard() {
                       <div className="pt-2 max-w-xs sm:max-w-sm space-y-1">
                         <label className="block text-xs font-bold text-zinc-900 flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-zinc-500" />
-                          <span>Estimated Time (Optional)</span>
+                          <span>{t('booking.estimatedTime')}</span>
                         </label>
                         <div className="relative">
                           <input
@@ -1684,7 +1684,7 @@ export default function PassengerDashboard() {
                         onClick={() => handleNextStep(2)}
                         className="w-full sm:w-auto justify-center bg-black hover:bg-zinc-800 text-white font-bold px-8 py-3.5 rounded-full text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer shrink-0"
                       >
-                        <span>Continue to Seat &amp; Luggage</span>
+                        <span>{t('booking.continueToSeat')}</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -1772,7 +1772,7 @@ export default function PassengerDashboard() {
                       <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
                           <Train className="w-3.5 h-3.5 text-zinc-400" />
-                          <span>Coach Number</span> <span className="text-rose-500">*</span>
+                          <span>{t('booking.coach')}</span> <span className="text-rose-500">*</span>
                         </label>
                         <div className="relative">
                           <input
@@ -1803,7 +1803,7 @@ export default function PassengerDashboard() {
                       <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
                           <Armchair className="w-3.5 h-3.5 text-zinc-400" />
-                          <span>Seat / Berth No.</span> <span className="text-rose-500">*</span>
+                          <span>{t('booking.seatNumber')}</span> <span className="text-rose-500">*</span>
                         </label>
                         <div className="relative">
                           <input
@@ -1833,7 +1833,7 @@ export default function PassengerDashboard() {
 
                       <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">
-                          Berth Position
+                          {t('booking.berthType')}
                         </label>
                         <select
                           value={berthType}
@@ -1860,7 +1860,7 @@ export default function PassengerDashboard() {
                         className="w-full sm:w-auto justify-center px-6 py-3 rounded-full bg-[#f0f4f8] hover:bg-slate-200 text-zinc-900 font-semibold text-xs transition-colors cursor-pointer flex items-center gap-2"
                       >
                         <ArrowLeft className="w-4 h-4" />
-                        <span>Back to Journey</span>
+                        <span>{t('booking.back')}</span>
                       </button>
 
                       <button
@@ -1868,7 +1868,7 @@ export default function PassengerDashboard() {
                         onClick={() => handleNextStep(3)}
                         className="hidden lg:flex w-full sm:w-auto justify-center bg-black hover:bg-zinc-800 text-white font-bold px-8 py-3.5 rounded-full text-xs shadow-xs transition-all items-center gap-2 cursor-pointer"
                       >
-                        <span>Continue to Services</span>
+                        <span>{t('booking.continueToServices')}</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -1945,7 +1945,7 @@ export default function PassengerDashboard() {
                                 {/* Small Bag */}
                                 <div className="flex items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/60">
                                   <div>
-                                    <p className="text-xs font-bold text-zinc-900">Small Bag</p>
+                                    <p className="text-xs font-bold text-zinc-900">{t('booking.smallBag')}</p>
                                     <p className="text-[10px] text-zinc-400 font-medium">₹30 / item</p>
                                   </div>
                                   <div className="flex items-center gap-2.5">
@@ -1984,7 +1984,7 @@ export default function PassengerDashboard() {
                                 {/* Medium Bag */}
                                 <div className="flex items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/60">
                                   <div>
-                                    <p className="text-xs font-bold text-zinc-900">Medium Bag</p>
+                                    <p className="text-xs font-bold text-zinc-900">{t('booking.mediumBag')}</p>
                                     <p className="text-[10px] text-zinc-400 font-medium">₹40 / item</p>
                                   </div>
                                   <div className="flex items-center gap-2.5">
@@ -2023,7 +2023,7 @@ export default function PassengerDashboard() {
                                 {/* Large Bag */}
                                 <div className="flex items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/60">
                                   <div>
-                                    <p className="text-xs font-bold text-zinc-900">Large Bag</p>
+                                    <p className="text-xs font-bold text-zinc-900">{t('booking.largeBag')}</p>
                                     <p className="text-[10px] text-zinc-400 font-medium">₹60 / item</p>
                                   </div>
                                   <div className="flex items-center gap-2.5">
@@ -2137,7 +2137,7 @@ export default function PassengerDashboard() {
                         className="w-full sm:w-auto justify-center px-6 py-3 rounded-full bg-[#f0f4f8] hover:bg-slate-200 text-zinc-900 font-semibold text-xs transition-colors cursor-pointer flex items-center gap-2"
                       >
                         <ArrowLeft className="w-4 h-4" />
-                        <span>Back to Seat &amp; Luggage</span>
+                        <span>{t('booking.back')}</span>
                       </button>
 
                       <button
@@ -2145,7 +2145,7 @@ export default function PassengerDashboard() {
                         onClick={() => handleNextStep(4)}
                         className="hidden lg:flex w-full sm:w-auto justify-center bg-black hover:bg-zinc-800 text-white font-bold px-8 py-3.5 rounded-full text-xs shadow-xs transition-all items-center gap-2 cursor-pointer"
                       >
-                        <span>Continue to Review</span>
+                        <span>{t('booking.continueToReview')}</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -2164,7 +2164,7 @@ export default function PassengerDashboard() {
                           STEP 4 OF 4
                         </span>
                         <h2 className="text-xl sm:text-3xl font-black tracking-tight text-zinc-900 leading-tight">
-                          Review Your Booking
+                          {t('booking.summaryTitle')}
                         </h2>
                         <p className="text-xs text-zinc-500 mt-1 font-medium">
                           Please check your details before proceeding to payment.
@@ -2177,7 +2177,7 @@ export default function PassengerDashboard() {
                         className="bg-slate-100 hover:bg-slate-200 text-zinc-700 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer border border-slate-200/50 transition-colors shadow-2xs shrink-0"
                       >
                         <Edit className="w-3.5 h-3.5 text-zinc-600" />
-                        <span>Edit Details</span>
+                        <span>{t('common.edit')}</span>
                       </button>
                     </div>
 
@@ -2194,14 +2194,14 @@ export default function PassengerDashboard() {
                             <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 text-zinc-800 flex items-center justify-center shrink-0">
                               <Train className="w-4 h-4 text-zinc-700" />
                             </span>
-                            <h3 className="font-bold text-xs sm:text-sm text-zinc-900 truncate">Journey Details</h3>
+                            <h3 className="font-bold text-xs sm:text-sm text-zinc-900 truncate">{t('booking.step1')}</h3>
                           </div>
                           <button
                             type="button"
                             onClick={() => setBookingStep(1)}
                             className="bg-slate-100 hover:bg-slate-200 text-zinc-700 font-semibold text-xs px-3 py-1.5 rounded-lg border border-slate-200/50 cursor-pointer shrink-0"
                           >
-                            Edit
+                            {t('common.edit')}
                           </button>
                         </div>
 
@@ -2239,14 +2239,14 @@ export default function PassengerDashboard() {
                             <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 text-zinc-800 flex items-center justify-center shrink-0">
                               <Armchair className="w-4 h-4 text-zinc-700" />
                             </span>
-                            <h3 className="font-bold text-xs sm:text-sm text-zinc-900 truncate">Coach, Seat &amp; Mission</h3>
+                            <h3 className="font-bold text-xs sm:text-sm text-zinc-900 truncate">{t('booking.step2')}</h3>
                           </div>
                           <button
                             type="button"
                             onClick={() => setBookingStep(2)}
                             className="bg-slate-100 hover:bg-slate-200 text-zinc-700 font-semibold text-xs px-3 py-1.5 rounded-lg border border-slate-200/50 cursor-pointer shrink-0"
                           >
-                            Edit
+                            {t('common.edit')}
                           </button>
                         </div>
 
@@ -2283,7 +2283,7 @@ export default function PassengerDashboard() {
                               <Luggage className="w-4 h-4 text-zinc-700" />
                             </span>
                             <h3 className="font-bold text-xs sm:text-sm text-zinc-900 truncate">
-                              Selected Services ({SERVICE_META.filter((s) => s.key === 'luggage' ? getLuggageTotalCount() > 0 : s.qty ? services[s.key] > 0 : services[s.key]).length})
+                              {t('booking.step3')} ({SERVICE_META.filter((s) => s.key === 'luggage' ? getLuggageTotalCount() > 0 : s.qty ? services[s.key] > 0 : services[s.key]).length})
                             </h3>
                           </div>
                           <button
@@ -2291,7 +2291,7 @@ export default function PassengerDashboard() {
                             onClick={() => setBookingStep(3)}
                             className="bg-slate-100 hover:bg-slate-200 text-zinc-700 font-semibold text-xs px-3 py-1.5 rounded-lg border border-slate-200/50 cursor-pointer shrink-0"
                           >
-                            Edit
+                            {t('common.edit')}
                           </button>
                         </div>
 
@@ -2342,7 +2342,7 @@ export default function PassengerDashboard() {
                         className="w-full sm:w-auto justify-center px-6 py-3 rounded-full bg-[#f0f4f8] hover:bg-slate-200 text-zinc-900 font-semibold text-xs transition-colors cursor-pointer flex items-center gap-2"
                       >
                         <ArrowLeft className="w-4 h-4" />
-                        <span>Back to Services</span>
+                        <span>{t('booking.back')}</span>
                       </button>
 
                       <button
@@ -2350,7 +2350,7 @@ export default function PassengerDashboard() {
                         onClick={handleConfirm}
                         className="hidden lg:flex w-full sm:w-auto justify-center px-8 py-3.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs shadow-xs transition-all items-center gap-2 cursor-pointer"
                       >
-                        <span>Continue to Payment</span>
+                        <span>{t('booking.continueToReview')}</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -2403,13 +2403,13 @@ export default function PassengerDashboard() {
                 <div className="p-4 sm:p-8 lg:p-10 flex-1 z-10 flex flex-col justify-between max-w-[58%] sm:max-w-xl">
                   <div>
                     <span className="text-[9px] sm:text-[11px] font-bold tracking-[0.2em] text-zinc-400 uppercase font-mono">
-                      MY JOURNEYS
+                      {t('dashboard.myJourneys')}
                     </span>
                     <h1 className="text-2xl sm:text-4xl lg:text-[44px] font-black text-black tracking-tight mt-0.5 sm:mt-1 leading-tight">
-                      Your <span className="text-[#146BFF]">Trips</span>
+                      {t('dashboard.yourTrips')}
                     </h1>
                     <p className="text-[10px] sm:text-sm text-zinc-500 font-medium mt-1 leading-tight line-clamp-2">
-                      Every journey, every assistance — in one place.
+                      {t('dashboard.everyJourneySub')}
                     </p>
                   </div>
 
@@ -2420,7 +2420,7 @@ export default function PassengerDashboard() {
                         {allDisplayBookings.length}
                       </div>
                       <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
-                        Total Trips
+                        {t('trips.totalTrips')}
                       </div>
                     </div>
                     <div className="h-6 sm:h-7 w-px bg-slate-200/80" />
@@ -2429,7 +2429,7 @@ export default function PassengerDashboard() {
                         {ongoingList.length}
                       </div>
                       <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
-                        Ongoing
+                        {t('trips.ongoing')}
                       </div>
                     </div>
                     <div className="h-6 sm:h-7 w-px bg-slate-200/80" />
@@ -2438,7 +2438,7 @@ export default function PassengerDashboard() {
                         {upcomingList.length}
                       </div>
                       <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
-                        Upcoming
+                        {t('trips.upcoming')}
                       </div>
                     </div>
                     <div className="h-6 sm:h-7 w-px bg-slate-200/80" />
@@ -2447,7 +2447,7 @@ export default function PassengerDashboard() {
                         {completedList.length}
                       </div>
                       <div className="text-[9px] sm:text-xs font-semibold text-zinc-400 mt-0.5">
-                        Completed
+                        {t('trips.completed')}
                       </div>
                     </div>
                   </div>
@@ -2479,7 +2479,7 @@ export default function PassengerDashboard() {
                     : 'bg-white text-zinc-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
                     }`}
                 >
-                  <span>All Trips</span>
+                  <span>{t('trips.allTrips')}</span>
                   <span
                     className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'all' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
                       }`}
@@ -2504,7 +2504,7 @@ export default function PassengerDashboard() {
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600" />
                       </span>
                     )}
-                    <span>Ongoing</span>
+                    <span>{t('trips.ongoing')}</span>
                   </span>
                   <span
                     className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'ongoing' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
@@ -2523,7 +2523,7 @@ export default function PassengerDashboard() {
                     : 'bg-white text-zinc-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
                     }`}
                 >
-                  <span>Upcoming</span>
+                  <span>{t('trips.upcoming')}</span>
                   <span
                     className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'upcoming' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
                       }`}
@@ -2541,7 +2541,7 @@ export default function PassengerDashboard() {
                     : 'bg-white text-zinc-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
                     }`}
                 >
-                  <span>Completed</span>
+                  <span>{t('trips.completed')}</span>
                   <span
                     className={`min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${tripFilter === 'completed' ? 'bg-white text-black' : 'bg-slate-100 text-zinc-600'
                       }`}
@@ -2560,7 +2560,7 @@ export default function PassengerDashboard() {
                   title="View Cancellation & Refund Policy"
                 >
                   <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Cancellation Policy</span>
+                  <span>{t('trips.cancellationPolicyBtn')}</span>
                 </button>
 
                 {/* Sort By Dropdown */}
@@ -2573,16 +2573,16 @@ export default function PassengerDashboard() {
                   <Calendar className="w-3.5 h-3.5 text-zinc-600" />
                   <span>
                     {sortBy === 'newest'
-                      ? 'Recent Booking'
+                      ? t('trips.sortRecentBooking')
                       : sortBy === 'oldest'
-                        ? 'Oldest Booking'
+                        ? t('trips.sortOldestBooking')
                         : sortBy === 'journey_date'
-                          ? 'Journey Date'
+                          ? t('trips.sortJourneyDate')
                           : sortBy === 'fare_high'
-                            ? 'Fare: High to Low'
+                            ? t('trips.sortFareHigh')
                             : sortBy === 'fare_low'
-                              ? 'Fare: Low to High'
-                              : 'Recent Booking'}
+                              ? t('trips.sortFareLow')
+                              : t('trips.sortRecentBooking')}
                   </span>
                   <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${sortDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -2597,7 +2597,7 @@ export default function PassengerDashboard() {
                         className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'newest' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
                           }`}
                       >
-                        <span>Recent Booking</span>
+                        <span>{t('trips.sortRecentBooking')}</span>
                         {sortBy === 'newest' && <Check className="w-3.5 h-3.5 text-black" />}
                       </button>
                       <button
@@ -2606,7 +2606,7 @@ export default function PassengerDashboard() {
                         className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'oldest' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
                           }`}
                       >
-                        <span>Oldest Booking</span>
+                        <span>{t('trips.sortOldestBooking')}</span>
                         {sortBy === 'oldest' && <Check className="w-3.5 h-3.5 text-black" />}
                       </button>
                       <button
@@ -2615,7 +2615,7 @@ export default function PassengerDashboard() {
                         className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'journey_date' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
                           }`}
                       >
-                        <span>Journey Date</span>
+                        <span>{t('trips.sortJourneyDate')}</span>
                         {sortBy === 'journey_date' && <Check className="w-3.5 h-3.5 text-black" />}
                       </button>
                       <button
@@ -2624,7 +2624,7 @@ export default function PassengerDashboard() {
                         className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'fare_high' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
                           }`}
                       >
-                        <span>Fare: High to Low</span>
+                        <span>{t('trips.sortFareHigh')}</span>
                         {sortBy === 'fare_high' && <Check className="w-3.5 h-3.5 text-black" />}
                       </button>
                       <button
@@ -2633,7 +2633,7 @@ export default function PassengerDashboard() {
                         className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'fare_low' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
                           }`}
                       >
-                        <span>Fare: Low to High</span>
+                        <span>{t('trips.sortFareLow')}</span>
                         {sortBy === 'fare_low' && <Check className="w-3.5 h-3.5 text-black" />}
                       </button>
                     </div>
@@ -2649,8 +2649,8 @@ export default function PassengerDashboard() {
                 <TrainLoader
                   fullScreen={false}
                   size="md"
-                  text="Loading your trips..."
-                  subtext="Syncing your bookings with Indian Railways telemetry..."
+                  text={t('trips.loadingTrips')}
+                  subtext={t('trips.loadingTelemetry')}
                 />
               </div>
             ) : fetchError ? (
@@ -2658,8 +2658,8 @@ export default function PassengerDashboard() {
                 <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4 border border-rose-100">
                   <AlertCircle className="w-7 h-7" />
                 </div>
-                <h3 className="font-extrabold text-base sm:text-lg text-zinc-900 mb-1">Unable to load your trips</h3>
-                <p className="text-xs sm:text-sm text-zinc-500 mb-6">Unable to load your trips. Please try again.</p>
+                <h3 className="font-extrabold text-base sm:text-lg text-zinc-900 mb-1">{t('trips.unableToLoad')}</h3>
+                <p className="text-xs sm:text-sm text-zinc-500 mb-6">{t('trips.unableToLoadSub')}</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -2669,7 +2669,7 @@ export default function PassengerDashboard() {
                   className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-2.5 rounded-full text-xs transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Retry</span>
+                  <span>{t('trips.retry')}</span>
                 </button>
               </div>
             ) : (() => {
@@ -2786,16 +2786,16 @@ export default function PassengerDashboard() {
                       <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#146BFF] flex items-center justify-center mx-auto mb-4 border border-blue-100">
                         <Luggage className="w-7 h-7" />
                       </div>
-                      <h3 className="font-extrabold text-base sm:text-lg text-zinc-900 mb-1">No trips yet</h3>
+                      <h3 className="font-extrabold text-base sm:text-lg text-zinc-900 mb-1">{t('trips.noTripsYet')}</h3>
                       <p className="text-xs sm:text-sm text-zinc-500 mb-6 max-w-xs mx-auto leading-relaxed">
-                        Your booked journeys and assistance requests will appear here.
+                        {t('trips.noTripsYetSub')}
                       </p>
                       <button
                         type="button"
                         onClick={() => setTab('book')}
                         className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-3 rounded-full text-xs transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs"
                       >
-                        <span>Book a Trip</span>
+                        <span>{t('trips.bookATrip')}</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -2808,21 +2808,21 @@ export default function PassengerDashboard() {
                       <Luggage className="w-7 h-7" />
                     </div>
                     <h3 className="font-extrabold text-base text-zinc-900 mb-1">
-                      {tripFilter === 'ongoing' ? 'No ongoing trips' : tripFilter === 'upcoming' ? 'No upcoming trips' : 'No completed trips'}
+                      {tripFilter === 'ongoing' ? t('trips.noOngoingTrips') : tripFilter === 'upcoming' ? t('trips.noUpcomingTrips') : t('trips.noCompletedTrips')}
                     </h3>
                     <p className="text-xs text-zinc-500 mb-6">
                       {tripFilter === 'ongoing'
-                        ? 'You have no trips currently in progress.'
+                        ? t('trips.noOngoingSub')
                         : tripFilter === 'upcoming'
-                          ? 'You have no upcoming station assistance dispatches.'
-                          : 'No historical completed trip records found.'}
+                          ? t('trips.noUpcomingSub')
+                          : t('trips.noCompletedSub')}
                     </p>
                     <button
                       type="button"
                       onClick={() => setTripFilter('all')}
                       className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-2.5 rounded-full text-xs transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
-                      <span>View All Trips</span>
+                      <span>{t('trips.viewAllTrips')}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -2913,7 +2913,7 @@ export default function PassengerDashboard() {
                     const trackerSteps = [
                       {
                         id: 'confirmed',
-                        label: 'Booking Confirmed',
+                        label: t('trips.stepBookingConfirmed'),
                         time: confirmedTime,
                         date: confirmedDate,
                         isDone: isConfirmedDone,
@@ -2921,7 +2921,7 @@ export default function PassengerDashboard() {
                       },
                       {
                         id: 'assigned',
-                        label: 'Assistant Assigned',
+                        label: t('trips.stepAssistantAssigned'),
                         time: assignedTime,
                         date: assignedDate,
                         isDone: isAssignedDone,
@@ -2929,7 +2929,7 @@ export default function PassengerDashboard() {
                       },
                       {
                         id: 'reached',
-                        label: 'Assistant Reached',
+                        label: t('trips.stepAssistantReached'),
                         time: reachedTime,
                         date: reachedDate,
                         isDone: isReachedDone,
@@ -2937,7 +2937,7 @@ export default function PassengerDashboard() {
                       },
                       {
                         id: 'completed',
-                        label: 'Service Completed',
+                        label: t('trips.stepServiceCompleted'),
                         time: completedTime,
                         date: completedDate,
                         isDone: isServiceDone,
@@ -2995,17 +2995,17 @@ export default function PassengerDashboard() {
                                 {isCancelled ? (
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200 inline-flex items-center gap-1 uppercase tracking-wider">
                                     <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
-                                    CANCELLED
+                                    {t('trips.statusCancelled')}
                                   </span>
                                 ) : isCompleted ? (
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]/60 inline-flex items-center gap-1 uppercase tracking-wider">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#059669]" />
-                                    COMPLETED
+                                    {t('trips.statusCompleted')}
                                   </span>
                                 ) : (
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#EFF6FF] text-[#146BFF] border border-[#BFDBFE]/60 inline-flex items-center gap-1 uppercase tracking-wider">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#146BFF]" />
-                                    PENDING
+                                    {t('trips.statusPending')}
                                   </span>
                                 )}
 
@@ -3042,7 +3042,7 @@ export default function PassengerDashboard() {
                                           className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-zinc-700 hover:bg-slate-50 font-medium transition-colors cursor-pointer"
                                         >
                                           <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                          <span>Copy ID: {b.booking_id || b.id}</span>
+                                          <span>{t('trips.copyBookingId', { id: b.booking_id || b.id })}</span>
                                         </button>
 
                                         {canCancel && (
@@ -3056,7 +3056,7 @@ export default function PassengerDashboard() {
                                               className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-blue-600 hover:bg-blue-50 font-medium transition-colors cursor-pointer"
                                             >
                                               <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                                              <span>Change Booking</span>
+                                              <span>{t('trips.changeBooking')}</span>
                                             </button>
                                             <button
                                               type="button"
@@ -3067,7 +3067,7 @@ export default function PassengerDashboard() {
                                               className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
                                             >
                                               <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
-                                              <span>Cancel Booking</span>
+                                              <span>{t('trips.cancelBooking')}</span>
                                             </button>
                                           </>
                                         )}
@@ -3097,9 +3097,9 @@ export default function PassengerDashboard() {
                                 <Train className="w-3 h-3 text-[#146BFF]" />
                               </div>
                               <div className="min-w-0">
-                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">Coach</span>
+                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">{t('trips.coach')}</span>
                                 <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
-                                  {b.coach || b.services?.coach || 'Unassigned'}
+                                  {b.coach || b.services?.coach || t('trips.unassigned')}
                                 </span>
                               </div>
                             </div>
@@ -3110,9 +3110,9 @@ export default function PassengerDashboard() {
                                 <Armchair className="w-3 h-3 text-[#146BFF]" />
                               </div>
                               <div className="min-w-0">
-                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">Seat</span>
+                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">{t('trips.seat')}</span>
                                 <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
-                                  {b.seat_number || b.services?.seat_number || 'Unassigned'}
+                                  {b.seat_number || b.services?.seat_number || t('trips.unassigned')}
                                 </span>
                               </div>
                             </div>
@@ -3123,7 +3123,7 @@ export default function PassengerDashboard() {
                                 <Luggage className="w-3 h-3 text-[#146BFF]" />
                               </div>
                               <div className="min-w-0">
-                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">Service</span>
+                                <span className="text-[9px] text-zinc-400 font-medium block leading-none">{t('trips.service')}</span>
                                 <span className="text-xs font-bold text-zinc-800 block truncate leading-tight mt-0.5">
                                   {serviceLabel}
                                 </span>
@@ -3138,16 +3138,16 @@ export default function PassengerDashboard() {
                                 <div className="bg-rose-50/80 border border-rose-200/70 rounded-xl p-2.5 px-3 flex items-start gap-2">
                                   <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
                                   <div className="min-w-0">
-                                    <p className="text-xs font-bold text-rose-800 leading-snug">Booking was cancelled.</p>
-                                    <p className="text-[10px] text-rose-600 font-medium leading-snug">Feel free to book assistance again anytime.</p>
+                                    <p className="text-xs font-bold text-rose-800 leading-snug">{t('trips.bookingCancelledNote')}</p>
+                                    <p className="text-[10px] text-rose-600 font-medium leading-snug">{t('trips.bookingCancelledNoteSub')}</p>
                                   </div>
                                 </div>
                               ) : (
                                 <div className="bg-[#EFF6FF]/80 border border-[#BFDBFE]/60 rounded-xl p-2.5 px-3 flex items-start gap-2">
                                   <Info className="w-3.5 h-3.5 text-[#146BFF] shrink-0 mt-0.5" />
                                   <div className="min-w-0">
-                                    <p className="text-xs font-bold text-[#1E40AF] leading-snug">Your booking is confirmed.</p>
-                                    <p className="text-[10px] text-[#3B82F6] font-medium leading-snug">We are assigning the nearest assistant.</p>
+                                    <p className="text-xs font-bold text-[#1E40AF] leading-snug">{t('trips.bookingConfirmedNote')}</p>
+                                    <p className="text-[10px] text-[#3B82F6] font-medium leading-snug">{t('trips.bookingConfirmedNoteSub')}</p>
                                   </div>
                                 </div>
                               )}
@@ -3204,7 +3204,7 @@ export default function PassengerDashboard() {
                                         </div>
                                       ) : (
                                         <span className="text-[9px] font-medium text-zinc-400 mt-0.5 leading-tight">
-                                          Pending
+                                          {t('trips.statusPending')}
                                         </span>
                                       )}
                                     </div>
@@ -3235,22 +3235,22 @@ export default function PassengerDashboard() {
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-extrabold text-zinc-900 text-xs flex items-center gap-1.5">
                                     <ShieldCheck className="w-4 h-4 text-blue-600" />
-                                    <span>ONECOOLIE JOURNEY PROTECTION</span>
+                                    <span>{t('protection.productName')}</span>
                                   </span>
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                    ACTIVE
+                                    {t('trips.protectionActive')}
                                   </span>
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                                    PRE-LAUNCH
+                                    {t('trips.protectionPreLaunch')}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-3 text-[11px] text-zinc-600 font-mono flex-wrap">
-                                  <span>Protection ID: <strong className="text-zinc-900">{b.journey_protection.protection_id}</strong></span>
-                                  <span>Price: <strong className="text-zinc-900">₹0.50</strong></span>
+                                  <span>{t('trips.protectionIdLabel', { id: b.journey_protection.protection_id })}</span>
+                                  <span>{t('trips.protectionPriceLabel', { price: '₹0.50' })}</span>
                                   {b.journey_protection.activated_at && (
-                                    <span>Activated: {new Date(b.journey_protection.activated_at).toLocaleDateString()}</span>
+                                    <span>{t('trips.protectionActivatedLabel', { date: new Date(b.journey_protection.activated_at).toLocaleDateString() })}</span>
                                   )}
-                                  <span>Terms: {b.journey_protection.terms_version || 'PRE-LAUNCH-v1'}</span>
+                                  <span>{t('trips.protectionTermsLabel', { version: b.journey_protection.terms_version || 'PRE-LAUNCH-v1' })}</span>
                                 </div>
                               </div>
 
@@ -3260,14 +3260,14 @@ export default function PassengerDashboard() {
                                   onClick={() => setActiveProtectionModalBooking(b)}
                                   className="px-3 py-1.5 rounded-full bg-white hover:bg-slate-100 text-blue-600 border border-blue-200 font-bold text-xs transition-colors cursor-pointer"
                                 >
-                                  View Terms
+                                  {t('trips.viewTerms')}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleContactSupport(navigate)}
                                   className="px-3 py-1.5 rounded-full bg-white hover:bg-slate-100 text-zinc-700 border border-slate-200 font-semibold text-xs transition-colors cursor-pointer"
                                 >
-                                  Contact Support
+                                  {t('trips.contactSupport')}
                                 </button>
                               </div>
                             </div>
@@ -3276,11 +3276,11 @@ export default function PassengerDashboard() {
                               <div>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
-                                  <span className="font-bold text-zinc-800 text-xs">ONECOOLIE JOURNEY PROTECTION</span>
-                                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-200 text-zinc-600">PRE-LAUNCH</span>
+                                  <span className="font-bold text-zinc-800 text-xs">{t('protection.productName')}</span>
+                                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-200 text-zinc-600">{t('trips.protectionPreLaunch')}</span>
                                 </div>
                                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                                  No Journey Protection has been added to this booking. (₹0.50 / journey)
+                                  {t('trips.noProtectionAdded')}
                                 </p>
                               </div>
 
@@ -3290,7 +3290,7 @@ export default function PassengerDashboard() {
                                   onClick={() => setActiveProtectionModalBooking(b)}
                                   className="text-blue-600 hover:text-blue-800 font-bold text-[11px] cursor-pointer"
                                 >
-                                  View Terms
+                                  {t('trips.viewTerms')}
                                 </button>
                                 {!isCancelled && !isCompleted && (
                                   <button
@@ -3307,7 +3307,7 @@ export default function PassengerDashboard() {
                                     }}
                                     className="px-3 py-1.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs shadow-2xs transition-colors cursor-pointer"
                                   >
-                                    Add Protection (₹0.50)
+                                    {t('trips.addProtectionFee')}
                                   </button>
                                 )}
                               </div>
@@ -3321,7 +3321,7 @@ export default function PassengerDashboard() {
                                 ₹{b.total_price ?? 0}
                               </div>
                               <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
-                                Assistance Fee
+                                {t('trips.assistanceFee')}
                               </div>
                             </div>
 
@@ -3340,7 +3340,7 @@ export default function PassengerDashboard() {
                                     : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
                                   }`}
                               >
-                                <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
+                                <span>{isCompleted ? t('trips.viewSummary') : t('trips.viewTripCard')}</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </button>
 
@@ -3354,7 +3354,7 @@ export default function PassengerDashboard() {
                                     }}
                                     className="px-2 py-0.5 text-[11px] font-bold text-[#1463FF] hover:bg-blue-50 rounded-md transition-colors cursor-pointer border border-blue-200/60"
                                   >
-                                    Rebook
+                                    {t('trips.rebook')}
                                   </button>
                                   <button
                                     type="button"
@@ -3364,7 +3364,7 @@ export default function PassengerDashboard() {
                                     }}
                                     className="px-2 py-0.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer border border-rose-200/60"
                                   >
-                                    Cancel
+                                    {t('trips.cancel')}
                                   </button>
                                 </div>
                               )}
@@ -3424,17 +3424,17 @@ export default function PassengerDashboard() {
                                 {isCancelled ? (
                                   <span className="px-3.5 py-1 rounded-full text-xs font-black bg-rose-50 text-rose-600 border border-rose-200 inline-flex items-center gap-2 uppercase tracking-wider">
                                     <span className="w-2 h-2 rounded-full bg-rose-600" />
-                                    CANCELLED
+                                    {t('trips.statusCancelled')}
                                   </span>
                                 ) : isCompleted ? (
                                   <span className="px-3.5 py-1 rounded-full text-xs font-black bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]/60 inline-flex items-center gap-2 uppercase tracking-wider">
                                     <span className="w-2 h-2 rounded-full bg-[#059669]" />
-                                    COMPLETED
+                                    {t('trips.statusCompleted')}
                                   </span>
                                 ) : (
                                   <span className="px-3.5 py-1 rounded-full text-xs font-black bg-[#EFF6FF] text-[#146BFF] border border-[#BFDBFE]/60 inline-flex items-center gap-2 uppercase tracking-wider">
                                     <span className="w-2 h-2 rounded-full bg-[#146BFF]" />
-                                    PENDING
+                                    {t('trips.statusPending')}
                                   </span>
                                 )}
                               </div>
@@ -3450,9 +3450,9 @@ export default function PassengerDashboard() {
                                     <Train className="w-3.5 h-3.5 text-[#146BFF]" />
                                   </div>
                                   <div className="min-w-0">
-                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Coach</span>
+                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">{t('trips.coach')}</span>
                                     <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
-                                      {b.coach || b.services?.coach || 'Unassigned'}
+                                      {b.coach || b.services?.coach || t('trips.unassigned')}
                                     </span>
                                   </div>
                                 </div>
@@ -3463,9 +3463,9 @@ export default function PassengerDashboard() {
                                     <Armchair className="w-3.5 h-3.5 text-[#146BFF]" />
                                   </div>
                                   <div className="min-w-0">
-                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Seat</span>
+                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">{t('trips.seat')}</span>
                                     <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
-                                      {b.seat_number || b.services?.seat_number || 'Unassigned'}
+                                      {b.seat_number || b.services?.seat_number || t('trips.unassigned')}
                                     </span>
                                   </div>
                                 </div>
@@ -3476,7 +3476,7 @@ export default function PassengerDashboard() {
                                     <Luggage className="w-3.5 h-3.5 text-[#146BFF]" />
                                   </div>
                                   <div className="min-w-0">
-                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">Service</span>
+                                    <span className="text-[9px] sm:text-[10px] text-zinc-400 font-medium block leading-tight">{t('trips.service')}</span>
                                     <span className="text-xs sm:text-sm font-bold text-zinc-800 block truncate leading-tight">
                                       {serviceLabel}
                                     </span>
@@ -3491,16 +3491,16 @@ export default function PassengerDashboard() {
                                     <div className="bg-rose-50/80 border border-rose-200/70 rounded-2xl p-2.5 px-3 flex items-start gap-2.5">
                                       <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                                       <div className="min-w-0">
-                                        <p className="text-xs font-bold text-rose-800 leading-snug">Booking was cancelled.</p>
-                                        <p className="text-[11px] text-rose-600 font-medium leading-snug">Feel free to book assistance again anytime.</p>
+                                        <p className="text-xs font-bold text-rose-800 leading-snug">{t('trips.bookingCancelledNote')}</p>
+                                        <p className="text-[11px] text-rose-600 font-medium leading-snug">{t('trips.bookingCancelledNoteSub')}</p>
                                       </div>
                                     </div>
                                   ) : (
                                     <div className="bg-[#EFF6FF]/80 border border-[#BFDBFE]/60 rounded-2xl p-2.5 px-3 flex items-start gap-2.5">
                                       <Info className="w-4 h-4 text-[#146BFF] shrink-0 mt-0.5" />
                                       <div className="min-w-0">
-                                        <p className="text-xs font-bold text-[#1E40AF] leading-snug">Your booking is confirmed.</p>
-                                        <p className="text-[11px] text-[#3B82F6] font-medium leading-snug">We are assigning the nearest assistant.</p>
+                                        <p className="text-xs font-bold text-[#1E40AF] leading-snug">{t('trips.bookingConfirmedNote')}</p>
+                                        <p className="text-[11px] text-[#3B82F6] font-medium leading-snug">{t('trips.bookingConfirmedNoteSub')}</p>
                                       </div>
                                     </div>
                                   )}
@@ -3558,7 +3558,7 @@ export default function PassengerDashboard() {
                                           </div>
                                         ) : (
                                           <span className="text-[9px] sm:text-[10px] font-medium text-zinc-400 mt-0.5 leading-tight">
-                                            Pending
+                                            {t('trips.statusPending')}
                                           </span>
                                         )}
                                       </div>
@@ -3618,7 +3618,7 @@ export default function PassengerDashboard() {
                                       className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-zinc-700 hover:bg-slate-50 font-medium transition-colors cursor-pointer"
                                     >
                                       <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                      <span>Copy ID: {b.booking_id || b.id}</span>
+                                      <span>{t('trips.copyBookingId', { id: b.booking_id || b.id })}</span>
                                     </button>
 
                                     {canCancel && (
@@ -3632,7 +3632,7 @@ export default function PassengerDashboard() {
                                           className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-blue-600 hover:bg-blue-50 font-medium transition-colors cursor-pointer"
                                         >
                                           <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                                          <span>Change Booking</span>
+                                          <span>{t('trips.changeBooking')}</span>
                                         </button>
                                         <button
                                           type="button"
@@ -3643,7 +3643,7 @@ export default function PassengerDashboard() {
                                           className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
                                         >
                                           <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
-                                          <span>Cancel Booking</span>
+                                          <span>{t('trips.cancelBooking')}</span>
                                         </button>
                                       </>
                                     )}
@@ -3658,7 +3658,7 @@ export default function PassengerDashboard() {
                                 ₹{b.total_price ?? 0}
                               </div>
                               <div className="text-[11px] sm:text-xs text-zinc-400 font-semibold mt-1">
-                                Assistance Fee
+                                {t('trips.assistanceFee')}
                               </div>
                             </div>
 
@@ -3678,7 +3678,7 @@ export default function PassengerDashboard() {
                                     : 'bg-white hover:bg-slate-50 text-zinc-900 border border-slate-200/90'
                                   }`}
                               >
-                                <span>{isCompleted ? 'View Summary' : 'View Trip'}</span>
+                                <span>{isCompleted ? t('trips.viewSummary') : t('trips.viewTripCard')}</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </button>
 
@@ -3693,7 +3693,7 @@ export default function PassengerDashboard() {
                                     className="px-2.5 py-1 text-[11px] font-bold text-[#1463FF] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer border border-blue-200/60"
                                     title="Change Date/Train/Coach"
                                   >
-                                    Rebook
+                                    {t('trips.rebook')}
                                   </button>
                                   <button
                                     type="button"
@@ -3704,7 +3704,7 @@ export default function PassengerDashboard() {
                                     className="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-rose-200/60"
                                     title="Cancel Booking"
                                   >
-                                    Cancel
+                                    {t('trips.cancel')}
                                   </button>
                                 </div>
                               )}
@@ -3725,8 +3725,8 @@ export default function PassengerDashboard() {
                   <Headphones className="w-6 h-6" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-zinc-900">Need help with a trip?</h4>
-                  <p className="text-xs text-zinc-500">Our platform team is available 24/7 to assist your railway journey.</p>
+                  <h4 className="font-bold text-sm text-zinc-900">{t('trips.needHelpTitle')}</h4>
+                  <p className="text-xs text-zinc-500">{t('trips.needHelpSub')}</p>
                 </div>
               </div>
 
@@ -3735,7 +3735,7 @@ export default function PassengerDashboard() {
                 onClick={() => setTab('support')}
                 className="bg-black hover:bg-zinc-800 text-white font-bold px-6 py-2.5 rounded-full text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
               >
-                <span>Contact Support</span>
+                <span>{t('trips.contactSupport')}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -3808,7 +3808,7 @@ export default function PassengerDashboard() {
               className="flex flex-col text-left cursor-pointer"
             >
               <div className="flex items-center gap-1 text-[11px] font-bold text-zinc-500">
-                <span>Summary</span>
+                <span>{t('booking.summaryTitle')}</span>
                 <ChevronUp className={`w-3.5 h-3.5 transition-transform ${mobileSummaryOpen ? 'rotate-180' : ''}`} />
               </div>
               <span className="font-mono font-extrabold text-lg text-black">
@@ -3829,12 +3829,12 @@ export default function PassengerDashboard() {
             >
               <span>
                 {bookingStep === 1
-                  ? 'Next: Seat Details'
+                  ? t('booking.nextSeatDetails')
                   : bookingStep === 2
-                    ? 'Next: Services'
+                    ? t('booking.nextServices')
                     : bookingStep === 3
-                      ? 'Review Booking'
-                      : 'Pay & Confirm'}
+                      ? t('booking.reviewBooking')
+                      : t('booking.payAndConfirm')}
               </span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
@@ -3848,8 +3848,8 @@ export default function PassengerDashboard() {
           <div className="bg-white rounded-t-3xl p-6 space-y-4 max-h-[85vh] overflow-y-auto animate-slide-up shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="font-bold text-base text-zinc-900">Booking Summary</h3>
-                <p className="text-xs text-zinc-400">Journey &amp; assistance breakdown</p>
+                <h3 className="font-bold text-base text-zinc-900">{t('booking.summaryStepTitle')}</h3>
+                <p className="text-xs text-zinc-400">{t('booking.summaryStepSub')}</p>
               </div>
               <button
                 type="button"
@@ -3864,7 +3864,7 @@ export default function PassengerDashboard() {
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl">
                 <p className="font-bold text-zinc-900">
-                  {selectedTrain ? `${selectedTrain.train_no} - ${selectedTrain.train_name}` : 'Select Train'}
+                  {selectedTrain ? `${selectedTrain.train_no} - ${selectedTrain.train_name}` : t('booking.selectTrain')}
                 </p>
                 <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
                   Station: {station} · Date: {journeyDate || 'Not selected'}
@@ -3874,19 +3874,19 @@ export default function PassengerDashboard() {
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                 <div>
                   <p className="font-bold text-zinc-900">
-                    {coach || seatNumber ? `Coach ${coach || '--'} · Seat ${seatNumber || '--'}` : 'Coach & Seat Not Entered'}
+                    {coach || seatNumber ? `Coach ${coach || '--'} · Seat ${seatNumber || '--'}` : t('booking.coachSeatNotEntered')}
                   </p>
-                  <p className="text-[11px] text-zinc-400">{coach || seatNumber ? `${berthType} Berth` : 'Enter in Step 2'}</p>
+                  <p className="text-[11px] text-zinc-400">{coach || seatNumber ? `${berthType} Berth` : t('booking.enterInStep2')}</p>
                 </div>
                 <span className="text-[11px] font-semibold text-blue-600 bg-blue-100/60 px-2.5 py-1 rounded-full">
-                  {actionType === 'collect_from_seat' ? 'De-boarding' : 'Boarding'}
+                  {actionType === 'collect_from_seat' ? t('booking.deboarding') : t('booking.boarding')}
                 </span>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-slate-100">
-                <p className="font-bold text-zinc-900">Selected Services</p>
+                <p className="font-bold text-zinc-900">{t('booking.selectedServices')}</p>
                 {SERVICE_META.filter((s) => s.key === 'luggage' ? getLuggageTotalCount() > 0 : s.qty ? services[s.key] > 0 : services[s.key]).length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic">No services selected yet</p>
+                  <p className="text-xs text-zinc-400 italic">{t('booking.noServicesSelectedYet')}</p>
                 ) : (
                   SERVICE_META.filter((s) => s.key === 'luggage' ? getLuggageTotalCount() > 0 : s.qty ? services[s.key] > 0 : services[s.key]).map((s) => (
                     <div key={s.key} className="flex justify-between text-zinc-600">
@@ -3907,7 +3907,7 @@ export default function PassengerDashboard() {
               </div>
 
               <div className="p-3.5 bg-black text-white rounded-2xl flex items-center justify-between">
-                <span className="font-bold">Total Amount Payable</span>
+                <span className="font-bold">{t('booking.totalAmountPayable')}</span>
                 <span className="font-mono font-extrabold text-xl">₹{calculateTotal()}</span>
               </div>
 
@@ -3916,7 +3916,7 @@ export default function PassengerDashboard() {
                 <div className="flex items-center gap-1.5 min-w-0">
                   <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span className="text-[11px] font-medium text-slate-500 truncate">
-                    Secured Payments with <strong className="font-extrabold text-[#0C2340]">Razorpay</strong>
+                    {t('booking.securedWithRazorpay')}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -3950,7 +3950,7 @@ export default function PassengerDashboard() {
               }}
               className="w-full py-3.5 rounded-full bg-black text-white font-bold text-xs cursor-pointer shadow-md"
             >
-              Continue to {bookingStep === 4 ? 'Payment' : `Step ${bookingStep + 1}`}
+              {bookingStep === 4 ? t('booking.continueToPayment') : t('booking.continueToStep', { step: bookingStep + 1 })}
             </button>
           </div>
         </div>
@@ -4034,10 +4034,10 @@ export default function PassengerDashboard() {
             {/* Title & Subtitle */}
             <div className="relative z-10 space-y-1 mb-5">
               <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900">
-                Booking <span className="text-[#059669]">Confirmed!</span>
+                {t('booking.bookingConfirmedTitle')}
               </h3>
               <p className="text-xs text-zinc-500 font-medium max-w-xs mx-auto leading-relaxed">
-                Your station assistance request has been received and confirmed. We'll keep you updated.
+                {t('booking.bookingConfirmedSub')}
               </p>
             </div>
 
@@ -4083,7 +4083,7 @@ export default function PassengerDashboard() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-[#059669]" />
                   </span>
-                  CONFIRMED
+                  {t('booking.confirmedStatus')}
                 </span>
               </div>
 
@@ -4119,7 +4119,7 @@ export default function PassengerDashboard() {
                   <span className="w-6.5 h-6.5 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                     <Calendar className="w-3.5 h-3.5" />
                   </span>
-                  <span className="font-semibold text-zinc-600">Journey Date</span>
+                  <span className="font-semibold text-zinc-600">{t('trips.sortJourneyDate')}</span>
                 </div>
                 <span className="font-bold text-zinc-900">
                   {journeyDate ? new Date(journeyDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '03 Sep 2026'}
@@ -4132,7 +4132,7 @@ export default function PassengerDashboard() {
                     <span className="w-6.5 h-6.5 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                       <ShieldCheck className="w-3.5 h-3.5" />
                     </span>
-                    <span className="font-semibold text-zinc-600">Start OTP</span>
+                    <span className="font-semibold text-zinc-600">{t('booking.startOtp')}</span>
                   </div>
                   <span className="font-mono font-black text-xs tracking-widest text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
                     {confirmedBooking.start_otp}
@@ -4151,8 +4151,8 @@ export default function PassengerDashboard() {
                 <div className="text-right">
                   <span className="font-bold text-zinc-900 block text-xs">
                     {['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(String(confirmedBooking.payment_method).toLowerCase())
-                      ? 'CASH / COD'
-                      : 'ONLINE'}
+                      ? t('booking.cashPayment')
+                      : t('booking.onlinePayment')}
                   </span>
                   <span className="font-mono font-black text-emerald-700 text-xs">
                     ₹{confirmedBooking.total_price}
@@ -4166,18 +4166,18 @@ export default function PassengerDashboard() {
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1.5">
                       <ShieldCheck className="w-4 h-4 text-blue-600" />
-                      <span className="font-bold text-zinc-900 text-[11px]">Journey Protection (₹0.50)</span>
+                      <span className="font-bold text-zinc-900 text-[11px]">{t('protection.productName')} (₹0.50)</span>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                       confirmedBooking.journey_protection.status === 'active'
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                         : 'bg-amber-100 text-amber-800 border border-amber-200'
                     }`}>
-                      {confirmedBooking.journey_protection.status === 'active' ? 'ACTIVE' : 'PENDING PAYMENT'}
+                      {confirmedBooking.journey_protection.status === 'active' ? t('trips.protectionActive') : t('protection.protectionPending')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500">
-                    <span>Protection ID:</span>
+                    <span>{t('protection.protectionId')}:</span>
                     <span className="font-bold text-zinc-800 select-all">{confirmedBooking.journey_protection.protection_id}</span>
                   </div>
                   {confirmedBooking.journey_protection.status !== 'active' && (
@@ -4205,7 +4205,7 @@ export default function PassengerDashboard() {
               className="w-full bg-[#059669] hover:bg-[#047857] text-white font-black py-3.5 px-6 rounded-full text-sm shadow-lg shadow-[#059669]/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.98] mb-3"
             >
               <Navigation className="w-4 h-4 text-white" />
-              <span>Track Assistant</span>
+              <span>{t('booking.trackAssistant')}</span>
               <ArrowRight className="w-4 h-4 text-white" />
             </button>
 
@@ -4226,7 +4226,7 @@ export default function PassengerDashboard() {
                 className="py-2.5 px-3 rounded-full border border-slate-200/80 hover:bg-slate-50 text-zinc-800 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Calendar className="w-3.5 h-3.5 text-zinc-500" />
-                <span>View Trip Details</span>
+                <span>{t('booking.viewTripDetails')}</span>
               </button>
 
               <button
@@ -4238,7 +4238,7 @@ export default function PassengerDashboard() {
                 className="py-2.5 px-3 rounded-full border border-slate-200/80 hover:bg-slate-50 text-zinc-800 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Home className="w-3.5 h-3.5 text-zinc-500" />
-                <span>Go to Home</span>
+                <span>{t('booking.goToHome')}</span>
               </button>
             </div>
 
@@ -4246,9 +4246,9 @@ export default function PassengerDashboard() {
             <div className="pt-3 border-t border-slate-100/80 text-[11px] text-zinc-400 space-y-0.5">
               <div className="flex items-center justify-center gap-1.5 text-zinc-500 font-medium">
                 <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-                <span>Thank you for choosing OneCoolie!</span>
+                <span>{t('booking.thankYouChoosing')}</span>
               </div>
-              <p className="text-[10px] text-zinc-400">Making every journey easier.</p>
+              <p className="text-[10px] text-zinc-400">{t('booking.makingEveryJourneyEasier')}</p>
             </div>
           </div>
         </div>
@@ -4266,7 +4266,7 @@ export default function PassengerDashboard() {
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
-                <h3 className="font-bold text-lg text-zinc-900">Edit Journey Details</h3>
+                <h3 className="font-bold text-lg text-zinc-900">{t('booking.editJourneyTitle')}</h3>
                 <p className="text-xs text-zinc-500 font-mono">Booking ID: {editingBooking.booking_id || editingBooking.id}</p>
               </div>
               <button
@@ -4280,7 +4280,7 @@ export default function PassengerDashboard() {
 
             <div className="space-y-4 text-xs">
               <div>
-                <label className="block text-xs font-bold text-zinc-700 mb-1.5">Coach Number</label>
+                <label className="block text-xs font-bold text-zinc-700 mb-1.5">{t('booking.coachNumberLabel')}</label>
                 <input
                   type="text"
                   value={editCoach}
@@ -4291,7 +4291,7 @@ export default function PassengerDashboard() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 mb-1.5">Seat / Berth Number</label>
+                <label className="block text-xs font-bold text-zinc-700 mb-1.5">{t('booking.seatBerthNumberLabel')}</label>
                 <input
                   type="text"
                   value={editSeat}
@@ -4302,7 +4302,7 @@ export default function PassengerDashboard() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 mb-1.5">Berth Position</label>
+                <label className="block text-xs font-bold text-zinc-700 mb-1.5">{t('booking.berthPositionLabel')}</label>
                 <select
                   value={editBerth}
                   onChange={(e) => setEditBerth(e.target.value)}
@@ -4326,7 +4326,7 @@ export default function PassengerDashboard() {
                 onClick={() => setEditingBooking(null)}
                 className="px-5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 font-bold text-xs cursor-pointer"
               >
-                Cancel
+                {t('trips.cancel')}
               </button>
               <button
                 type="button"
@@ -4353,7 +4353,7 @@ export default function PassengerDashboard() {
                 }}
                 className="px-6 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
               >
-                {editLoading ? 'Saving...' : 'Save Changes'}
+                {editLoading ? t('booking.saving') : t('booking.saveChanges')}
               </button>
             </div>
           </div>

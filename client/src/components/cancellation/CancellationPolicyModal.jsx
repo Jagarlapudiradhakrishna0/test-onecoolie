@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../api/axios';
 import { ShieldCheck, CheckCircle2, AlertTriangle, X, Clock, CreditCard, Ban } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function CancellationPolicyModal({ isOpen = true, onClose }) {
+  const { t } = useLanguage();
   const [policyData, setPolicyData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -81,8 +83,8 @@ export default function CancellationPolicyModal({ isOpen = true, onClose }) {
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-zinc-900 tracking-tight">ONECOOLIE Cancellation & Refund Policy</h3>
-              <p className="text-xs text-zinc-500">Transparent and fair policies for Indian Railways station assistance.</p>
+              <h3 className="text-lg font-black text-zinc-900 tracking-tight">{t('cancellation.policyTitle') || 'ONECOOLIE Cancellation & Refund Policy'}</h3>
+              <p className="text-xs text-zinc-500">{t('cancellation.policySubtitle') || 'Transparent and fair policies for Indian Railways station assistance.'}</p>
             </div>
           </div>
 
@@ -152,7 +154,7 @@ export default function CancellationPolicyModal({ isOpen = true, onClose }) {
               onClick={onClose}
               className="w-full py-3 px-6 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs transition-all cursor-pointer shadow-xs"
             >
-              I Understand
+              {t('common.iUnderstand') || 'I Understand'}
             </button>
           </div>
         </div>

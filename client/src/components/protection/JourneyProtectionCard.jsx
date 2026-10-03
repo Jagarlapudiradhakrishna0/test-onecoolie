@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Info, Check, ExternalLink, AlertCircle, FileText, CheckCircle2, Clock } from 'lucide-react';
 import JourneyProtectionTermsModal from './JourneyProtectionTermsModal';
+import { useLanguage } from '../../context/LanguageContext';
 
 /* ============================================================
    ONECOOLIE JOURNEY PROTECTION CARD
@@ -19,6 +20,7 @@ export default function JourneyProtectionCard({
   bookingRef = null,
   paymentMethod = 'online'
 }) {
+  const { t, formatCurrency, formatDate } = useLanguage();
   const [showTerms, setShowTerms] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(selected);
 
@@ -49,14 +51,14 @@ export default function JourneyProtectionCard({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h3 className="font-bold text-xs sm:text-sm text-zinc-900 truncate">
-                ONECOOLIE JOURNEY PROTECTION
+                {t('protection.title')}
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
-                PRE-LAUNCH
+                {t('protection.preLaunch')}
               </span>
             </div>
             <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
-              Optional protection for your journey and eligible baggage.
+              {t('protection.subtitle')}
             </p>
           </div>
         </div>
@@ -66,12 +68,12 @@ export default function JourneyProtectionCard({
           {isAlreadyActive ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
               <Check className="w-3 h-3 stroke-[3]" />
-              <span>ACTIVE</span>
+              <span>{t('protection.active')}</span>
             </span>
           ) : isPending ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200">
               <Clock className="w-3 h-3 stroke-[2.5]" />
-              <span>PENDING PAYMENT</span>
+              <span>{t('protection.pendingPayment')}</span>
             </span>
           ) : (
             <div>
@@ -79,7 +81,7 @@ export default function JourneyProtectionCard({
                 ₹0.50
               </div>
               <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
-                per journey
+                {t('protection.perJourney')}
               </div>
             </div>
           )}
@@ -90,20 +92,20 @@ export default function JourneyProtectionCard({
       {isAlreadyActive ? (
         <div className="bg-white rounded-xl p-3.5 border border-slate-200/70 text-xs space-y-2">
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Protection ID:</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.protectionId')}</span>
             <span className="font-bold text-zinc-900 select-all">{protectionId}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Status:</span>
-            <span className="font-bold text-emerald-600">ACTIVE</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.status')}</span>
+            <span className="font-bold text-emerald-600">{t('protection.active')}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Price:</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.price')}</span>
             <span className="font-bold text-zinc-900">₹0.50</span>
           </div>
           {protection?.proposed_protection_limit != null && (
             <div className="flex items-center justify-between font-mono">
-              <span className="text-zinc-500 text-[11px]">Proposed Limit:</span>
+              <span className="text-zinc-500 text-[11px]">{t('protection.proposedLimit')}</span>
               <span className="font-bold text-zinc-800">
                 Up to ₹{Number(protection.proposed_protection_limit).toLocaleString('en-IN')} (Proposed)
               </span>
@@ -111,35 +113,35 @@ export default function JourneyProtectionCard({
           )}
           {activatedAt && (
             <div className="flex items-center justify-between font-mono">
-              <span className="text-zinc-500 text-[11px]">Activated:</span>
-              <span className="text-zinc-700">{new Date(activatedAt).toLocaleString()}</span>
+              <span className="text-zinc-500 text-[11px]">{t('protection.activated')}</span>
+              <span className="text-zinc-700">{formatDate(activatedAt)}</span>
             </div>
           )}
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Terms:</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.termsVersion')}</span>
             <span className="text-zinc-600 truncate max-w-[200px]">{termsVersion}</span>
           </div>
         </div>
       ) : isPending ? (
         <div className="bg-white rounded-xl p-3.5 border border-amber-200/70 text-xs space-y-2.5">
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Protection ID:</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.protectionId')}</span>
             <span className="font-bold text-zinc-900 select-all">{protectionId}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Status:</span>
-            <span className="font-bold text-amber-700">PENDING PAYMENT</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.status')}</span>
+            <span className="font-bold text-amber-700">{t('protection.pendingPayment')}</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Price:</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.price')}</span>
             <span className="font-bold text-zinc-900">₹0.50</span>
           </div>
           <div className="flex items-center justify-between font-mono">
-            <span className="text-zinc-500 text-[11px]">Payment:</span>
-            <span className="font-bold text-zinc-800">{isCash ? 'CASH / COD' : 'Pending Gateway'}</span>
+            <span className="text-zinc-500 text-[11px]">{t('protection.payment')}</span>
+            <span className="font-bold text-zinc-800">{isCash ? t('payments.cash') : 'Pending Gateway'}</span>
           </div>
           <div className="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-            Journey Protection will become active after the applicable cash payment is successfully collected and recorded.
+            {t('protection.cashNotice')}
           </div>
         </div>
       ) : (
@@ -148,9 +150,9 @@ export default function JourneyProtectionCard({
           <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 text-[11px] leading-relaxed">
             <div className="flex items-center gap-1.5 font-bold mb-0.5 text-amber-950">
               <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>Pre-Launch Demonstration</span>
+              <span>{t('protection.preLaunchDemo')}</span>
             </div>
-            This feature is currently a pre-launch product demonstration and does not constitute an insurance policy or guarantee of payment. Actual insurance coverage will be introduced only after the required regulatory, underwriting, and insurance-provider arrangements are completed.
+            {t('protection.preLaunchNotice')}
           </div>
 
           {/* Opt-in and Terms Acceptance Row */}
@@ -164,7 +166,7 @@ export default function JourneyProtectionCard({
                   className="mt-0.5 w-4 h-4 rounded text-black border-slate-300 focus:ring-black cursor-pointer"
                 />
                 <span className="text-xs font-bold text-zinc-800">
-                  Add Journey Protection for ₹0.50
+                  {t('protection.addProtection')}
                 </span>
               </label>
 
@@ -172,7 +174,7 @@ export default function JourneyProtectionCard({
                 <div className="pl-6.5 text-[11px] text-zinc-600 space-y-1 animate-fade-in">
                   <p className="flex items-center gap-1.5 text-emerald-700 font-medium">
                     <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>I have read and understood the Journey Protection terms.</span>
+                    <span>{t('protection.termsAccepted')}</span>
                   </p>
                 </div>
               )}
@@ -189,7 +191,7 @@ export default function JourneyProtectionCard({
           className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer transition-colors text-[11px]"
         >
           <FileText className="w-3.5 h-3.5" />
-          <span>View Protection Terms</span>
+          <span>{t('protection.viewTerms')}</span>
         </button>
 
         <span className="text-[10px] text-zinc-400 font-mono">

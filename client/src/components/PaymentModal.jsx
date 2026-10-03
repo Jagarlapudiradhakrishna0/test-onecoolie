@@ -22,6 +22,7 @@ import oneCoolieLogo from '../assets/onecoolie-logo.png';
 import axios from '../api/axios';
 import { loadRazorpayScript } from '../utils/razorpay';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 /* ============================================================
    ONECOOLIE PAYMENT MODAL — Swiss Mobility Fintech Checkout
@@ -37,6 +38,7 @@ const MERCHANT_NAME = 'OneCoolie';
 
 export default function PaymentModal({ open, total = 0, onClose, onPaid, bookingData }) {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [processing, setProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState('select'); // 'select' | 'online'
   const [timeLeft, setTimeLeft] = useState(899); // 14:59 (15 minutes)
@@ -526,16 +528,16 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl sm:text-2xl font-black text-[#071A3D] tracking-tight leading-tight">
-                  Choose Payment Method
+                  {t('payments.chooseMethod')}
                 </h3>
                 <p className="text-xs sm:text-sm text-zinc-500 mt-1 font-medium">
-                  Select your preferred payment option for your OneCoolie booking
+                  {t('payments.selectPreferred')}
                 </p>
               </div>
 
               <div className="text-right shrink-0">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
-                  AMOUNT
+                  {t('payments.amount')}
                 </span>
                 <span className="text-2xl sm:text-3xl font-black text-[#1463FF] tracking-tight font-sans">
                   ₹{Number(total) % 1 === 0 ? total : Number(total).toFixed(2)}
@@ -564,10 +566,10 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-base sm:text-lg font-black text-[#071A3D] group-hover:text-[#1463FF] transition-colors leading-tight">
-                          Online Payment
+                          {t('payments.onlinePayment')}
                         </span>
                         <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold tracking-wide uppercase">
-                          Fast & Direct
+                          {t('payments.fastDirect')}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -611,22 +613,22 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-base sm:text-lg font-black text-[#071A3D] group-hover:text-emerald-700 transition-colors leading-tight">
-                          Cash on Payment
+                          {t('payments.cashOnPayment')}
                         </span>
                         <span className="px-2 py-0.5 rounded-full bg-slate-100 text-zinc-700 border border-slate-200 text-[10px] font-extrabold tracking-wide uppercase">
-                          Pay After Service
+                          {t('payments.payAfterService')}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
-                          Cash upon arrival
+                          {t('payments.cashUponArrival')}
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
-                          Station Assistant QR
+                          {t('payments.assistantQr')}
                         </span>
                         {bookingData?.journeyProtection && (
                           <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
-                            + ₹0.50 Journey Protection
+                            {t('payments.protectionAdded')}
                           </span>
                         )}
                       </div>
@@ -649,7 +651,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
             <div className="pt-2 text-center border-t border-slate-100">
               <p className="text-[11px] text-zinc-400 flex items-center justify-center gap-1.5 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>100% Verified Assistants • Transparent Indian Railway Pricing</span>
+                <span>{t('payments.verifiedAssistants')}</span>
               </p>
             </div>
           </div>
@@ -666,15 +668,15 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-xl font-black text-[#071A3D] tracking-tight leading-tight">
-                    Complete Payment
+                    {t('payments.completePayment')}
                   </h3>
                   <p className="text-xs text-zinc-500 mt-0.5 font-medium">
-                    Tap your preferred app to pay instantly
+                    {t('payments.tapAppToPay')}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
-                    AMOUNT
+                    {t('payments.amount')}
                   </span>
                   <span className="text-2xl font-black text-[#1463FF] tracking-tight font-sans">
                     ₹{total}
@@ -686,13 +688,13 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
               <div className="p-3 bg-[#F8FAFC] rounded-2xl border border-slate-200/90 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                    Merchant
+                    {t('payments.merchant')}
                   </span>
                   <span className="font-bold text-zinc-900">{MERCHANT_NAME}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                    Booking ID
+                    {t('payments.bookingId')}
                   </span>
                   <span className="font-mono font-bold text-zinc-900">#{bookingRef}</span>
                 </div>
@@ -701,7 +703,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
               {/* Native UPI App Deep Link Launchers */}
               <div className="space-y-2.5 pt-1">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500 block">
-                  Choose your UPI app to pay
+                  {t('payments.chooseUpiApp')}
                 </span>
 
                 {/* 1. PhonePe Direct Launch */}
@@ -789,10 +791,10 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
               <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50/70 border border-blue-200/60 text-xs text-blue-950">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                  <span className="font-bold">Waiting for UPI completion...</span>
+                  <span className="font-bold">{t('payments.waitingUpi')}</span>
                 </div>
                 <span className="text-[10px] text-blue-700 bg-white px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
-                  Auto-detecting
+                  {t('payments.autoDetecting')}
                 </span>
               </div>
 
@@ -811,11 +813,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   {processing ? (
                     <span className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      <span>Opening Secure Checkout...</span>
+                      <span>{t('payments.openingCheckout')}</span>
                     </span>
                   ) : (
                     <>
-                      <span>Proceed to Pay with Razorpay</span>
+                      <span>{t('payments.proceedRazorpay')}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -823,7 +825,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
               </div>
 
               <p className="text-center text-[10px] text-zinc-400 pt-1">
-                🛡️ Encrypted • Verified Merchant • OneCoolie Rail Network
+                🛡️ {t('payments.trustBadge')}
               </p>
             </div>
 
@@ -845,16 +847,16 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-2xl font-black text-[#071A3D] tracking-tight leading-tight">
-                      Complete Payment
+                      {t('payments.completePayment')}
                     </h3>
                     <p className="text-xs text-zinc-500 mt-1 font-medium">
-                      Scan the QR code with any UPI app to pay securely.
+                      {t('payments.scanQr')}
                     </p>
                   </div>
 
                   <div className="text-right shrink-0">
                     <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
-                      AMOUNT
+                      {t('payments.amount')}
                     </span>
                     <span className="text-2xl sm:text-3xl font-black text-[#1463FF] tracking-tight font-sans">
                       ₹{total}
@@ -886,7 +888,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
 
                     <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#1463FF] border border-blue-200/70 text-[11px] font-bold shadow-2xs">
                       <QrCode className="w-3 h-3" />
-                      <span>Scan with any UPI App</span>
+                      <span>{t('payments.scanWithAnyUpi')}</span>
                     </div>
                   </div>
 
@@ -896,7 +898,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     <div className="flex items-center gap-1.5 text-zinc-700">
                       <Clock className="w-4 h-4 text-emerald-600 shrink-0" />
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-600">
-                        QR CODE EXPIRES IN
+                        {t('payments.qrExpiresIn')}
                       </span>
                     </div>
 
@@ -906,15 +908,15 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                         {String(minutes).padStart(2, '0')} : {String(seconds).padStart(2, '0')}
                       </div>
                       <div className="flex justify-center gap-10 text-[10px] uppercase font-bold text-zinc-400 mt-0.5">
-                        <span>min</span>
-                        <span>sec</span>
+                        <span>{t('payments.min')}</span>
+                        <span>{t('payments.sec')}</span>
                       </div>
                     </div>
 
                     {/* Security Advisory Pill */}
                     <div className="p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/70 text-[11px] text-blue-900 leading-snug flex items-start gap-1.5">
                       <Info className="w-3.5 h-3.5 text-[#1463FF] shrink-0 mt-0.5" />
-                      <span>For your security, the QR code refreshes automatically every 15 minutes.</span>
+                      <span>{t('payments.qrSecurityNotice')}</span>
                     </div>
 
                     {/* Regenerate Button */}
@@ -924,7 +926,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                       className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-bold text-[#1463FF] flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-[0.99]"
                     >
                       <RotateCw className="w-3.5 h-3.5" />
-                      <span>Regenerate QR</span>
+                      <span>{t('payments.regenerateQr')}</span>
                     </button>
                   </div>
 
@@ -935,7 +937,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   <div className="grid grid-cols-3 gap-2 text-left">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                        Merchant Name
+                        {t('payments.merchant')}
                       </span>
                       <span className="text-xs font-bold text-zinc-900 truncate block">
                         {MERCHANT_NAME}
@@ -943,7 +945,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     </div>
                     <div>
                       <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                        Booking ID
+                        {t('payments.bookingId')}
                       </span>
                       <span className="font-mono text-xs font-bold text-zinc-900 truncate block">
                         #{bookingRef}
@@ -951,7 +953,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     </div>
                     <div>
                       <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                        Amount
+                        {t('payments.amount')}
                       </span>
                       <span className="text-xs font-extrabold text-[#1463FF] block">
                         ₹{total}
@@ -964,10 +966,10 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50/70 border border-blue-200/60 text-xs text-blue-950">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                    <span className="font-bold">Waiting for UPI completion...</span>
+                    <span className="font-bold">{t('payments.waitingUpi')}</span>
                   </div>
                   <span className="text-[10px] text-blue-700 bg-white px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
-                    Auto-detecting
+                    {t('payments.autoDetecting')}
                   </span>
                 </div>
 
@@ -986,11 +988,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     {processing ? (
                       <span className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                        <span>Opening Secure Checkout...</span>
+                        <span>{t('payments.openingCheckout')}</span>
                       </span>
                     ) : (
                       <>
-                        <span>Proceed to Pay with Razorpay</span>
+                        <span>{t('payments.proceedRazorpay')}</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -1011,10 +1013,10 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   </div>
                   <div>
                     <h4 className="text-sm font-extrabold text-[#071A3D] tracking-tight leading-tight">
-                      Safe. Simple. Secure.
+                      {t('payments.safeSimpleSecure')}
                     </h4>
                     <p className="text-xs text-zinc-600 mt-0.5 leading-snug">
-                      Complete your payment and confirm your booking.
+                      {t('payments.completePaymentConfirm')}
                     </p>
                   </div>
                 </div>
@@ -1024,28 +1026,28 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   {[
                     {
                       num: 1,
-                      title: 'Open any UPI app',
-                      desc: 'PhonePe, GPay, Paytm, or any UPI app',
+                      title: t('payments.step1Title'),
+                      desc: t('payments.step1Desc'),
                     },
                     {
                       num: 2,
-                      title: 'Scan the QR code',
-                      desc: 'Use your UPI app to scan',
+                      title: t('payments.step2Title'),
+                      desc: t('payments.step2Desc'),
                     },
                     {
                       num: 3,
-                      title: 'Verify amount',
+                      title: t('payments.step3Title'),
                       desc: `₹${total} (OneCoolie Booking)`,
                     },
                     {
                       num: 4,
-                      title: 'Complete payment',
-                      desc: "You'll get a confirmation in your UPI app",
+                      title: t('payments.step4Title'),
+                      desc: t('payments.step4Desc'),
                     },
                     {
                       num: 5,
-                      title: 'Return to OneCoolie',
-                      desc: 'Tap the button below after payment',
+                      title: t('payments.step5Title'),
+                      desc: t('payments.step5Desc'),
                     },
                   ].map((step, idx, arr) => (
                     <div key={step.num} className="relative flex items-start gap-3 group">
@@ -1125,7 +1127,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 <div className="text-center pt-1">
                   <p className="text-[10px] text-zinc-400 flex items-center justify-center gap-1.5 font-medium">
                     <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                    <span>Encrypted • Verified Merchant • OneCoolie Rail Network</span>
+                    <span>{t('payments.trustBadge')}</span>
                   </p>
                 </div>
 

@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Sparkles
 } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 const UNASSIGNED_REASONS = [
   { id: 'TRAIN_CANCELLED', label: 'Train cancelled' },
@@ -61,7 +62,26 @@ export default function CancellationModal({
   onSuccess,
   onRequestRebook
 }) {
+  const { t } = useLanguage();
   const [step, setStep] = useState('decision');
+
+  const getReasonLabel = (reason) => {
+    switch (reason.id) {
+      case 'TRAIN_CANCELLED': return t('cancellation.trainCancelled') || reason.label;
+      case 'TRAIN_SCHEDULE_CHANGED': return t('cancellation.scheduleChanged') || reason.label;
+      case 'JOURNEY_DATE_CHANGED': return t('cancellation.dateChanged') || reason.label;
+      case 'JOURNEY_TIME_CHANGED': return t('cancellation.timeChanged') || reason.label;
+      case 'DESTINATION_CHANGED': return t('cancellation.destinationChanged') || reason.label;
+      case 'DUPLICATE_BOOKING': return t('cancellation.duplicateBooking') || reason.label;
+      case 'BOOKED_BY_MISTAKE': return t('cancellation.mistakeBooking') || reason.label;
+      case 'PERSONAL_EMERGENCY': return t('cancellation.emergency') || reason.label;
+      case 'CHANGE_OF_PLANS': return t('cancellation.plansChanged') || reason.label;
+      case 'OTHER': return t('cancellation.other') || reason.label;
+      case 'OTHER_GENUINE': return t('cancellation.otherGenuine') || reason.label;
+      case 'VOLUNTARY_CANCEL': return t('cancellation.voluntaryCancel') || reason.label;
+      default: return reason.label;
+    }
+  };
   const [selectedReason, setSelectedReason] = useState('');
   const [reasonDetails, setReasonDetails] = useState('');
   const [reasonError, setReasonError] = useState('');
@@ -317,7 +337,7 @@ export default function CancellationModal({
                       onChange={() => handleSelectReason(r.id)}
                       className="sr-only"
                     />
-                    <span>{r.label}</span>
+                    <span>{getReasonLabel(r)}</span>
                     <span aria-hidden="true" className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-black bg-black' : 'border-slate-300'}`}>
                       {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
@@ -350,7 +370,7 @@ export default function CancellationModal({
             <div className="pt-2 flex items-center gap-2.5">
               {isAssigned && (
                 <button type="button" onClick={() => setStep('decision')} className="py-2.5 px-4 rounded-full border border-slate-200 hover:bg-slate-100 text-zinc-700 font-bold text-xs cursor-pointer">
-                  Back
+                  {t('common.back')}
                 </button>
               )}
               <button
@@ -358,7 +378,7 @@ export default function CancellationModal({
                 onClick={handleProceedToReview}
                 className="flex-1 py-3 px-5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
               >
-                <span>Review Cancellation Policy</span>
+                <span>{t('cancellation.policy')}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -372,7 +392,7 @@ export default function CancellationModal({
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Step 2 of 2: Cancellation Policy &amp; Refund</span>
               </div>
-              <h3 className="text-lg font-black text-zinc-900 tracking-tight">Confirm Cancellation</h3>
+              <h3 className="text-lg font-black text-zinc-900 tracking-tight">{t('cancellation.cancelBooking')}</h3>
               <p className="text-xs text-zinc-500 mt-0.5">Review your refund eligibility calculated under ONECOOLIE station assistance rules.</p>
             </div>
 
@@ -403,7 +423,7 @@ export default function CancellationModal({
                     </div>
                   )}
                   <div className="border-t border-slate-200 pt-2 flex items-center justify-between font-extrabold text-sm">
-                    <span className="text-zinc-900">Net Refund Amount</span>
+                    <span className="text-zinc-900">{t('cancellation.refundAmount')}</span>
                     <span className="font-mono text-emerald-600">₹{quote.refundAmount}</span>
                   </div>
                 </div>
@@ -422,7 +442,7 @@ export default function CancellationModal({
                 onClick={() => setStep('reason')}
                 className="py-3 px-5 rounded-full border border-slate-200 hover:bg-slate-100 text-zinc-700 font-bold text-xs cursor-pointer disabled:opacity-40"
               >
-                Change Reason
+                {t('common.back')}
               </button>
               <button
                 type="button"
@@ -433,7 +453,7 @@ export default function CancellationModal({
                 {isSubmitting ? (
                   <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Cancelling booking...</span></>
                 ) : (
-                  <span>Confirm Cancellation</span>
+                  <span>{t('cancellation.confirmCancel')}</span>
                 )}
               </button>
             </div>
@@ -446,12 +466,12 @@ export default function CancellationModal({
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-zinc-900">Booking Cancelled</h3>
+              <h3 className="text-lg font-black text-zinc-900">{t('cancellation.cancelledSuccess')}</h3>
               <p className="text-xs text-zinc-500 mt-1 max-w-xs mx-auto">{cancellationResult.message}</p>
             </div>
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl max-w-sm mx-auto text-xs space-y-1">
               <div className="flex items-center justify-between text-zinc-600">
-                <span>Refund Processed</span>
+                <span>{t('cancellation.refund')}</span>
                 <span className="font-mono font-bold text-emerald-600">₹{cancellationResult.refundAmount}</span>
               </div>
               {cancellationResult.cancellationCharge > 0 && (
@@ -463,7 +483,7 @@ export default function CancellationModal({
             </div>
             <div className="pt-2">
               <button type="button" onClick={onClose} className="w-full py-3 px-6 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs transition-all cursor-pointer shadow-xs">
-                Done
+                {t('common.done')}
               </button>
             </div>
           </div>
