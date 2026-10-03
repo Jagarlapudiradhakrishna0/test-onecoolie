@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   X,
   AlertCircle,
+  Banknote,
   Train,
   Ticket,
   MapPin,
