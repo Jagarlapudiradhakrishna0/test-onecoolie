@@ -121,7 +121,26 @@ export function LanguageProvider({ children }) {
       }
     }
 
+    // Also check if last token exists at root level of dict
+    const lastPart = parts[parts.length - 1];
+    if (lastPart in dict && typeof dict[lastPart] === 'string') {
+      return dict[lastPart];
+    }
+
     return undefined;
+  }, []);
+
+  /**
+   * Safe humanized developer fallback so raw camelCase strings are never shown to passengers
+   */
+  const getSafeFallback = useCallback((key) => {
+    if (!key) return '';
+    const token = key.includes('.') ? key.split('.').pop() : key;
+    return token
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase())
+      .trim();
   }, []);
 
   /**
@@ -134,14 +153,25 @@ export function LanguageProvider({ children }) {
     const currentDict = locales[lang] || locales.en;
     const fallbackDict = locales.en;
 
+    // 1. Check in selected language
     let value = lookupKey(currentDict, key);
+
+    // 2. If missing in selected language, fall back to English
     if (value === undefined && lang !== 'en') {
       value = lookupKey(fallbackDict, key);
     }
 
+    // 3. If missing in both, log warning in dev and use safe fallback
     if (value === undefined) {
-      // Fallback: return the last token of the key or key itself
-      return key.includes('.') ? key.split('.').pop() : key;
+      try {
+        if (
+          (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') ||
+          (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV)
+        ) {
+          console.warn(`[ONECOOLIE i18n] Missing translation for key: "${key}" in language "${lang}"`);
+        }
+      } catch (e) {}
+      value = getSafeFallback(key);
     }
 
     // Variable interpolation: replaces {varName} with params.varName
@@ -154,7 +184,7 @@ export function LanguageProvider({ children }) {
     }
 
     return String(value);
-  }, [lang, lookupKey]);
+  }, [lang, lookupKey, getSafeFallback]);
 
   /**
    * Locale-aware date formatter
@@ -229,14 +259,24 @@ export const useLanguage = () => {
       lang: 'en',
       setLanguage: () => {},
       t: (k, params) => {
-        if (params) {
-          let s = k;
-          for (const [p, v] of Object.entries(params)) {
-            s = s.replaceAll(`{${p}}`, v);
+        let text = k;
+        if (locales.en) {
+          const parts = k.split('.');
+          let cur = locales.en;
+          for (const p of parts) cur = cur?.[p];
+          if (typeof cur === 'string') text = cur;
+          else if (typeof locales.en[k] === 'string') text = locales.en[k];
+          else {
+            const token = k.includes('.') ? k.split('.').pop() : k;
+            text = token.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
           }
-          return s;
         }
-        return k.includes('.') ? k.split('.').pop() : k;
+        if (params) {
+          for (const [p, v] of Object.entries(params)) {
+            text = text.replaceAll(`{${p}}`, v);
+          }
+        }
+        return text;
       },
       formatDate: (d) => String(d),
       formatTime: (t) => String(t),
