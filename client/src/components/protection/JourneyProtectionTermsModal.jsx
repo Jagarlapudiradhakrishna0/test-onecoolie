@@ -1,5 +1,6 @@
-import React from 'react';
-import { X, ShieldCheck, AlertCircle, FileText, CheckCircle2, Printer } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { X, AlertCircle, CheckCircle2, Printer } from 'lucide-react';
 
 /* ============================================================
    ONECOOLIE JOURNEY PROTECTION — PRE-LAUNCH POLICY & TERMS MODAL
@@ -7,6 +8,8 @@ import { X, ShieldCheck, AlertCircle, FileText, CheckCircle2, Printer } from 'lu
    • Authoritative Customer Price: ₹0.50 / journey
    • STRICT: ZERO specific benefit/payout amounts displayed
    • Strictly complies with Swiss Minimal typography and brand guidelines
+   • Rendered via React Portal directly into document.body to ensure
+     absolute top-level stacking above sticky Booking Summary and headers.
    ============================================================ */
 
 export const PRE_LAUNCH_TERMS_SECTIONS = [
@@ -86,23 +89,80 @@ export default function JourneyProtectionTermsModal({
   bookingRef = null,
   acceptedAt = null
 }) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
+  const modalCardRef = useRef(null);
 
-  const handlePrint = () => {
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Prevent background scrolling and lock body when open
+  useEffect(() => {
+    if (!open) return;
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+
+    // Compensate for scrollbar removal to prevent layout shift
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+    };
+  }, [open]);
+
+  // Handle keyboard events (Escape key closes dialog)
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (onClose) onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
+
+  // Accessible focus management: focus modal card upon opening
+  useEffect(() => {
+    if (open && modalCardRef.current) {
+      modalCardRef.current.focus();
+    }
+  }, [open]);
+
+  if (!open || !mounted || typeof document === 'undefined') return null;
+
+  const handlePrint = (e) => {
+    e.stopPropagation();
     window.print();
   };
 
-  return (
+  const modalContent = (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="protection-terms-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in"
+      aria-describedby="protection-terms-desc"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/65 backdrop-blur-sm animate-fade-in select-none"
+      onClick={onClose}
     >
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50/70">
-          <div className="space-y-1">
+      <div
+        ref={modalCardRef}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        className="relative bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xl flex flex-col overflow-hidden my-auto w-[calc(100vw-24px)] sm:w-[calc(100vw-48px)] max-w-[900px] max-h-[calc(100vh-24px)] sm:max-h-[calc(100vh-48px)] max-h-[calc(100dvh-24px)] sm:max-h-[calc(100dvh-48px)] transition-all animate-scale-in outline-none select-text"
+        style={{
+          maxWidth: '900px'
+        }}
+      >
+        {/* ── 1. MODAL HEADER (FIXED WITHIN MODAL) ── */}
+        <div className="shrink-0 p-4 sm:p-6 border-b border-slate-100 flex items-start justify-between gap-3 sm:gap-4 bg-slate-50/90">
+          <div className="space-y-1 min-w-0 pr-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-blue-100 text-blue-800 border border-blue-200">
                 PRE-LAUNCH
@@ -114,11 +174,11 @@ export default function JourneyProtectionTermsModal({
                 v1 (ONECOOLIE-PROTECTION-PRELAUNCH-v1)
               </span>
             </div>
-            <h2 id="protection-terms-title" className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">
+            <h2 id="protection-terms-title" className="text-base sm:text-xl font-black text-zinc-900 tracking-tight truncate sm:whitespace-normal">
               ONECOOLIE JOURNEY PROTECTION
             </h2>
-            <p className="text-xs text-zinc-600 font-medium">
-              Optional protection for your journey. · <strong className="text-zinc-900 font-bold">₹0.50 / journey</strong>
+            <p id="protection-terms-desc" className="text-xs text-zinc-600 font-medium">
+              Optional protection for your journey · <strong className="text-zinc-900 font-bold">₹0.50 / journey</strong>
             </p>
           </div>
 
@@ -126,24 +186,26 @@ export default function JourneyProtectionTermsModal({
             <button
               type="button"
               onClick={handlePrint}
-              className="w-9 h-9 rounded-full bg-white hover:bg-slate-100 text-zinc-600 border border-slate-200 flex items-center justify-center cursor-pointer transition-colors"
+              className="w-9 h-9 rounded-full bg-white hover:bg-slate-100 text-zinc-600 border border-slate-200 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
               title="Print Policy Document"
+              aria-label="Print policy document"
             >
               <Printer className="w-4 h-4" />
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="w-9 h-9 rounded-full bg-white hover:bg-slate-100 text-zinc-600 border border-slate-200 flex items-center justify-center cursor-pointer transition-colors"
-              title="Close"
+              className="w-9 h-9 rounded-full bg-white hover:bg-slate-100 text-zinc-600 border border-slate-200 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+              title="Close Dialog"
+              aria-label="Close protection terms dialog"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Scrollable Content Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-5 text-xs text-zinc-700 leading-relaxed">
+        {/* ── 2. SCROLLABLE TERMS CONTENT (INDEPENDENT SCROLL) ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5 text-xs text-zinc-700 leading-relaxed overscroll-contain focus:outline-none">
           {/* Prominent Pre-Launch Disclaimer Box */}
           <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-amber-900 space-y-2">
             <div className="flex items-center gap-2 font-bold text-amber-950 text-xs">
@@ -157,7 +219,7 @@ export default function JourneyProtectionTermsModal({
 
           {/* Active Protection Record Telemetry (if viewing after activation) */}
           {protectionId && (
-            <div className="p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200 text-xs font-mono space-y-1">
+            <div className="p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200 text-xs font-mono space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-sans">Protection ID:</span>
                 <span className="font-bold text-zinc-900 select-all">{protectionId}</span>
@@ -181,7 +243,7 @@ export default function JourneyProtectionTermsModal({
             </div>
           )}
 
-          {/* 13 Structured Sections */}
+          {/* 13 Structured Sections (Exact Wording Preserved) */}
           <div className="space-y-4 pt-1">
             {PRE_LAUNCH_TERMS_SECTIONS.map((sec) => (
               <div key={sec.number} className="border-b border-slate-100 pb-3.5 last:border-none">
@@ -196,17 +258,17 @@ export default function JourneyProtectionTermsModal({
           </div>
         </div>
 
-        {/* Modal Actions Footer */}
-        <div className="p-4 sm:p-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/60">
+        {/* ── 3. MODAL ACTIONS FOOTER (FIXED WITHIN MODAL) ── */}
+        <div className="shrink-0 p-4 sm:p-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/90">
           <div className="text-[11px] text-zinc-500 font-medium text-center sm:text-left">
             Terms Version: <span className="font-mono font-bold text-zinc-800">ONECOOLIE-PROTECTION-PRELAUNCH-v1</span>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-initial px-5 py-2.5 rounded-full bg-white hover:bg-slate-100 text-zinc-800 font-bold text-xs border border-slate-200 transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-white hover:bg-slate-100 text-zinc-800 font-bold text-xs border border-slate-200 transition-colors cursor-pointer text-center"
             >
               Close
             </button>
@@ -217,9 +279,9 @@ export default function JourneyProtectionTermsModal({
                   onAccept();
                   onClose();
                 }}
-                className="flex-1 sm:flex-initial px-6 py-2.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center"
               >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>I Understand &amp; Accept</span>
               </button>
             )}
@@ -228,4 +290,7 @@ export default function JourneyProtectionTermsModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
+
