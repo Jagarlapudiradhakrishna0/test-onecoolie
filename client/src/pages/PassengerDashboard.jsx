@@ -811,10 +811,18 @@ export default function PassengerDashboard() {
           });
           if (index >= 0) {
             const next = [...prev];
-            next[index] = { ...next[index], ...updated };
+            next[index] = {
+              ...next[index],
+              ...updated,
+              created_at: updated.created_at || next[index].created_at
+            };
             return next;
           }
-          return [updated, ...prev];
+          const newBooking = {
+            ...updated,
+            created_at: updated.created_at || new Date().toISOString()
+          };
+          return [newBooking, ...prev];
         });
       };
 
@@ -2563,7 +2571,19 @@ export default function PassengerDashboard() {
                   className="px-4 py-2 sm:py-2.5 rounded-full bg-white hover:bg-slate-50 text-zinc-800 font-bold text-xs border border-slate-200/80 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Calendar className="w-3.5 h-3.5 text-zinc-600" />
-                  <span>Sort by</span>
+                  <span>
+                    {sortBy === 'newest'
+                      ? 'Recent Booking'
+                      : sortBy === 'oldest'
+                        ? 'Oldest Booking'
+                        : sortBy === 'journey_date'
+                          ? 'Journey Date'
+                          : sortBy === 'fare_high'
+                            ? 'Fare: High to Low'
+                            : sortBy === 'fare_low'
+                              ? 'Fare: Low to High'
+                              : 'Recent Booking'}
+                  </span>
                   <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${sortDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -2577,7 +2597,7 @@ export default function PassengerDashboard() {
                         className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'newest' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
                           }`}
                       >
-                        <span>Newest First</span>
+                        <span>Recent Booking</span>
                         {sortBy === 'newest' && <Check className="w-3.5 h-3.5 text-black" />}
                       </button>
                       <button
@@ -2586,8 +2606,17 @@ export default function PassengerDashboard() {
                         className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'oldest' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
                           }`}
                       >
-                        <span>Oldest First</span>
+                        <span>Oldest Booking</span>
                         {sortBy === 'oldest' && <Check className="w-3.5 h-3.5 text-black" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setSortBy('journey_date'); setSortDropdownOpen(false); }}
+                        className={`w-full px-3 py-2 rounded-xl text-left font-semibold transition-colors flex items-center justify-between cursor-pointer ${sortBy === 'journey_date' ? 'bg-slate-100 text-black font-bold' : 'text-zinc-700 hover:bg-slate-50'
+                          }`}
+                      >
+                        <span>Journey Date</span>
+                        {sortBy === 'journey_date' && <Check className="w-3.5 h-3.5 text-black" />}
                       </button>
                       <button
                         type="button"
@@ -2697,19 +2726,57 @@ export default function PassengerDashboard() {
                       ? completedList
                       : allDisplayBookings;
 
+              // Helper for safe timestamp parsing
+              const getBookingCreatedAt = (b) => {
+                if (!b) return 0;
+                const raw = b.created_at || b.createdAt || b.booking_created_at;
+                if (!raw) return 0;
+                const ms = new Date(raw).getTime();
+                return isNaN(ms) ? 0 : ms;
+              };
+
+              const getJourneyDateMs = (b) => {
+                if (!b) return 0;
+                const raw = b.journey_date || b.journeyDate;
+                if (!raw) return 0;
+                const ms = new Date(raw).getTime();
+                return isNaN(ms) ? 0 : ms;
+              };
+
+              const getSecondaryId = (b) => String(b?.id || b?.booking_id || '');
+
               // Apply Sorting safely
               currentList = [...(currentList || [])].filter(Boolean).sort((a, b) => {
                 if (!a || !b) return 0;
+
                 if (sortBy === 'oldest') {
-                  return new Date(a.journey_date || 0) - new Date(b.journey_date || 0);
+                  const diff = getBookingCreatedAt(a) - getBookingCreatedAt(b);
+                  if (diff !== 0) return diff;
+                  return getSecondaryId(a).localeCompare(getSecondaryId(b));
                 }
+
+                if (sortBy === 'journey_date') {
+                  const jDiff = getJourneyDateMs(a) - getJourneyDateMs(b);
+                  if (jDiff !== 0) return jDiff;
+                  return getBookingCreatedAt(b) - getBookingCreatedAt(a);
+                }
+
                 if (sortBy === 'fare_high') {
-                  return (Number(b.total_price) || 0) - (Number(a.total_price) || 0);
+                  const fareDiff = (Number(b.total_price) || 0) - (Number(a.total_price) || 0);
+                  if (fareDiff !== 0) return fareDiff;
+                  return getBookingCreatedAt(b) - getBookingCreatedAt(a);
                 }
+
                 if (sortBy === 'fare_low') {
-                  return (Number(a.total_price) || 0) - (Number(b.total_price) || 0);
+                  const fareDiff = (Number(a.total_price) || 0) - (Number(b.total_price) || 0);
+                  if (fareDiff !== 0) return fareDiff;
+                  return getBookingCreatedAt(b) - getBookingCreatedAt(a);
                 }
-                return new Date(b.journey_date || 0) - new Date(a.journey_date || 0);
+
+                // Default: 'newest' -> Recent Booking (created_at DESC, secondary id DESC)
+                const timeDiff = getBookingCreatedAt(b) - getBookingCreatedAt(a);
+                if (timeDiff !== 0) return timeDiff;
+                return getSecondaryId(b).localeCompare(getSecondaryId(a));
               });
 
               if (currentList.length === 0) {

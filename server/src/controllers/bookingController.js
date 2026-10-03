@@ -148,6 +148,12 @@ exports.getMyBookings = async (req, res) => {
         {
           ascending: false
         }
+      )
+      .order(
+        'id',
+        {
+          ascending: false
+        }
       );
 
 
@@ -1270,6 +1276,12 @@ exports.getAllBookings = async (req, res) => {
       .select('*')
       .order(
         'created_at',
+        {
+          ascending: false
+        }
+      )
+      .order(
+        'id',
         {
           ascending: false
         }

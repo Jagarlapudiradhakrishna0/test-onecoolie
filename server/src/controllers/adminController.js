@@ -415,7 +415,8 @@ exports.getAllBookings = async (req, res) => {
         passenger:passenger_id(id, name, email, phone),
         assistant:assistant_id(id, name, email, phone, station_code, is_online)
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (booking_status && booking_status.toLowerCase() !== 'all') {
       query = query.eq('booking_status', booking_status.toLowerCase());
