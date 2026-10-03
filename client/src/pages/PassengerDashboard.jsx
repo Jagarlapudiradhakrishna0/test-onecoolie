@@ -4298,13 +4298,14 @@ export default function PassengerDashboard() {
         <CancellationModal
           isOpen={Boolean(activeCancelBooking)}
           booking={activeCancelBooking}
-          onClose={() => setActiveCancelBooking(null)}
-          onCancelled={() => {
+          onClose={() => {
             setActiveCancelBooking(null);
             fetchBookings();
           }}
+          onCancelled={() => {
+            fetchBookings();
+          }}
           onSuccess={() => {
-            setActiveCancelBooking(null);
             fetchBookings();
           }}
           onRequestRebook={() => {

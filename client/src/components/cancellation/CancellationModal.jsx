@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../api/axios';
 import { toast } from 'react-hot-toast';
 import {
@@ -80,6 +81,35 @@ export default function CancellationModal({
   }, [booking]);
 
   const reasonsList = isAssigned ? ASSIGNED_REASONS : UNASSIGNED_REASONS;
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Prevent background scrolling while modal is open
+  useEffect(() => {
+    if (!isOpen || !booking) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen, booking]);
+
+  // Handle escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !isSubmitting) {
+        e.preventDefault();
+        if (onClose) onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitting, onClose]);
 
   useEffect(() => {
     if (!isOpen || !booking) return;
@@ -191,11 +221,13 @@ export default function CancellationModal({
     setReasonError('');
   }, []);
 
-  if (!isOpen || !booking) return null;
+  if (!isOpen || !booking || !mounted || typeof document === 'undefined') return null;
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[110] bg-black/65 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose(); }}
     >
       <div
@@ -439,4 +471,6 @@ export default function CancellationModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

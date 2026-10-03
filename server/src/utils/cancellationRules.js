@@ -183,8 +183,8 @@ function canPassengerCancel(booking, payment) {
     };
   }
 
-  // Allowed from: pending, accepted, arriving
-  if (['pending', 'accepted', 'arriving'].includes(bookingStatus)) {
+  // Allowed from: pending, accepted, arriving, assigned, confirmed
+  if (['pending', 'accepted', 'arriving', 'assigned', 'confirmed'].includes(bookingStatus)) {
     return { allowed: true };
   }
 
