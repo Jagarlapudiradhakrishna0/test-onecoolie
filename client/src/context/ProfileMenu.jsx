@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, LogOut, ShieldCheck, HelpCircle, Sliders, Luggage, Briefcase, ChevronDown, CheckCircle2, Phone, Shield, Laptop, Smartphone, Globe, Activity } from 'lucide-react';
