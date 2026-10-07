@@ -1694,8 +1694,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
             <button
               type="button"
+              id="view-protection-terms-btn"
+              aria-label="View Terms and Pre-Launch Policy"
               onClick={() => setShowProtectionTerms(true)}
-              className="w-full py-1 text-xs text-blue-600 hover:text-blue-800 font-bold text-center cursor-pointer transition-colors"
+              className="w-full py-1 text-xs text-blue-600 hover:text-blue-800 font-bold text-center cursor-pointer transition-colors focus:outline-none focus:underline"
             >
               View Terms &amp; Pre-Launch Policy
             </button>
@@ -1796,8 +1798,13 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
       {/* ── Protection Terms Modal ── */}
       {showProtectionTerms && (
         <JourneyProtectionTermsModal
+          open={showProtectionTerms}
           isOpen={showProtectionTerms}
           onClose={() => setShowProtectionTerms(false)}
+          protectionId={journeyProtection?.protection_id}
+          bookingRef={bookingUuid || booking?.booking_id || booking?.id}
+          acceptedAt={journeyProtection?.activated_at || journeyProtection?.terms_accepted_at}
+          hasAccepted={Boolean(hasProtection)}
         />
       )}
 

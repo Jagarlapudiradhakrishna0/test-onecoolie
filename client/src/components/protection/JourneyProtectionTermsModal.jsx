@@ -19,7 +19,8 @@ import { getLocalizedPolicy } from '../../locales/protectionPolicyData';
    ============================================================ */
 
 export default function JourneyProtectionTermsModal({
-  open,
+  open: openProp,
+  isOpen: isOpenProp,
   onClose,
   onAccept,
   hasAccepted = false,
@@ -27,6 +28,7 @@ export default function JourneyProtectionTermsModal({
   bookingRef = null,
   acceptedAt = null
 }) {
+  const open = Boolean(openProp ?? isOpenProp);
   const { lang, t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const modalCardRef = useRef(null);

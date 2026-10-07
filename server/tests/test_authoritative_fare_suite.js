@@ -273,6 +273,23 @@ runTest('10. Static Code Audit: TripSummaryPage.jsx uses data-driven protection 
   assert.ok(!code.includes('<span className="font-bold text-zinc-900">₹0.50</span>'), 'TripSummaryPage.jsx must NOT have hardcoded ₹0.50 span');
 });
 
+runTest('11. Static Code Audit: JourneyProtectionTermsModal supports both open and isOpen props', () => {
+  const modalPath = path.join(__dirname, '..', '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionTermsModal.jsx');
+  const code = fs.readFileSync(modalPath, 'utf8');
+
+  assert.ok(code.includes('open: openProp') && code.includes('isOpen: isOpenProp'), 'Modal must accept both open and isOpen props');
+  assert.ok(code.includes('const open = Boolean(openProp ?? isOpenProp)'), 'Modal must resolve open status from either prop');
+});
+
+runTest('12. Static Code Audit: ActiveBooking.jsx correctly triggers and passes open prop to JourneyProtectionTermsModal', () => {
+  const activeBookingPath = path.join(__dirname, '..', '..', 'client', 'src', 'components', 'ActiveBooking.jsx');
+  const code = fs.readFileSync(activeBookingPath, 'utf8');
+
+  assert.ok(code.includes('setShowProtectionTerms(true)'), 'View terms button must set showProtectionTerms to true');
+  assert.ok(code.includes('open={showProtectionTerms}'), 'ActiveBooking must pass open={showProtectionTerms} to modal');
+  assert.ok(code.includes('id="view-protection-terms-btn"'), 'Button must have accessible id');
+});
+
 console.log('\n====================================================');
 console.log(`RESULTS: ${passedTests} / ${totalTests} TESTS PASSED`);
 console.log('STATUS: AUTHORITATIVE FARE AUDIT SUITE PASSED 100%! ✓');
