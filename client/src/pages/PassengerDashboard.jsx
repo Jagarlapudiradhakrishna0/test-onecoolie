@@ -1275,7 +1275,7 @@ export default function PassengerDashboard() {
               <div className="block md:hidden bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3 w-full max-w-full min-w-0 overflow-hidden">
                 <div className="flex items-center justify-between min-w-0">
                   <span className="text-xs font-extrabold text-zinc-900 truncate">
-                    {t('booking.stepIndicator', { step: bookingStep, total: 4 })}: {[
+                    {t('booking.stepIndicator', { current: bookingStep, step: bookingStep, total: 4 })}: {[
                       t('booking.step1'),
                       t('booking.step2'),
                       t('booking.step3'),

@@ -242,7 +242,58 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled';
   const isInService = rawStatus === 'in_service';
   const canCancel = !isCancelled && !isCompleted && !isInService;
-  const isBoarding = !(booking?.action_type === 'collect_from_seat' || booking?.services?.action_type === 'collect_from_seat');
+
+  // ── Normalize Journey Service Type ('Boarding' | 'De-boarding') ──
+  const serviceTypeDisplay = (() => {
+    const rawCandidates = [
+      booking?.action_type,
+      booking?.services?.action_type,
+      booking?.service_mode,
+      booking?.services?.service_mode,
+      booking?.journey_type,
+      booking?.services?.journey_type,
+      booking?.service_type,
+      booking?.services?.service_type,
+      booking?.mission,
+      booking?.services?.mission,
+    ];
+
+    for (const val of rawCandidates) {
+      if (!val || typeof val !== 'string') continue;
+      const clean = val.trim().toLowerCase();
+
+      // Check for de-boarding signals
+      if (
+        clean === 'collect_from_seat' ||
+        clean === 'collect-from-seat' ||
+        clean === 'collect_from_berth' ||
+        clean.includes('deboard') ||
+        clean.includes('de-board') ||
+        clean.includes('collect_from_seat')
+      ) {
+        return 'De-boarding';
+      }
+
+      // Check for boarding signals
+      if (
+        clean === 'load_to_seat' ||
+        clean === 'load-to-seat' ||
+        clean === 'load_to_berth' ||
+        clean === 'boarding' ||
+        clean === 'board' ||
+        clean.startsWith('board') ||
+        clean.includes('load_to_seat')
+      ) {
+        return 'Boarding';
+      }
+    }
+
+    const isDeBoard = booking?.action_type === 'collect_from_seat' || booking?.services?.action_type === 'collect_from_seat';
+    return isDeBoard ? 'De-boarding' : 'Boarding';
+  })();
+
+  const isBoarding = serviceTypeDisplay === 'Boarding';
+  const serviceLabel = serviceTypeDisplay;
 
   const trainNo = booking?.train_no || booking?.train_number || 'Train';
   const rawTrainName = booking?.train_name || 'Express';
@@ -274,7 +325,6 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   const coach = booking?.coach || booking?.services?.coach || 'Unassigned';
   const seatNumber = booking?.seat_number || booking?.services?.seat_number || 'Unassigned';
   const berthType = booking?.berth_type || booking?.services?.berth_type || 'Berth';
-  const serviceLabel = isBoarding ? 'Boarding Load' : 'Platform Assist';
   const specialInstructions = booking?.special_instructions || booking?.notes || booking?.service_description || 'Standard platform assistance';
   const fareAmount = booking?.total_price ?? booking?.amount ?? 0;
   const paymentStatus = (booking?.payment_status || 'PAID').toUpperCase();
@@ -1083,10 +1133,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                 <div className="min-w-0 flex-1">
                   <span className="text-[10px] text-zinc-400 font-semibold block leading-none">Service Type</span>
                   <span className="text-xs sm:text-[13px] font-bold text-zinc-900 block leading-snug break-words mt-1">
-                    {serviceLabel}
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-medium block leading-tight break-words mt-0.5">
-                    {selectedServices.map(s => s.name).join(' + ')}
+                    {serviceTypeDisplay}
                   </span>
                 </div>
               </div>

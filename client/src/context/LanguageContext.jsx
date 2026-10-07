@@ -177,7 +177,14 @@ export function LanguageProvider({ children }) {
     // Variable interpolation: replaces {varName} with params.varName
     if (params && typeof params === 'object') {
       let interpolated = String(value);
-      for (const [pKey, pVal] of Object.entries(params)) {
+      const resolvedParams = { ...params };
+      if (resolvedParams.current === undefined && resolvedParams.step !== undefined) {
+        resolvedParams.current = resolvedParams.step;
+      }
+      if (resolvedParams.step === undefined && resolvedParams.current !== undefined) {
+        resolvedParams.step = resolvedParams.current;
+      }
+      for (const [pKey, pVal] of Object.entries(resolvedParams)) {
         interpolated = interpolated.replaceAll(`{${pKey}}`, pVal !== undefined && pVal !== null ? String(pVal) : '');
       }
       return interpolated;
