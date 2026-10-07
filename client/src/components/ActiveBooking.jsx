@@ -319,8 +319,11 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     rawSpecialInstructions &&
     typeof rawSpecialInstructions === 'string' &&
     rawSpecialInstructions.trim() &&
-    !rawSpecialInstructions.trim().toLowerCase().startsWith('requested services:') &&
-    !rawSpecialInstructions.trim().toLowerCase().startsWith('standard platform')
+    !rawSpecialInstructions.toLowerCase().includes('requested services:') &&
+    !rawSpecialInstructions.toLowerCase().includes('standard platform') &&
+    !rawSpecialInstructions.toLowerCase().includes('mission: boarding') &&
+    !rawSpecialInstructions.toLowerCase().includes('mission: de-boarding') &&
+    !rawSpecialInstructions.toLowerCase().includes('coach:')
   );
   const specialInstructions = hasCustomInstructions ? rawSpecialInstructions.trim() : null;
 
@@ -890,25 +893,25 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
               </button>
             </div>
 
-            {/* Visual Grid of Selected Service Cards (Adapts cleanly from 1 to 6) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+            {/* Visual Grid of Selected Service Cards (Reference design: Icon + Name + Quantity/Status, NO PRICES) */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4">
               {selectedServices.map((srv) => (
                 <div
                   key={srv.key}
-                  className="bg-[#F8FAFC] hover:bg-white border border-slate-100 hover:border-blue-200 rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between min-h-[110px] transition-all shadow-2xs group"
+                  className="bg-[#F8FAFC] hover:bg-white border border-slate-200/80 hover:border-blue-200 rounded-2xl p-4 flex flex-col justify-between min-h-[125px] transition-all shadow-2xs group"
                 >
-                  <div className={`w-8 h-8 rounded-xl ${srv.iconBg} flex items-center justify-center shrink-0 shadow-2xs`}>
+                  <div className={`w-9 h-9 rounded-xl ${srv.iconBg} flex items-center justify-center shrink-0 shadow-2xs`}>
                     {srv.icon}
                   </div>
 
-                  <div className="mt-2.5 flex-1 flex flex-col justify-between">
-                    <h4 className="text-xs font-bold text-zinc-900 leading-snug line-clamp-2">
+                  <div className="mt-3 flex-1 flex flex-col justify-between">
+                    <h4 className="text-xs sm:text-[13px] font-bold text-zinc-900 leading-snug">
                       {srv.name}
                     </h4>
                     {srv.badge && (
-                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full inline-block mt-2 w-fit ${srv.badgeClass || 'bg-blue-50 text-[#1463FF] border border-blue-100'}`}>
+                      <p className="text-[11px] sm:text-xs text-zinc-500 font-medium leading-tight mt-1.5">
                         {srv.badge}
-                      </span>
+                      </p>
                     )}
                   </div>
                 </div>
@@ -1392,6 +1395,14 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
               ))}
             </div>
 
+            {/* Total Amount Row */}
+            <div className="pt-3 border-t border-slate-200/80 flex items-center justify-between text-xs font-bold">
+              <span className="font-extrabold text-zinc-900">Total Amount</span>
+              <span className="font-mono font-black text-sm text-zinc-900">
+                ₹{fareAmount.toFixed(2)}
+              </span>
+            </div>
+
             {/* Payment Details */}
             <div className="space-y-2.5 pt-3 border-t border-slate-100 text-xs">
               <div className="flex items-center justify-between">
@@ -1495,7 +1506,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                 </p>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-black group-hover:translate-x-0.5 transition-all" />
+            <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-black group-hover:translate-x-0.5 transition-all" />
           </div>
 
           {/* Card 4: Action Links (Cancel & Rebook & SOS) */}

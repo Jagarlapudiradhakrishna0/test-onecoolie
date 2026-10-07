@@ -17,8 +17,7 @@ import {
   Calendar,
   CreditCard,
   AlertCircle,
-  RefreshCw,
-  Home
+  RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from '../api/axios';
@@ -348,66 +347,13 @@ export default function BookingLive() {
           </div>
         </header>
 
-        {/* ── Main Layout: Left Sidebar + Center/Right Content from ActiveBooking ── */}
-        <main className="max-w-[1560px] mx-auto px-3 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col lg:flex-row items-start gap-5 lg:gap-6">
-            {/* ── 1. LEFT SIDEBAR (Desktop >= lg) ── */}
-            <aside className="hidden lg:flex flex-col w-44 xl:w-52 shrink-0 space-y-1.5 sticky top-24 pt-1">
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
-              >
-                <Home className="w-4 h-4 text-zinc-500" />
-                <span>Home</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard?tab=trips')}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold bg-blue-50 text-[#1463FF] border border-blue-100 shadow-2xs transition-all cursor-pointer text-left w-full"
-              >
-                <Briefcase className="w-4 h-4 text-[#1463FF]" />
-                <span>My Trips</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard?tab=book')}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
-              >
-                <Calendar className="w-4 h-4 text-zinc-500" />
-                <span>Book New</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard?tab=book')}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
-              >
-                <MapPin className="w-4 h-4 text-zinc-500" />
-                <span>Stations</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard?tab=support')}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
-              >
-                <Headphones className="w-4 h-4 text-zinc-500" />
-                <span>Support</span>
-              </button>
-            </aside>
-
-            {/* ── 2. MAIN WORKSPACE (ActiveBooking contains Center + Right Columns) ── */}
-            <div className="flex-1 min-w-0 w-full">
-              <ActiveBooking
-                booking={booking}
-                distance={distance}
-                onUpdate={(b) => setBooking(b)}
-              />
-            </div>
-          </div>
+        {/* ── Main Layout: Expanded Full Width Trip Details ── */}
+        <main className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <ActiveBooking
+            booking={booking}
+            distance={distance}
+            onUpdate={(b) => setBooking(b)}
+          />
         </main>
 
       {/* ── Minimal Footer (Under Movesphere Technologies) ── */}
