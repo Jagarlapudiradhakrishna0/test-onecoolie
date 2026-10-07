@@ -17,7 +17,8 @@ import {
   Calendar,
   CreditCard,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Home
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from '../api/axios';
@@ -298,95 +299,116 @@ export default function BookingLive() {
             </button>
           </div>
 
-          {/* Center: Dual Pill Navigation Switcher */}
-          <div className="flex items-center p-1.5 bg-slate-100/90 rounded-full border border-slate-200/70 gap-1.5 shadow-inner">
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard?tab=book')}
-              className="px-6 lg:px-7 py-2.5 rounded-full text-xs lg:text-sm font-semibold text-zinc-600 hover:text-black transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <Train className="w-4 h-4" />
-              <span>Book</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard?tab=trips')}
-              className="px-6 lg:px-7 py-2.5 rounded-full text-xs lg:text-sm font-bold bg-black text-white shadow-xs transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <Briefcase className="w-4 h-4" />
-              <span>My Trips</span>
-              {activeBookings.length > 0 && (
-                <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-white text-black">
-                  {activeBookings.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Far Right Corner: Notification Bell + Profile Menu */}
-          <div className="flex items-center gap-3.5">
-            <PassengerNotifications
-              bookings={allBookings}
-              activeBookings={activeBookings}
-              onNavigateTab={(t) => navigate(`/dashboard?tab=${t}`)}
-              buttonClassName="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs"
-            />
-
-            <ProfileMenu role="passenger" onNavigate={(t) => navigate(`/dashboard?tab=${t}`)} />
-          </div>
-        </div>
-      </header>
-
-      {/* ── Main Content Container ── */}
-      <main className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Sub-Header: Breadcrumb Back Link + Booking ID & Booked Date */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-          <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard?tab=trips')}
-              className="hover:text-[#1463FF] transition-colors flex items-center gap-1.5 cursor-pointer text-[#1463FF]"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>My Trips</span>
-            </button>
-            <span className="text-zinc-300">/</span>
-            <span className="text-zinc-900 font-extrabold">Trip Details</span>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-slate-100/90 border border-slate-200/70 rounded-full px-3.5 py-1 text-xs">
-              <span className="text-zinc-400 font-medium">Booking ID</span>
-              <span className="font-mono font-bold text-zinc-900 select-all">
-                {getDisplayId(booking) || id}
-              </span>
+            {/* Center: Triple Pill Navigation Switcher */}
+            <div className="flex items-center p-1.5 bg-slate-100/90 rounded-full border border-slate-200/70 gap-1.5 shadow-inner">
               <button
                 type="button"
-                onClick={handleCopyId}
-                className="text-zinc-400 hover:text-black p-0.5 cursor-pointer ml-0.5"
-                title="Copy Booking ID"
+                onClick={() => navigate('/dashboard?tab=book')}
+                className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-semibold text-zinc-600 hover:text-black transition-all flex items-center gap-2 cursor-pointer"
               >
-                {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <Calendar className="w-4 h-4 text-zinc-500" />
+                <span>Book</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard?tab=trips')}
+                className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold bg-blue-50 text-[#1463FF] border border-blue-200/80 shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Briefcase className="w-4 h-4 text-[#1463FF]" />
+                <span>My Trips</span>
+                {activeBookings.length > 0 && (
+                  <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-[#1463FF] text-white">
+                    {activeBookings.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard?tab=support')}
+                className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-semibold text-zinc-600 hover:text-black transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Headphones className="w-4 h-4 text-zinc-500" />
+                <span>Support</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-              <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-              <span>
-                Booked on <span className="font-bold text-zinc-900">{formattedBookedDate}</span>
-              </span>
+            {/* Far Right Corner: Notification Bell + Profile Menu */}
+            <div className="flex items-center gap-3.5">
+              <PassengerNotifications
+                bookings={allBookings}
+                activeBookings={activeBookings}
+                onNavigateTab={(t) => navigate(`/dashboard?tab=${t}`)}
+                buttonClassName="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs"
+              />
+
+              <ProfileMenu role="passenger" onNavigate={(t) => navigate(`/dashboard?tab=${t}`)} />
             </div>
           </div>
-        </div>
+        </header>
 
-        {/* Active Booking Component (Hero + Trust Strip + 3-Col Content) */}
-        <ActiveBooking
-          booking={booking}
-          distance={distance}
-          onUpdate={(b) => setBooking(b)}
-        />
-      </main>
+        {/* ── Main Layout: Left Sidebar + Center/Right Content from ActiveBooking ── */}
+        <main className="max-w-[1560px] mx-auto px-3 sm:px-6 lg:px-8 py-5">
+          <div className="flex flex-col lg:flex-row items-start gap-5 lg:gap-6">
+            {/* ── 1. LEFT SIDEBAR (Desktop >= lg) ── */}
+            <aside className="hidden lg:flex flex-col w-44 xl:w-52 shrink-0 space-y-1.5 sticky top-24 pt-1">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
+              >
+                <Home className="w-4 h-4 text-zinc-500" />
+                <span>Home</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard?tab=trips')}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold bg-blue-50 text-[#1463FF] border border-blue-100 shadow-2xs transition-all cursor-pointer text-left w-full"
+              >
+                <Briefcase className="w-4 h-4 text-[#1463FF]" />
+                <span>My Trips</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard?tab=book')}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
+              >
+                <Calendar className="w-4 h-4 text-zinc-500" />
+                <span>Book New</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard?tab=book')}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
+              >
+                <MapPin className="w-4 h-4 text-zinc-500" />
+                <span>Stations</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard?tab=support')}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-black hover:bg-slate-100/80 transition-all cursor-pointer text-left w-full"
+              >
+                <Headphones className="w-4 h-4 text-zinc-500" />
+                <span>Support</span>
+              </button>
+            </aside>
+
+            {/* ── 2. MAIN WORKSPACE (ActiveBooking contains Center + Right Columns) ── */}
+            <div className="flex-1 min-w-0 w-full">
+              <ActiveBooking
+                booking={booking}
+                distance={distance}
+                onUpdate={(b) => setBooking(b)}
+              />
+            </div>
+          </div>
+        </main>
 
       {/* ── Minimal Footer (Under Movesphere Technologies) ── */}
       <footer className="w-full border-t border-slate-200/80 bg-white py-6 px-4 sm:px-8 lg:px-12 mt-12">
