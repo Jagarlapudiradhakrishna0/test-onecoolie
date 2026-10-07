@@ -789,30 +789,19 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             {/* Content overlay */}
             <div className="relative z-10 p-5 sm:p-7 flex flex-col justify-between min-h-[220px]">
               <div>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <span className="text-[10px] sm:text-[11px] font-extrabold tracking-widest text-blue-300 uppercase block font-mono">
-                      INDIAN RAILWAYS
-                    </span>
-                    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight mt-1">
-                      {stationCode} <span className="text-[#3B82F6]">→</span> {destStationCode}
-                    </h2>
-                    <p className="text-xs sm:text-sm font-semibold text-slate-200 mt-1">
-                      Train {trainNo} | {cleanTrainName}
-                    </p>
-                    <p className="text-xs text-slate-300/90 mt-1">
-                      “A faster, smoother, and more comfortable journey with OneCoolie.”
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => toast.success(`Station map active for ${stationCode}`)}
-                    className="bg-white/90 hover:bg-white text-[#1463FF] backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold border border-white/40 shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition-transform active:scale-95"
-                  >
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>View on Map</span>
-                  </button>
+                <div>
+                  <span className="text-[10px] sm:text-[11px] font-extrabold tracking-widest text-blue-300 uppercase block font-mono">
+                    INDIAN RAILWAYS
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight mt-1">
+                    {stationCode} <span className="text-[#3B82F6]">→</span> {destStationCode}
+                  </h2>
+                  <p className="text-xs sm:text-sm font-semibold text-slate-200 mt-1">
+                    Train {trainNo} | {cleanTrainName}
+                  </p>
+                  <p className="text-xs text-slate-300/90 mt-1">
+                    “A faster, smoother, and more comfortable journey with OneCoolie.”
+                  </p>
                 </div>
               </div>
 
@@ -1121,19 +1110,9 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
           {/* 5. Trip & Platform Details */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-extrabold text-zinc-900 tracking-tight">
-                Trip &amp; Platform Details
-              </h3>
-              <button
-                type="button"
-                onClick={() => toast.success(`Station map active for ${stationCode}`)}
-                className="px-3.5 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 text-[#1463FF] font-bold text-xs border border-blue-100 flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                <span>View on Map</span>
-              </button>
-            </div>
+            <h3 className="text-base font-extrabold text-zinc-900 tracking-tight">
+              Trip &amp; Platform Details
+            </h3>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
               {/* Coach */}
