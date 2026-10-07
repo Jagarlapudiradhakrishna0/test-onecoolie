@@ -624,8 +624,35 @@ exports.register = async (req, res) => {
 
     if (existingUser) {
       return res.status(400).json({
-        message: 'User already exists.'
+        message: 'An account with this email address already exists. Please log in.'
       });
+    }
+
+    // Check if phone already exists
+    if (phone) {
+      const cleanPhoneDigits = String(phone).replace(/\D/g, '');
+      const phoneTen = cleanPhoneDigits.length === 12 && cleanPhoneDigits.startsWith('91')
+        ? cleanPhoneDigits.slice(2)
+        : cleanPhoneDigits;
+      if (phoneTen.length === 10) {
+        const phoneVariants = [
+          `+91 ${phoneTen}`,
+          `+91${phoneTen}`,
+          phoneTen,
+          `91${phoneTen}`
+        ];
+        const { data: existingPhoneUser } = await supabase
+          .from('users')
+          .select('id')
+          .in('phone', phoneVariants)
+          .limit(1);
+
+        if (existingPhoneUser && existingPhoneUser.length > 0) {
+          return res.status(400).json({
+            message: 'An account with this mobile number already exists. Please log in.'
+          });
+        }
+      }
     }
 
     // Hash password
@@ -748,6 +775,7 @@ exports.login = async (req, res) => {
     // Find user
     let user = null;
     let queryError = null;
+    let passwordAlreadyVerified = false;
 
     if (role === 'admin') {
       const normalizedEmail = normalizeEmail(rawInput);
@@ -782,28 +810,85 @@ exports.login = async (req, res) => {
       }
 
       // Check exact email for approved admin
-      const { data: exactAdmin, error: exactErr } = await supabase
+      const { data: exactAdmins, error: exactErr } = await supabase
         .from('users')
         .select('*')
-        .eq('email', normalizedEmail)
-        .maybeSingle();
+        .eq('email', normalizedEmail);
 
       if (exactErr) {
         queryError = exactErr;
-      } else if (exactAdmin) {
-        user = exactAdmin;
+      } else if (exactAdmins && exactAdmins.length > 0) {
+        user = exactAdmins[0];
       }
     } else {
       if (rawInput.includes('@')) {
-        const normalizedEmail = rawInput.toLowerCase();
-        const { data: standardUser, error: stdErr } = await supabase
+        const normalizedEmail = rawInput.toLowerCase().trim();
+        const { data: candidates, error: stdErr } = await supabase
           .from('users')
           .select('*')
-          .eq('email', normalizedEmail)
-          .maybeSingle();
+          .eq('email', normalizedEmail);
 
-        queryError = stdErr;
-        user = standardUser;
+        if (stdErr) {
+          console.error('LOGIN EMAIL LOOKUP ERROR:', stdErr);
+          return res.status(500).json({
+            message: 'Unable to complete login. Please try again.'
+          });
+        }
+
+        if (!candidates || candidates.length === 0) {
+          return res.status(401).json({
+            message: 'Invalid email or password.'
+          });
+        }
+
+        // Filter by requested role
+        const roleCandidates = candidates.filter((u) => u.role === role);
+        if (roleCandidates.length === 0) {
+          return res.status(401).json({
+            message: `This account does not have ${role} privileges.`
+          });
+        }
+
+        // Match password with bcrypt across role candidates
+        const matchingUsers = [];
+        for (const candidate of roleCandidates) {
+          if (candidate.password) {
+            const isMatch = await bcrypt.compare(password, candidate.password);
+            if (isMatch) {
+              matchingUsers.push(candidate);
+            }
+          }
+        }
+
+        if (matchingUsers.length === 0) {
+          return res.status(401).json({
+            message: 'Invalid email or password.'
+          });
+        }
+
+        if (matchingUsers.length === 1) {
+          user = matchingUsers[0];
+        } else {
+          // If multiple accounts share the email and match the password:
+          // Prefer account with bookings, or most recent
+          const candidateIds = matchingUsers.map((u) => u.id);
+          const { data: bookingsData } = await supabase
+            .from('bookings')
+            .select('passenger_id')
+            .in('passenger_id', candidateIds);
+
+          if (bookingsData && bookingsData.length > 0) {
+            const counts = {};
+            bookingsData.forEach((b) => {
+              counts[b.passenger_id] = (counts[b.passenger_id] || 0) + 1;
+            });
+            matchingUsers.sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
+          } else {
+            matchingUsers.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+          }
+          user = matchingUsers[0];
+        }
+        passwordAlreadyVerified = true;
       } else {
         // Phone lookup: construct common formatting variants (+91..., 10 digits, with/without space, etc.)
         const digits = rawInput.replace(/\D/g, '');
@@ -818,14 +903,84 @@ exports.login = async (req, res) => {
           digits.length === 10 ? `91${digits}` : null
         ].filter(Boolean);
 
-        const { data: phoneUser, error: phoneErr } = await supabase
+        let { data: candidates, error: phoneErr } = await supabase
           .from('users')
           .select('*')
-          .in('phone', phoneCandidates)
-          .maybeSingle();
+          .in('phone', phoneCandidates);
 
-        queryError = phoneErr;
-        user = phoneUser;
+        // Fallback: if not found by exact candidate match and tenDigits is 10 digits, try ilike
+        if ((!candidates || candidates.length === 0) && tenDigits.length === 10) {
+          const { data: fallbackCandidates, error: fbErr } = await supabase
+            .from('users')
+            .select('*')
+            .ilike('phone', `%${tenDigits}%`);
+
+          if (!fbErr && fallbackCandidates) {
+            candidates = fallbackCandidates;
+          }
+        }
+
+        if (phoneErr) {
+          console.error('LOGIN PHONE LOOKUP ERROR:', phoneErr);
+          return res.status(500).json({
+            message: 'Unable to complete login. Please try again.'
+          });
+        }
+
+        if (!candidates || candidates.length === 0) {
+          return res.status(401).json({
+            message: 'Invalid mobile number or password.'
+          });
+        }
+
+        // Filter by requested role
+        const roleCandidates = candidates.filter((u) => u.role === role);
+        if (roleCandidates.length === 0) {
+          return res.status(401).json({
+            message: `This account does not have ${role} privileges.`
+          });
+        }
+
+        // Match password with bcrypt across role candidates
+        const matchingUsers = [];
+        for (const candidate of roleCandidates) {
+          if (candidate.password) {
+            const isMatch = await bcrypt.compare(password, candidate.password);
+            if (isMatch) {
+              matchingUsers.push(candidate);
+            }
+          }
+        }
+
+        if (matchingUsers.length === 0) {
+          return res.status(401).json({
+            message: 'Invalid mobile number or password.'
+          });
+        }
+
+        if (matchingUsers.length === 1) {
+          user = matchingUsers[0];
+        } else {
+          // If multiple accounts share the phone and match the password:
+          // Prefer account with bookings, or most recent
+          const candidateIds = matchingUsers.map((u) => u.id);
+          const { data: bookingsData } = await supabase
+            .from('bookings')
+            .select('passenger_id')
+            .in('passenger_id', candidateIds);
+
+          if (bookingsData && bookingsData.length > 0) {
+            const counts = {};
+            bookingsData.forEach((b) => {
+              counts[b.passenger_id] = (counts[b.passenger_id] || 0) + 1;
+            });
+            matchingUsers.sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
+          } else {
+            matchingUsers.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+          }
+          user = matchingUsers[0];
+        }
+        passwordAlreadyVerified = true;
       }
     }
 
@@ -833,7 +988,7 @@ exports.login = async (req, res) => {
       console.error('LOGIN DATABASE ERROR:', queryError);
 
       return res.status(500).json({
-        message: 'Database error while logging in.'
+        message: 'Unable to complete login. Please try again.'
       });
     }
 
@@ -850,9 +1005,8 @@ exports.login = async (req, res) => {
         user.id
       );
 
-      return res.status(500).json({
-        message:
-          'This account does not have a role assigned. Please update the user role in Supabase.'
+      return res.status(403).json({
+        message: 'Account setup is incomplete. Please contact support.'
       });
     }
 
@@ -1047,15 +1201,17 @@ exports.login = async (req, res) => {
     // -------------------------------------------------------------
     // STANDARD PASSENGER & ASSISTANT LOGIN (Unchanged)
     // -------------------------------------------------------------
-    const isMatch = await bcrypt.compare(
-      password,
-      user.password
-    );
+    if (!passwordAlreadyVerified) {
+      const isMatch = await bcrypt.compare(
+        password,
+        user.password
+      );
 
-    if (!isMatch) {
-      return res.status(401).json({
-        message: 'Invalid credentials.'
-      });
+      if (!isMatch) {
+        return res.status(401).json({
+          message: 'Invalid credentials.'
+        });
+      }
     }
 
     if (

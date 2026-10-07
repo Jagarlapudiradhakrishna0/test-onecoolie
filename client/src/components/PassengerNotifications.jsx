@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import axios from '../api/axios';
 
 /* ============================================================
    ONECOOLIE PASSENGER NOTIFICATIONS — Real-Time Travel Alerts
@@ -30,10 +32,17 @@ export default function PassengerNotifications({
 }) {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
+
+  const userId = user?.id || user?._id || '';
+  const userKey = userId ? `user_${userId}` : 'guest';
+  const DISMISSED_KEY = `oc_notif_dismissed_${userKey}`;
+  const READ_KEY = `oc_notif_read_${userKey}`;
+
   const [dismissedIds, setDismissedIds] = useState(() => {
     try {
-      const saved = localStorage.getItem('passenger_dismissed_notifications');
+      const saved = localStorage.getItem(DISMISSED_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -41,14 +50,42 @@ export default function PassengerNotifications({
   });
   const [readIds, setReadIds] = useState(() => {
     try {
-      const saved = localStorage.getItem('passenger_read_notifications');
+      const saved = localStorage.getItem(READ_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
+  const [backendNotifications, setBackendNotifications] = useState([]);
 
   const dropdownRef = useRef(null);
+
+  // Synchronize read and dismissed IDs whenever authenticated user changes
+  useEffect(() => {
+    try {
+      const savedDismissed = localStorage.getItem(DISMISSED_KEY);
+      setDismissedIds(savedDismissed ? JSON.parse(savedDismissed) : []);
+      const savedRead = localStorage.getItem(READ_KEY);
+      setReadIds(savedRead ? JSON.parse(savedRead) : []);
+    } catch {
+      setDismissedIds([]);
+      setReadIds([]);
+    }
+  }, [DISMISSED_KEY, READ_KEY]);
+
+  // Load backend notifications for authenticated user
+  useEffect(() => {
+    if (!userId) return;
+    let isMounted = true;
+    axios.get('/notifications')
+      .then((res) => {
+        if (isMounted && res.data?.notifications) {
+          setBackendNotifications(res.data.notifications);
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [userId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -63,20 +100,20 @@ export default function PassengerNotifications({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  // Persist dismissed and read notifications
+  // Persist dismissed and read notifications scoped to userKey
   useEffect(() => {
     try {
-      localStorage.setItem('passenger_dismissed_notifications', JSON.stringify(dismissedIds));
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedIds));
     } catch { }
-  }, [dismissedIds]);
+  }, [dismissedIds, DISMISSED_KEY]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('passenger_read_notifications', JSON.stringify(readIds));
+      localStorage.setItem(READ_KEY, JSON.stringify(readIds));
     } catch { }
-  }, [readIds]);
+  }, [readIds, READ_KEY]);
 
-  // Build notifications feed
+  // Build notifications feed with deterministic and stable IDs
   const notificationsList = useMemo(() => {
     const list = [];
 
@@ -85,6 +122,7 @@ export default function PassengerNotifications({
       activeBookings.forEach((b) => {
         if (!b) return;
         const bId = b.id || b.booking_id || b._id || '';
+        const stableId = bId ? `active-${bId}` : `active-${b.train_no || 'train'}-${b.journey_date || 'date'}`;
         const rawStatus = String(b.booking_status || b.status || '').toLowerCase();
         const isAssigned = Boolean(
           b.assistant_id ||
@@ -93,7 +131,7 @@ export default function PassengerNotifications({
         );
 
         list.push({
-          id: `active-${bId || Math.random()}`,
+          id: stableId,
           bookingId: bId,
           booking: b,
           type: 'active',
@@ -120,7 +158,7 @@ export default function PassengerNotifications({
       bookings.slice(0, 3).forEach((b) => {
         if (!b) return;
         const bId = b.id || b.booking_id || b._id || '';
-        const key = `booking-${bId || Math.random()}`;
+        const stableId = bId ? `booking-${bId}` : `booking-${b.train_no || 'train'}-${b.journey_date || 'date'}`;
         // Skip if already in active list
         if (bId && list.some((item) => item.bookingId && String(item.bookingId) === String(bId))) return;
 
@@ -129,7 +167,7 @@ export default function PassengerNotifications({
         const isCancelled = rawStatus === 'cancelled';
 
         list.push({
-          id: key,
+          id: stableId,
           bookingId: bId,
           booking: b,
           type: 'history',
@@ -155,7 +193,28 @@ export default function PassengerNotifications({
       });
     }
 
-    // 3. Platform & Security Essential Notices
+    // 3. Backend notifications
+    if (backendNotifications && backendNotifications.length > 0) {
+      backendNotifications.forEach((bn) => {
+        if (!bn || bn.is_dismissed) return;
+        if (list.some((item) => item.id === bn.id)) return;
+        list.push({
+          id: bn.id,
+          bookingId: bn.booking_id,
+          type: bn.type || 'info',
+          urgency: bn.type === 'sos' ? 'high' : 'normal',
+          title: bn.title || 'Notification',
+          description: bn.message || '',
+          badge: bn.type ? bn.type.toUpperCase() : 'Notice',
+          badgeStyle: 'bg-slate-100 text-zinc-800 border-slate-200',
+          icon: bn.type === 'sos' ? Info : Bell,
+          iconBg: bn.type === 'sos' ? 'bg-rose-600 text-white' : 'bg-black text-white',
+          time: bn.created_at ? new Date(bn.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'
+        });
+      });
+    }
+
+    // 4. Platform & Security Essential Notices
     list.push({
       id: 'tip-otp-security',
       type: 'tip',
@@ -183,7 +242,7 @@ export default function PassengerNotifications({
     });
 
     return list;
-  }, [bookings, activeBookings]);
+  }, [bookings, activeBookings, backendNotifications]);
 
   // Filter out dismissed
   const visibleNotifications = useMemo(() => {
@@ -200,18 +259,29 @@ export default function PassengerNotifications({
     const allIds = visibleNotifications.map((n) => n.id);
     setDismissedIds((prev) => Array.from(new Set([...prev, ...allIds])));
     setReadIds((prev) => Array.from(new Set([...prev, ...allIds])));
+    if (userId) {
+      axios.post('/notifications/clear-all').catch(() => {});
+    }
   };
 
   const handleDismiss = (id, e) => {
     e.stopPropagation();
     setDismissedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    if (!readIds.includes(id)) {
+      setReadIds((prev) => [...prev, id]);
+    }
+    if (userId && typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) {
+      axios.patch(`/notifications/${id}/dismiss`).catch(() => {});
+    }
   };
 
   const handleItemClick = (item) => {
-    // When viewed, remove it from the notifications list immediately
-    setDismissedIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+    // When viewed, mark only that notification as read and persist
     if (!readIds.includes(item.id)) {
       setReadIds((prev) => [...prev, item.id]);
+      if (userId && typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id)) {
+        axios.patch(`/notifications/${item.id}/read`).catch(() => {});
+      }
     }
     setOpen(false);
 

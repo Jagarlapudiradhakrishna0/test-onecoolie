@@ -695,6 +695,8 @@ app.use('/api/support', supportRoutes);
 app.use('/api/support-tickets', supportRoutes);
 const protectionRoutes = require('./routes/protectionRoutes');
 app.use('/api/protection', protectionRoutes);
+const notificationRoutes = require('./routes/notificationRoutes');
+app.use('/api/notifications', notificationRoutes);
 
 // --------------------------------------------------
 // 404 HANDLER
