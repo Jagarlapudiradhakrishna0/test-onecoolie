@@ -9,9 +9,9 @@ async function runTranslationAudit() {
   console.log('RUNNING ONECOOLIE TRANSLATION COVERAGE AUDIT');
   console.log('====================================================\n');
 
-  const enPath = path.join(__dirname, '..', 'client', 'src', 'locales', 'en.js');
-  const tePath = path.join(__dirname, '..', 'client', 'src', 'locales', 'te.js');
-  const hiPath = path.join(__dirname, '..', 'client', 'src', 'locales', 'hi.js');
+  const enPath = path.join(__dirname, '..', '..', 'client', 'src', 'locales', 'en.js');
+  const tePath = path.join(__dirname, '..', '..', 'client', 'src', 'locales', 'te.js');
+  const hiPath = path.join(__dirname, '..', '..', 'client', 'src', 'locales', 'hi.js');
 
   assert.ok(fs.existsSync(enPath), 'en.js must exist');
   assert.ok(fs.existsSync(tePath), 'te.js must exist');

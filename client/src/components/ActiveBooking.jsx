@@ -504,66 +504,6 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
       }
     }
 
-    // Default Fallback: If empty, show representative booking services
-    if (list.length === 0) {
-      list.push(
-        {
-          key: 'luggage',
-          name: 'Luggage Assistance',
-          desc: 'Porter handling from station gate directly to berth',
-          badge: '1 Small, 1 Medium',
-          icon: <Luggage className="w-5 h-5 text-[#1463FF]" />,
-          iconBg: 'bg-blue-50 text-[#1463FF]',
-          badgeClass: 'bg-blue-50 text-[#1463FF] border border-blue-100',
-        },
-        {
-          key: 'escort',
-          name: 'Seat & Coach Escort',
-          desc: 'Personal guide navigating platform foot-bridges to coach',
-          badge: 'Included',
-          icon: <Armchair className="w-5 h-5 text-emerald-600" />,
-          iconBg: 'bg-emerald-50 text-emerald-600',
-          badgeClass: 'bg-blue-50 text-[#1463FF] border border-blue-100',
-        },
-        {
-          key: 'wheelchair',
-          name: 'Wheelchair & Priority',
-          desc: 'Wheelchair transit and dedicated escort',
-          badge: 'Priority',
-          icon: <Accessibility className="w-5 h-5 text-purple-600" />,
-          iconBg: 'bg-purple-50 text-purple-600',
-          badgeClass: 'bg-purple-50 text-purple-700 border border-purple-100',
-        },
-        {
-          key: 'language',
-          name: 'Multilingual Guide',
-          desc: 'Local communication assistance in regional languages',
-          badge: 'Included',
-          icon: <Languages className="w-5 h-5 text-amber-600" />,
-          iconBg: 'bg-amber-50 text-amber-600',
-          badgeClass: 'bg-blue-50 text-[#1463FF] border border-blue-100',
-        },
-        {
-          key: 'snacks',
-          name: 'Berth Refreshments',
-          desc: 'Station water and packed snacks delivered to seat',
-          badge: 'Included',
-          icon: <Coffee className="w-5 h-5 text-rose-600" />,
-          iconBg: 'bg-rose-50 text-rose-600',
-          badgeClass: 'bg-blue-50 text-[#1463FF] border border-blue-100',
-        },
-        {
-          key: 'transport',
-          name: 'Exit Gate & Cab Transfer',
-          desc: 'Assistance connecting to pre-booked cab or auto',
-          badge: 'Included',
-          icon: <Car className="w-5 h-5 text-sky-600" />,
-          iconBg: 'bg-sky-50 text-sky-600',
-          badgeClass: 'bg-blue-50 text-[#1463FF] border border-blue-100',
-        }
-      );
-    }
-
     return list;
   }, [booking?.services]);
 
@@ -725,9 +665,9 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     !isCancelled &&
     (booking?.assistant_id || booking?.assistant?.id || (booking?.assistant?.name && isAssistantAccepted))
   );
-  const assistantName = booking?.assistant?.name || 'Ramesh Kumar';
-  const assistantRating = booking?.assistant?.rating ? Number(booking.assistant.rating).toFixed(1) : '4.8';
-  const assistantBookingsCount = booking?.assistant?.completed_jobs ?? booking?.assistant?.total_completed ?? 320;
+  const assistantName = booking?.assistant?.name || 'Assigned Sahayak';
+  const assistantRating = booking?.assistant?.rating ? Number(booking.assistant.rating).toFixed(1) : '5.0';
+  const assistantBookingsCount = booking?.assistant?.completed_jobs ?? booking?.assistant?.total_completed ?? 0;
 
   // Actions
   const handleCopyId = () => {
@@ -994,30 +934,36 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
               </button>
             </div>
 
-            {/* Visual Grid of Selected Service Cards (Reference design: Icon + Name + Quantity/Status, NO PRICES) */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4">
-              {selectedServices.map((srv) => (
-                <div
-                  key={srv.key}
-                  className="bg-[#F8FAFC] hover:bg-white border border-slate-200/80 hover:border-blue-200 rounded-2xl p-4 flex flex-col justify-between min-h-[125px] transition-all shadow-2xs group"
-                >
-                  <div className={`w-9 h-9 rounded-xl ${srv.iconBg} flex items-center justify-center shrink-0 shadow-2xs`}>
-                    {srv.icon}
-                  </div>
+            {/* Visual Grid of Selected Service Cards (or Empty State) */}
+            {selectedServices.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4">
+                {selectedServices.map((srv) => (
+                  <div
+                    key={srv.key}
+                    className="bg-[#F8FAFC] hover:bg-white border border-slate-200/80 hover:border-blue-200 rounded-2xl p-4 flex flex-col justify-between min-h-[125px] transition-all shadow-2xs group"
+                  >
+                    <div className={`w-9 h-9 rounded-xl ${srv.iconBg} flex items-center justify-center shrink-0 shadow-2xs`}>
+                      {srv.icon}
+                    </div>
 
-                  <div className="mt-3 flex-1 flex flex-col justify-between">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-zinc-900 leading-snug">
-                      {srv.name}
-                    </h4>
-                    {srv.badge && (
-                      <p className="text-[11px] sm:text-xs text-zinc-500 font-medium leading-tight mt-1.5">
-                        {srv.badge}
-                      </p>
-                    )}
+                    <div className="mt-3 flex-1 flex flex-col justify-between">
+                      <h4 className="text-xs sm:text-[13px] font-bold text-zinc-900 leading-snug">
+                        {srv.name}
+                      </h4>
+                      {srv.badge && (
+                        <p className="text-[11px] sm:text-xs text-zinc-500 font-medium leading-tight mt-1.5">
+                          {srv.badge}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs text-zinc-400 font-medium bg-[#F8FAFC] rounded-2xl border border-slate-100">
+                No additional assistance services requested for this booking.
+              </div>
+            )}
           </div>
 
           {/* 3. Journey Progress (Horizontal 5-Step Timeline or Red Cancellation Alert) */}

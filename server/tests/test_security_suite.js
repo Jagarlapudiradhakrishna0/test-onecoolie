@@ -6,7 +6,7 @@
  */
 
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 if (!process.env.SUPABASE_URL) process.env.SUPABASE_URL = 'https://fake-supabase-for-tests.supabase.co';
 if (!process.env.SUPABASE_SECRET_KEY) process.env.SUPABASE_SECRET_KEY = 'fake-supabase-secret-key-for-test-suite';
 
@@ -15,10 +15,10 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 
-const { validateTrainHost, ALLOWED_TRAIN_API_HOSTS } = require('./src/utils/ssrfValidator');
-const { adminOnly, requirePermission } = require('./src/middleware/adminMiddleware');
-const { hasPermission, getPermissionsForRole } = require('./src/config/rbac');
-const { confirmTestPayment } = require('./src/controllers/paymentController');
+const { validateTrainHost, ALLOWED_TRAIN_API_HOSTS } = require('../src/utils/ssrfValidator');
+const { adminOnly, requirePermission } = require('../src/middleware/adminMiddleware');
+const { hasPermission, getPermissionsForRole } = require('../src/config/rbac');
+const { confirmTestPayment } = require('../src/controllers/paymentController');
 
 console.log('====================================================');
 console.log('RUNNING ONECOOLIE AUTOMATED SECURITY SUITE (22 TESTS)');
@@ -152,7 +152,7 @@ async function runTests() {
   // TEST 9: Anonymous user cannot update train API configuration
   // ----------------------------------------------------
   {
-    const trainRoutesContent = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'trainRoutes.js'), 'utf8');
+    const trainRoutesContent = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'trainRoutes.js'), 'utf8');
     const updateKeyProtected = trainRoutesContent.includes("router.post('/update-key', protect, adminOnly, requirePermission('trains:update')");
     assert.strictEqual(updateKeyProtected, true, '/update-key route must be protected with auth and permission');
     pass(9, 'Anonymous user cannot update train API configuration (Protected)');
@@ -193,7 +193,7 @@ async function runTests() {
   // ----------------------------------------------------
   {
     assert.strictEqual(typeof confirmTestPayment, 'undefined', 'confirmTestPayment must be completely removed');
-    const paymentRoutes = fs.readFileSync(path.join(__dirname, 'src', 'routes', 'paymentRoutes.js'), 'utf8');
+    const paymentRoutes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'paymentRoutes.js'), 'utf8');
     assert.strictEqual(paymentRoutes.includes('/test-confirm'), false, 'test-confirm route must not exist in paymentRoutes.js');
     pass(11, 'Test payment endpoint completely removed from production codebase');
   }
@@ -217,9 +217,9 @@ async function runTests() {
   // TEST 13: Socket private event isolated (No global io.emit)
   // ----------------------------------------------------
   {
-    const bookingCtrl = fs.readFileSync(path.join(__dirname, 'src', 'controllers', 'bookingController.js'), 'utf8');
-    const paymentCtrl = fs.readFileSync(path.join(__dirname, 'src', 'controllers', 'paymentController.js'), 'utf8');
-    const serviceCtrl = fs.readFileSync(path.join(__dirname, 'src', 'controllers', 'serviceController.js'), 'utf8');
+    const bookingCtrl = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'bookingController.js'), 'utf8');
+    const paymentCtrl = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'paymentController.js'), 'utf8');
+    const serviceCtrl = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'serviceController.js'), 'utf8');
 
     assert.strictEqual(bookingCtrl.includes('io.emit('), false, 'bookingController must contain zero global io.emit calls');
     assert.strictEqual(paymentCtrl.includes('io.emit('), false, 'paymentController must contain zero global io.emit calls');
@@ -231,7 +231,7 @@ async function runTests() {
   // TEST 14: OTP isolated from unauthorized sockets
   // ----------------------------------------------------
   {
-    const bookingCtrl = fs.readFileSync(path.join(__dirname, 'src', 'controllers', 'bookingController.js'), 'utf8');
+    const bookingCtrl = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'bookingController.js'), 'utf8');
     // Verify cash new_booking emission strips OTP
     assert.strictEqual(bookingCtrl.includes("const fleetFormatted = formatBooking(booking, { includeOTP: false });"), true);
     // Verify only passenger room receives full booking
@@ -243,8 +243,8 @@ async function runTests() {
   // TEST 15: Ticket message isolated
   // ----------------------------------------------------
   {
-    const supportCtrl = fs.readFileSync(path.join(__dirname, 'src', 'controllers', 'supportController.js'), 'utf8');
-    const indexSrc = fs.readFileSync(path.join(__dirname, 'src', 'index.js'), 'utf8');
+    const supportCtrl = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'supportController.js'), 'utf8');
+    const indexSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
 
     assert.strictEqual(supportCtrl.includes("ioInstance.emit('ticket_message'"), false, 'supportController must not globally emit ticket_message');
     assert.strictEqual(supportCtrl.includes("ioInstance.to(`ticket_${ticket.id}`).emit('ticket_message'"), true, 'supportController must emit ticket_message to ticket room');
@@ -256,7 +256,7 @@ async function runTests() {
   // TEST 16: Logout clears user-specific storage
   // ----------------------------------------------------
   {
-    const axiosSrc = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'api', 'axios.js'), 'utf8');
+    const axiosSrc = fs.readFileSync(path.join(__dirname, '..', '..', 'client', 'src', 'api', 'axios.js'), 'utf8');
     assert.strictEqual(axiosSrc.includes("key.startsWith('onecoolie_')"), true, 'clearStoredTokens must clear onecoolie_ keys');
     assert.strictEqual(axiosSrc.includes("key.startsWith('booking_')"), true, 'clearStoredTokens must clear booking_ keys');
     assert.strictEqual(axiosSrc.includes("localStorage.removeItem('onecoolie_passenger_tickets_real')"), true, 'clearStoredTokens must clear legacy ticket key');
@@ -267,7 +267,7 @@ async function runTests() {
   // TEST 17: Passenger A -> Logout -> Passenger B cannot see A data
   // ----------------------------------------------------
   {
-    const supportStoreSrc = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'utils', 'supportStore.js'), 'utf8');
+    const supportStoreSrc = fs.readFileSync(path.join(__dirname, '..', '..', 'client', 'src', 'utils', 'supportStore.js'), 'utf8');
     assert.strictEqual(supportStoreSrc.includes('onecoolie_passenger_tickets_${userId}'), true, 'Support ticket keys must be namespaced by userId');
     pass(17, 'Multi-account isolation: Storage namespaced by userId preventing cross-account leaks');
   }
@@ -276,7 +276,7 @@ async function runTests() {
   // TEST 18: Registration token is session-bound
   // ----------------------------------------------------
   {
-    const authCtrl = fs.readFileSync(path.join(__dirname, 'src', 'controllers', 'authController.js'), 'utf8');
+    const authCtrl = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'authController.js'), 'utf8');
     assert.strictEqual(authCtrl.includes('sessionService.createSession'), true, 'Registration must call sessionService.createSession');
     assert.strictEqual(authCtrl.includes('setRefreshTokenCookie(res, refreshToken)'), true, 'Registration must set refresh token cookie');
     pass(18, 'Registration tokens are authoritatively bound to user_sessions with sid');
@@ -326,8 +326,8 @@ async function runTests() {
   // TEST 21: Direct Supabase client access cannot bypass ownership (RLS scoped to service_role)
   // ----------------------------------------------------
   {
-    const masterPath = path.join(__dirname, 'supabase', 'ONECOOLIE_MASTER_SCHEMA.sql');
-    const legacyPath = path.join(__dirname, '..', 'supabase_complete_production_schema.sql');
+    const masterPath = path.join(__dirname, '..', 'supabase', 'ONECOOLIE_MASTER_SCHEMA.sql');
+    const legacyPath = path.join(__dirname, '..', '..', 'supabase_complete_production_schema.sql');
     const schemaFile = fs.existsSync(masterPath) ? masterPath : legacyPath;
     const schemaSql = fs.readFileSync(schemaFile, 'utf8');
     assert.strictEqual(schemaSql.includes('FOR ALL TO service_role USING (true) WITH CHECK (true);'), true, 'RLS universal policies must be strictly scoped TO service_role');
@@ -340,7 +340,7 @@ async function runTests() {
   // TEST 22: Admin password cannot be bypassed with hardcoded passwords
   // ----------------------------------------------------
   {
-    const authCtrl = fs.readFileSync(path.join(__dirname, 'src', 'controllers', 'authController.js'), 'utf8');
+    const authCtrl = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'authController.js'), 'utf8');
     assert.strictEqual(authCtrl.includes('MASTER_ADMIN_PASSWORDS'), false, 'MASTER_ADMIN_PASSWORDS must be completely deleted from authController');
     assert.strictEqual(authCtrl.includes('Password123!'), false, 'Hardcoded passwords must not exist in authController');
     assert.strictEqual(authCtrl.includes('OneCoolie@2026'), false, 'Hardcoded bypass passwords must not exist in authController');

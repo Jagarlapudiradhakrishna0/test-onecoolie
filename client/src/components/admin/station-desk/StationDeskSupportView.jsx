@@ -1385,12 +1385,8 @@ export default function StationDeskSupportView({
         onOptimisticMessage={handleOptimisticMessage}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
-        onAssignSahayak={(t) => {
-          console.log('Dispatching sahayak for ticket:', t.id);
-        }}
-        onAddNote={(id, note) => {
-          console.log('Appended internal note to ticket:', id, note);
-        }}
+        onAssignSahayak={() => {}}
+        onAddNote={() => {}}
       />
 
       {/* 5. Modal: Raise / Dispatch Support Ticket (Admin) */}

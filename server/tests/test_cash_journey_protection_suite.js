@@ -38,16 +38,16 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const {
   JOURNEY_PROTECTION_CONFIG,
   generateProtectionId
-} = require('./src/utils/protectionConfig');
-const { calculateBookingPrice } = require('./src/config/pricing');
-const { isCashPayment, isOnlinePayment } = require('./src/utils/paymentClassification');
-const { normalizeBookingPayload } = require('./src/utils/bookingCore');
-const { formatBooking } = require('./src/utils/bookingFormatter');
+} = require('../src/utils/protectionConfig');
+const { calculateBookingPrice } = require('../src/config/pricing');
+const { isCashPayment, isOnlinePayment } = require('../src/utils/paymentClassification');
+const { normalizeBookingPayload } = require('../src/utils/bookingCore');
+const { formatBooking } = require('../src/utils/bookingFormatter');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -204,7 +204,7 @@ runTest('11. Duplicate cash collection is blocked (idempotent)', () => {
 
 // TEST 12: Duplicate protection activation is blocked (partial unique index constraint)
 runTest('12. Database partial unique index strictly prevents multiple active records per booking', () => {
-  const schemaPath = path.join(__dirname, 'supabase', 'ONECOOLIE_JOURNEY_PROTECTION_SCHEMA.sql');
+  const schemaPath = path.join(__dirname, '..', 'supabase', 'ONECOOLIE_JOURNEY_PROTECTION_SCHEMA.sql');
   const content = fs.readFileSync(schemaPath, 'utf8');
   assert.ok(content.includes('CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_journey_protection_active_booking'));
   assert.ok(content.includes('WHERE status = \'active\''));
@@ -251,7 +251,7 @@ runTest('16. Passenger can only view their own protection (BOLA check)', () => {
 
 // TEST 17: Passenger cannot modify protection status
 runTest('17. Passenger cannot modify protection status (client Supabase update restricted)', () => {
-  const rlsPath = path.join(__dirname, 'supabase', 'ONECOOLIE_RLS_FINAL.sql');
+  const rlsPath = path.join(__dirname, '..', 'supabase', 'ONECOOLIE_RLS_FINAL.sql');
   const content = fs.readFileSync(rlsPath, 'utf8');
   assert.ok(content.includes('Passengers can view own protection'));
   assert.ok(!content.includes('CREATE POLICY "journey_protection_passenger_update"'));
@@ -259,7 +259,7 @@ runTest('17. Passenger cannot modify protection status (client Supabase update r
 
 // TEST 18: RLS remains secure
 runTest('18. RLS remains secure (no USING (true) or WITH CHECK (true))', () => {
-  const rlsPath = path.join(__dirname, 'supabase', 'ONECOOLIE_RLS_FINAL.sql');
+  const rlsPath = path.join(__dirname, '..', 'supabase', 'ONECOOLIE_RLS_FINAL.sql');
   const content = fs.readFileSync(rlsPath, 'utf8');
   assert.ok(!content.includes('CREATE POLICY "journey_protection_public_all" ON public.journey_protection FOR ALL USING (true)'));
 });
@@ -281,7 +281,7 @@ runTest('20. Cancellation after collection marks protection cancelled', () => {
 
 // TEST 21: No benefit/payout amount appears in passenger UI
 runTest('21. No benefit/payout amount appears in passenger UI components', () => {
-  const cardPath = path.join(__dirname, '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionCard.jsx');
+  const cardPath = path.join(__dirname, '..', '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionCard.jsx');
   const cardContent = fs.readFileSync(cardPath, 'utf8');
   assert.ok(!cardContent.includes('100000'));
   assert.ok(!cardContent.includes('1,00,000'));
@@ -326,7 +326,7 @@ runTest('25. Cancellation rules integration verified', () => {
 
 // TEST 26: Existing payment suite passes
 runTest('26. Payment classification module verified', () => {
-  assert.ok(fs.existsSync(path.join(__dirname, 'src', 'utils', 'paymentClassification.js')));
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'src', 'utils', 'paymentClassification.js')));
 });
 
 // TEST 27: Existing Journey Protection suite passes
@@ -336,7 +336,7 @@ runTest('27. Core Journey Protection test suite verified', () => {
 
 // TEST 28: Frontend production build passes
 runTest('28. Frontend production build artifacts verified', () => {
-  const distHtml = path.join(__dirname, '..', 'client', 'dist', 'index.html');
+  const distHtml = path.join(__dirname, '..', '..', 'client', 'dist', 'index.html');
   assert.ok(fs.existsSync(distHtml));
 });
 

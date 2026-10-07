@@ -42,14 +42,14 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const {
   PROTECTION_CONFIG,
   generateProtectionId,
   PRE_LAUNCH_POLICY_TERMS
-} = require('./src/utils/protectionConfig');
-const { formatRazorpayAmount } = require('./src/config/razorpay');
+} = require('../src/utils/protectionConfig');
+const { formatRazorpayAmount } = require('../src/config/razorpay');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -271,8 +271,8 @@ async function main() {
 
   // Test 21: No benefit/payout amount appears in passenger UI components
   runTest('21. No benefit/payout amount appears in passenger UI components', () => {
-    const termsCode = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionTermsModal.jsx'), 'utf8');
-    const cardCode = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionCard.jsx'), 'utf8');
+    const termsCode = fs.readFileSync(path.join(__dirname, '..', '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionTermsModal.jsx'), 'utf8');
+    const cardCode = fs.readFileSync(path.join(__dirname, '..', '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionCard.jsx'), 'utf8');
     
     [termsCode, cardCode].forEach((content) => {
       assert.strictEqual(content.includes('100000'), false, 'UI must not include 100000');
@@ -310,33 +310,33 @@ async function main() {
 
   // Test 25: No service-role credentials are exposed to frontend
   runTest('25. No service-role credentials are exposed to frontend', () => {
-    const clientEnv = fs.existsSync(path.join(__dirname, '..', 'client', '.env'))
-      ? fs.readFileSync(path.join(__dirname, '..', 'client', '.env'), 'utf8')
+    const clientEnv = fs.existsSync(path.join(__dirname, '..', '..', 'client', '.env'))
+      ? fs.readFileSync(path.join(__dirname, '..', '..', 'client', '.env'), 'utf8')
       : '';
     assert.strictEqual(clientEnv.includes('service_role'), false, 'Client .env must never contain service_role');
   });
 
   // Test 26: Existing authentication mechanisms verified
   runTest('26. Existing authentication mechanisms verified', () => {
-    const authMiddleware = require('./src/middleware/authMiddleware');
+    const authMiddleware = require('../src/middleware/authMiddleware');
     assert.strictEqual(typeof authMiddleware.protect, 'function', 'protect middleware must be exported');
   });
 
   // Test 27: Existing security headers verified
   runTest('27. Existing security headers verified in server index.js', () => {
-    const serverIndex = fs.readFileSync(path.join(__dirname, 'src', 'index.js'), 'utf8');
+    const serverIndex = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
     assert.strictEqual(serverIndex.includes('helmet'), true, 'Helmet security headers must be active');
   });
 
   // Test 28: Existing CORS/CSRF protection verified
   runTest('28. Existing CORS/CSRF protection verified', () => {
-    const serverIndex = fs.readFileSync(path.join(__dirname, 'src', 'index.js'), 'utf8');
+    const serverIndex = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
     assert.strictEqual(serverIndex.includes('corsOriginHandler'), true, 'CORS origin handler must be active');
   });
 
   // Test 29: Existing cancellation rules integration verified
   runTest('29. Existing cancellation rules integration verified', () => {
-    const cancellationRules = require('./src/utils/cancellationRules');
+    const cancellationRules = require('../src/utils/cancellationRules');
     assert.strictEqual(typeof cancellationRules.canPassengerCancel, 'function');
   });
 
@@ -348,13 +348,13 @@ async function main() {
 
   // Test 31: Frontend production build artifact verification
   runTest('31. Frontend production build artifact verification', () => {
-    const distIndex = path.join(__dirname, '..', 'client', 'dist', 'index.html');
+    const distIndex = path.join(__dirname, '..', '..', 'client', 'dist', 'index.html');
     assert.strictEqual(fs.existsSync(distIndex), true, 'client/dist/index.html must exist after vite build');
   });
 
   // Test 32: Database RLS rules verified for journey_protection and protection_claims
   runTest('32. Database RLS rules verified for journey_protection and protection_claims', () => {
-    const rlsSql = fs.readFileSync(path.join(__dirname, 'supabase', 'ONECOOLIE_RLS_FINAL.sql'), 'utf8');
+    const rlsSql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'ONECOOLIE_RLS_FINAL.sql'), 'utf8');
     assert.strictEqual(rlsSql.includes('ALTER TABLE public.journey_protection ENABLE ROW LEVEL SECURITY;'), true);
     assert.strictEqual(rlsSql.includes('ALTER TABLE public.protection_claims ENABLE ROW LEVEL SECURITY;'), true);
     assert.strictEqual(rlsSql.includes('"Passengers can view own protection"'), true);
@@ -363,7 +363,7 @@ async function main() {
 
   // Test 33: Baggage Protection Limits match 4 pre-launch tiers
   runTest('33. Baggage Protection Limits match 4 proposed tiers (₹2.5k, ₹5k, ₹10k, ₹15k)', () => {
-    const { BAGGAGE_PROTECTION_LIMITS } = require('./src/utils/protectionConfig');
+    const { BAGGAGE_PROTECTION_LIMITS } = require('../src/utils/protectionConfig');
     assert.strictEqual(BAGGAGE_PROTECTION_LIMITS.length, 4);
     const small = BAGGAGE_PROTECTION_LIMITS.find(t => t.tier === 'small');
     const medium = BAGGAGE_PROTECTION_LIMITS.find(t => t.tier === 'medium');
@@ -378,7 +378,7 @@ async function main() {
 
   // Test 34: Baggage Protection Tier calculation is server-authoritative
   runTest('34. Baggage Protection Tier calculation is server-authoritative', () => {
-    const { calculateProposedProtectionTier } = require('./src/utils/protectionConfig');
+    const { calculateProposedProtectionTier } = require('../src/utils/protectionConfig');
     const bookingSmall = { services: { luggageCounts: { small: 2 } } };
     const bookingLarge = { services: { luggageCounts: { small: 1, large: 1 } } };
     const bookingXL = { services: { luggageCounts: { extra_large: 1 } } };
@@ -392,7 +392,7 @@ async function main() {
 
   // Test 35: Damage terms table covers 13 points and excludes minor / normal wear
   runTest('35. Damage terms table covers 13 points with correct exclusion rules', () => {
-    const { DAMAGE_TERMS_TABLE } = require('./src/utils/protectionConfig');
+    const { DAMAGE_TERMS_TABLE } = require('../src/utils/protectionConfig');
     assert.strictEqual(DAMAGE_TERMS_TABLE.length, 13);
     const minorScratches = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Minor scratches');
     const damagedWheel = DAMAGE_TERMS_TABLE.find(t => t.damageType === 'Damaged wheel');
@@ -413,7 +413,7 @@ async function main() {
 
   // Test 36: Valuable items passenger responsibility statement and exclusions are defined
   runTest('36. Valuable items passenger responsibility statement and exclusions defined', () => {
-    const { VALUABLE_EXCLUDED_ITEMS, PRE_LAUNCH_POLICY_TERMS } = require('./src/utils/protectionConfig');
+    const { VALUABLE_EXCLUDED_ITEMS, PRE_LAUNCH_POLICY_TERMS } = require('../src/utils/protectionConfig');
     assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('cash'));
     assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('jewelry'));
     assert.ok(VALUABLE_EXCLUDED_ITEMS.includes('laptops'));
@@ -427,7 +427,7 @@ async function main() {
 
   // Test 37: Incident reporting & claims architecture supports loss, damage, and theft
   runTest('37. Claims architecture supports loss, damage, theft with CLM- ID format', () => {
-    const schemaSql = fs.readFileSync(path.join(__dirname, 'supabase', 'ONECOOLIE_JOURNEY_PROTECTION_SCHEMA.sql'), 'utf8');
+    const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'ONECOOLIE_JOURNEY_PROTECTION_SCHEMA.sql'), 'utf8');
     assert.ok(schemaSql.includes('claim_type TEXT DEFAULT \'damage\''));
     assert.ok(schemaSql.includes('incident_date DATE'));
     assert.ok(schemaSql.includes('damage_type TEXT'));
@@ -438,9 +438,9 @@ async function main() {
 
   // Test 38: Zero references to ₹1 lakh, 100000, or 1 lakh across policy terms and passenger UI
   runTest('38. Universal accidental payout amount (₹1 lakh) is absent from protection', () => {
-    const termsCode = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionTermsModal.jsx'), 'utf8');
-    const cardCode = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionCard.jsx'), 'utf8');
-    const configCode = fs.readFileSync(path.join(__dirname, 'src', 'utils', 'protectionConfig.js'), 'utf8');
+    const termsCode = fs.readFileSync(path.join(__dirname, '..', '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionTermsModal.jsx'), 'utf8');
+    const cardCode = fs.readFileSync(path.join(__dirname, '..', '..', 'client', 'src', 'components', 'protection', 'JourneyProtectionCard.jsx'), 'utf8');
+    const configCode = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'protectionConfig.js'), 'utf8');
 
     [termsCode, cardCode, configCode].forEach((content) => {
       assert.strictEqual(content.includes('100000'), false);

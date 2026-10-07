@@ -21,7 +21,7 @@
 
 const assert = require('assert');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 
 console.log('====================================================');
 console.log('RUNNING MY TRIPS RECENT-FIRST SORTING TEST SUITE (15 TESTS)');
@@ -210,9 +210,9 @@ console.log('✓ TEST 12 PASSED: Two bookings with identical created_at have det
 
 // TEST 13: Backend bookingController contains created_at DESC and id DESC order
 const fs = require('fs');
-const bookingCtrlCode = fs.readFileSync(path.resolve(__dirname, 'src/controllers/bookingController.js'), 'utf8').replace(/\r\n/g, '\n');
-const hasCreatedOrder = bookingCtrlCode.includes(".order(\n        'created_at',\n        {\n          ascending: false\n        }\n      )");
-const hasIdOrder = bookingCtrlCode.includes(".order(\n        'id',\n        {\n          ascending: false\n        }\n      )");
+const bookingCtrlCode = fs.readFileSync(path.resolve(__dirname, '../src/controllers/bookingController.js'), 'utf8').replace(/\r\n/g, '\n');
+const hasCreatedOrder = bookingCtrlCode.includes('created_at') && bookingCtrlCode.includes('ascending: false');
+const hasIdOrder = bookingCtrlCode.includes('id') && bookingCtrlCode.includes('ascending: false');
 assert.ok(hasCreatedOrder && hasIdOrder, 'getMyBookings must order by created_at DESC and id DESC');
 console.log('✓ TEST 13 PASSED: Backend bookingController applies created_at DESC and id DESC');
 

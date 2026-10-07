@@ -8,7 +8,7 @@ const {
   calculateCancellationRefund,
   canPassengerCancel,
   evaluateAssistantAssignmentForRebooking
-} = require('./src/utils/cancellationRules.js');
+} = require('../src/utils/cancellationRules.js');
 
 console.log('====================================================');
 console.log('RUNNING CANCELLATION & REBOOKING TEST SUITE (14 TESTS)');

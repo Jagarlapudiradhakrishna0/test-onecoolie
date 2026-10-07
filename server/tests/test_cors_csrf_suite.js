@@ -14,15 +14,15 @@ const http = require('http');
 const path = require('path');
 
 // Ensure environment is loaded
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 if (!process.env.SUPABASE_URL) process.env.SUPABASE_URL = 'https://fake-supabase-for-tests.supabase.co';
 if (!process.env.SUPABASE_SECRET_KEY) process.env.SUPABASE_SECRET_KEY = 'fake-supabase-secret-key-for-test-suite';
 process.env.PAYMENT_MODE = 'production';
 process.env.RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_live_test_dummy_key';
 process.env.RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'test_dummy_secret';
 
-const { getAllowedOrigins, isProduction } = require('./src/config/environment');
-const { app } = require('./src/index');
+const { getAllowedOrigins, isProduction } = require('../src/config/environment');
+const { app } = require('../src/index');
 
 console.log('====================================================');
 console.log('RUNNING ONECOOLIE CORS & CSRF DOMAIN VERIFICATION SUITE');
@@ -252,7 +252,7 @@ async function runSuite() {
     // TEST 10: CSRF Protection accepts legitimate Referer with path from https://www.onecoolie.in/login
     // ----------------------------------------------------
     {
-      const { csrfEndpoint, csrfProtection } = require('./src/middleware/csrfProtection');
+      const { csrfEndpoint, csrfProtection } = require('../src/middleware/csrfProtection');
       let nextCalled = false;
       const fakeReq = {
         method: 'POST',
