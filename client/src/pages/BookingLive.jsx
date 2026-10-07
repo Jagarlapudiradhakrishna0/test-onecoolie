@@ -271,12 +271,12 @@ export default function BookingLive() {
           <button
             type="button"
             onClick={() => navigate('/dashboard?tab=trips')}
-            className="flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 bg-black text-white shadow-xs cursor-pointer"
+            className="flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 bg-white text-black border border-black shadow-xs cursor-pointer"
           >
-            <Briefcase className="w-3.5 h-3.5" />
+            <Briefcase className="w-3.5 h-3.5 text-black" />
             <span>My Trips</span>
             {activeBookings.length > 0 && (
-              <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-white text-black">
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-black text-white">
                 {activeBookings.length}
               </span>
             )}
@@ -312,12 +312,12 @@ export default function BookingLive() {
               <button
                 type="button"
                 onClick={() => navigate('/dashboard?tab=trips')}
-                className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold bg-blue-50 text-[#1463FF] border border-blue-200/80 shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-bold bg-white text-black border border-black shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               >
-                <Briefcase className="w-4 h-4 text-[#1463FF]" />
+                <Briefcase className="w-4 h-4 text-black" />
                 <span>My Trips</span>
                 {activeBookings.length > 0 && (
-                  <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-[#1463FF] text-white">
+                  <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-black text-white">
                     {activeBookings.length}
                   </span>
                 )}
