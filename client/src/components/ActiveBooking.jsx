@@ -233,10 +233,51 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
   // ── 4. Derived Booking & Journey Details ──
   const rawStatus = String(booking?.booking_status || booking?.status || 'pending').toLowerCase();
-  const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled';
-  const isCompleted = !isCancelled && rawStatus === 'completed';
-  const isInService = !isCancelled && (rawStatus === 'in_service' || rawStatus === 'in_progress');
+  const rawAssistantStatus = String(booking?.assistant_status || booking?.services?.assistant_status || '').toLowerCase();
+
+  const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled' || rawAssistantStatus === 'cancelled';
+  const isCompleted = !isCancelled && (rawStatus === 'completed' || rawAssistantStatus === 'completed');
+  const isInService = !isCancelled && !isCompleted && (
+    rawStatus === 'in_service' ||
+    rawStatus === 'in_progress' ||
+    rawAssistantStatus === 'in_service'
+  );
+  const isReached = !isCancelled && !isCompleted && !isInService && (
+    rawStatus === 'reached' ||
+    rawStatus === 'arrived' ||
+    rawAssistantStatus === 'reached' ||
+    rawAssistantStatus === 'arrived'
+  );
   const canCancel = !isCancelled && !isCompleted && !isInService;
+
+  // Genuine assistant acceptance from persisted backend/database state
+  // Only true when assistant has actually accepted or progressed to downstream states.
+  // Explicitly FALSE if assistant is only assigned/pending acceptance.
+  const isAssistantAccepted = Boolean(
+    !isCancelled && (
+      ['accepted', 'arriving', 'reached', 'arrived', 'in_service', 'completed'].includes(rawAssistantStatus) ||
+      (
+        ['accepted', 'arriving', 'reached', 'arrived', 'in_service', 'completed'].includes(rawStatus) &&
+        rawAssistantStatus !== 'pending' &&
+        rawAssistantStatus !== 'assigned'
+      )
+    )
+  );
+
+  // Active "On the Way" stage: assistant accepted and en route, before reaching the station
+  const isAssistantOnTheWay = Boolean(
+    !isCancelled &&
+    !isCompleted &&
+    !isReached &&
+    !isInService &&
+    isAssistantAccepted &&
+    (
+      rawAssistantStatus === 'accepted' ||
+      rawAssistantStatus === 'arriving' ||
+      rawStatus === 'accepted' ||
+      rawStatus === 'arriving'
+    )
+  );
 
   // ── Normalize Journey Service Type ('Boarding' | 'De-boarding') ──
   const serviceTypeDisplay = (() => {
@@ -567,20 +608,74 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     }));
   }, [selectedServices, fareAmount]);
 
-  // ── 7. Journey Progress Milestones (Dynamic Active Step State) ──
-  const isAssigned = ['accepted', 'arriving', 'reached', 'arrived', 'in_service', 'in_progress', 'completed'].includes(rawStatus);
-  const isReached = ['reached', 'arrived', 'in_service', 'in_progress', 'completed'].includes(rawStatus);
-  const isServiceInProgress = ['in_service', 'in_progress', 'completed'].includes(rawStatus);
-  const isServiceDone = rawStatus === 'completed';
+  // ── 7. Journey Progress Milestones (Dynamic Active Step State & Real-time Countdown) ──
+  const isServiceDone = isCompleted;
+
+  // Live countdown timer for assistant arrival ETA (ticks only when assistant is actively on the way)
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    // Start countdown ONLY after assistant acceptance AND while actively on the way
+    if (!isAssistantOnTheWay) return;
+
+    setNow(Date.now());
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isAssistantOnTheWay]);
+
+  // Data-driven ETA calculation from persisted assignment and acceptance timestamps
+  const etaText = useMemo(() => {
+    // ETA ONLY appears when assistant has accepted and is actively on the way
+    if (!isAssistantOnTheWay) return null;
+
+    // If explicit flag that ETA is unavailable, do not show fake ETA
+    if (booking?.eta_unavailable) return null;
+
+    const rawAcceptedAt =
+      booking?.accepted_at ||
+      booking?.services?.accepted_at ||
+      (isAssistantAccepted ? (booking?.updated_at || booking?.created_at) : null);
+
+    if (!rawAcceptedAt) return null;
+
+    const acceptedTime = new Date(rawAcceptedAt).getTime();
+    if (isNaN(acceptedTime) || acceptedTime <= 0) return null;
+
+    // Total ETA in minutes (from booking data or default 8-minute dispatch window)
+    const totalMinutes = Number(
+      booking?.eta_minutes ??
+      booking?.services?.eta_minutes ??
+      booking?.assistant_eta_minutes ??
+      8
+    );
+
+    if (isNaN(totalMinutes) || totalMinutes <= 0) return null;
+
+    const totalMs = totalMinutes * 60 * 1000;
+    const elapsedMs = Math.max(0, now - acceptedTime);
+    const remainingMs = totalMs - elapsedMs;
+    const remainingMinutes = Math.max(0, Math.ceil(remainingMs / 60000));
+
+    if (remainingMinutes <= 0) {
+      return 'Arriving now';
+    }
+    if (remainingMinutes === 1) {
+      return 'Arriving in 1 minute';
+    }
+    return `Arriving in ${remainingMinutes} minutes`;
+  }, [isAssistantOnTheWay, isAssistantAccepted, booking, now]);
 
   // Derive current active step dynamically from live journey state
   const currentActiveStepId = useMemo(() => {
     if (isCancelled || isServiceDone) return null;
-    if (rawStatus === 'in_service' || rawStatus === 'in_progress') return 'in_progress';
-    if (rawStatus === 'reached' || rawStatus === 'arrived') return 'reaches_you';
-    if (['accepted', 'arriving', 'assigned', 'allocated'].includes(rawStatus)) return 'on_the_way';
+    if (isInService) return 'in_progress';
+    if (isReached) return 'reaches_you';
+    if (isAssistantOnTheWay) return 'on_the_way';
     return 'confirmed';
-  }, [rawStatus, isCancelled, isServiceDone]);
+  }, [isCancelled, isServiceDone, isInService, isReached, isAssistantOnTheWay]);
 
   const stepIds = ['confirmed', 'on_the_way', 'reaches_you', 'in_progress', 'completed'];
   const activeStepIdx = isServiceDone ? 5 : stepIds.indexOf(currentActiveStepId);
@@ -595,8 +690,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     },
     {
       id: 'on_the_way',
-      label: 'Assistant On the Way',
-      sub: isReached ? 'Assigned & en route' : 'Arriving in 8 minutes',
+      label: isAssistantAccepted ? 'Assistant On the Way' : 'Assistant Needed',
+      sub: isAssistantOnTheWay
+        ? (etaText || null)
+        : (isReached || isInService || isServiceDone ? 'Assigned & en route' : null),
       isDone: isServiceDone || activeStepIdx > 1,
       isCurrent: currentActiveStepId === 'on_the_way',
     },
@@ -626,7 +723,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   // ── 8. Assigned Assistant Information ──
   const hasAssignedAssistant = Boolean(
     !isCancelled &&
-    (booking?.assistant_id || booking?.assistant?.name || rawStatus !== 'pending')
+    (booking?.assistant_id || booking?.assistant?.id || (booking?.assistant?.name && isAssistantAccepted))
   );
   const assistantName = booking?.assistant?.name || 'Ramesh Kumar';
   const assistantRating = booking?.assistant?.rating ? Number(booking.assistant.rating).toFixed(1) : '4.8';
@@ -986,9 +1083,11 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       <p className={`text-xs font-bold mt-2.5 leading-tight ${st.isCurrent ? 'text-[#1463FF]' : st.isDone ? 'text-zinc-900' : 'text-zinc-400'}`}>
                         {st.label}
                       </p>
-                      <p className={`text-[10px] font-medium mt-0.5 leading-tight ${st.isCurrent ? 'text-[#1463FF]' : 'text-zinc-400'}`}>
-                        {st.sub}
-                      </p>
+                      {st.sub ? (
+                        <p className={`text-[10px] font-medium mt-0.5 leading-tight ${st.isCurrent ? 'text-[#1463FF]' : 'text-zinc-400'}`}>
+                          {st.sub}
+                        </p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -1019,7 +1118,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       </h4>
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>{isReached ? 'At platform' : isInService ? 'In service' : 'On the way'}</span>
+                        <span>{isReached ? 'At platform' : isInService ? 'In service' : isAssistantOnTheWay ? 'On the way' : 'Assigned'}</span>
                       </span>
                     </div>
                     <p className="text-xs text-zinc-500 font-medium mt-1 flex items-center gap-1.5">
@@ -1030,18 +1129,20 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                   </div>
                 </div>
 
-                {/* Arriving Box */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 px-3.5 flex items-center gap-3 shadow-2xs">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#1463FF] flex items-center justify-center shrink-0">
-                    <Train className="w-4 h-4 text-[#1463FF]" />
+                {/* Arriving Box — Only shown when assistant is actively on the way */}
+                {isAssistantOnTheWay && (
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 px-3.5 flex items-center gap-3 shadow-2xs">
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#1463FF] flex items-center justify-center shrink-0">
+                      <Train className="w-4 h-4 text-[#1463FF]" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-medium block leading-none">Arriving at platform in</span>
+                      <span className="text-xs sm:text-sm font-extrabold text-zinc-900 block leading-tight mt-0.5">
+                        {etaText || (distance <= 100 ? '1-2 minutes' : `${Math.max(3, Math.round(distance / 60))} minutes`)}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-zinc-400 font-medium block leading-none">Arriving at platform in</span>
-                    <span className="text-xs sm:text-sm font-extrabold text-zinc-900 block leading-tight mt-0.5">
-                      {distance <= 100 ? '1-2 minutes' : `${Math.max(3, Math.round(distance / 60))} minutes`}
-                    </span>
-                  </div>
-                </div>
+                )}
 
                 {/* Call & Message Actions */}
                 <div className="flex items-center gap-2 shrink-0">

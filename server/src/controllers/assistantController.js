@@ -204,6 +204,13 @@ exports.acceptBooking = async (req, res) => {
       });
     }
 
+    const nowIso = new Date().toISOString();
+    const existingServices = (targetBooking.services && typeof targetBooking.services === 'object') ? targetBooking.services : {};
+    const updatedServices = {
+      ...existingServices,
+      accepted_at: nowIso,
+    };
+
     const { data, error } = await supabase
       .from('bookings')
       .update({
@@ -213,7 +220,8 @@ exports.acceptBooking = async (req, res) => {
         start_otp: otp,
         start_otp_verified: false,
         start_otp_expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
+        services: updatedServices,
+        updated_at: nowIso,
       })
       .eq('id', targetBooking.id)
       .eq('booking_status', 'pending')  // atomic guard: only accept pending jobs
