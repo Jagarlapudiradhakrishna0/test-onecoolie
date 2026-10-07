@@ -603,7 +603,11 @@ export default function TripSummaryPage() {
               </div>
               <div>
                 <span className="text-[11px] text-zinc-400 font-medium block">Protection Fee</span>
-                <span className="font-bold text-zinc-900">₹0.50</span>
+                <span className="font-bold text-zinc-900">
+                  {journeyProtection.price != null && !isNaN(Number(journeyProtection.price))
+                    ? `₹${Number(journeyProtection.price).toFixed(2)}`
+                    : '—'}
+                </span>
               </div>
               <div>
                 <span className="text-[11px] text-zinc-400 font-medium block">Status / Terms</span>

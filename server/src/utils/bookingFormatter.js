@@ -206,7 +206,9 @@ function formatBooking(booking, { includeOTP = false } = {}) {
           id: booking.journey_protection.id,
           protection_id: booking.journey_protection.protection_id,
           status: booking.journey_protection.status,
-          price: Number(booking.journey_protection.price) || 0.5,
+          price: (booking.journey_protection.price != null && !isNaN(Number(booking.journey_protection.price)))
+            ? Number(booking.journey_protection.price)
+            : null,
           terms_version: booking.journey_protection.terms_version,
           terms_accepted_at: booking.journey_protection.terms_accepted_at,
           activated_at: booking.journey_protection.activated_at,

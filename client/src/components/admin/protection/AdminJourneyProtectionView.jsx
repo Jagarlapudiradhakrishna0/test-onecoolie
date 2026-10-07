@@ -246,7 +246,7 @@ export default function AdminJourneyProtectionView() {
                         )}
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-zinc-900">
-                        ₹{Number(p.price || 0.5).toFixed(2)}
+                        {p.price != null && !isNaN(Number(p.price)) ? `₹${Number(p.price).toFixed(2)}` : '—'}
                       </td>
                       <td className="py-3.5 px-4 text-zinc-500 font-mono text-[10px] truncate max-w-[120px]" title={p.terms_version}>
                         {p.terms_version || 'v2'}

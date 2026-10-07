@@ -367,7 +367,98 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   );
   const specialInstructions = hasCustomInstructions ? rawSpecialInstructions.trim() : null;
 
-  const fareAmount = Number(booking?.total_price ?? booking?.amount ?? 330.50);
+  // ── Authoritative Stored Fare from Database (ZERO Hardcoded Fallbacks) ──
+  const rawFare = useMemo(() => {
+    if (booking?.total_price != null && !isNaN(Number(booking.total_price))) {
+      return Number(booking.total_price);
+    }
+    if (booking?.amount != null && !isNaN(Number(booking.amount))) {
+      return Number(booking.amount);
+    }
+    if (booking?.payment?.amount != null && !isNaN(Number(booking.payment.amount))) {
+      return Number(booking.payment.amount);
+    }
+    return null;
+  }, [booking?.total_price, booking?.amount, booking?.payment?.amount]);
+
+  // ── Authoritative Journey Protection Pricing from DB / Booking Record ──
+  const protectionPrice = useMemo(() => {
+    // 1. Direct journeyProtection record price from database
+    if (journeyProtection?.price != null && !isNaN(Number(journeyProtection.price))) {
+      const p = Number(journeyProtection.price);
+      if (p > 0) return p;
+    }
+    // 2. Direct booking.journey_protection object price
+    if (booking?.journey_protection?.price != null && !isNaN(Number(booking.journey_protection.price))) {
+      const p = Number(booking.journey_protection.price);
+      if (p > 0) return p;
+    }
+    // 3. Stored pricing_breakdown item in booking.services
+    const breakdownProt = booking?.services?.pricing_breakdown?.find(
+      (b) => b.service === 'journey_protection'
+    );
+    if (breakdownProt && (breakdownProt.total != null || breakdownProt.unit_price != null)) {
+      const p = Number(breakdownProt.total ?? breakdownProt.unit_price);
+      if (!isNaN(p) && p > 0) return p;
+    }
+    return null;
+  }, [journeyProtection, booking]);
+
+  const hasProtection = useMemo(() => {
+    if (protectionPrice == null || protectionPrice <= 0) return false;
+    if (journeyProtection?.status === 'cancelled') return false;
+    return Boolean(
+      (journeyProtection && journeyProtection.status && journeyProtection.status !== 'cancelled') ||
+      (booking?.journey_protection && booking.journey_protection.status !== 'cancelled') ||
+      booking?.services?.pricing_breakdown?.some((b) => b.service === 'journey_protection') ||
+      booking?.has_journey_protection ||
+      booking?.services?.has_journey_protection
+    );
+  }, [protectionPrice, journeyProtection, booking]);
+
+  // Authoritative separation of assistance service charges vs grand total (Single Source of Truth, avoids double-counting)
+  const { serviceTotal, totalFare, isFareAvailable } = useMemo(() => {
+    if (rawFare == null) {
+      if (booking) {
+        console.warn('[ActiveBooking] Fare information unavailable or incomplete for booking:', booking.booking_id || booking.id);
+      }
+      return { serviceTotal: null, totalFare: null, isFareAvailable: false };
+    }
+
+    if (!hasProtection || protectionPrice == null || protectionPrice <= 0) {
+      return {
+        serviceTotal: rawFare,
+        totalFare: rawFare,
+        isFareAvailable: true
+      };
+    }
+
+    // Check if rawFare in database already incorporates the protection fee
+    const breakdownHasProtection = Boolean(
+      booking?.services?.pricing_breakdown?.some((b) => b.service === 'journey_protection')
+    );
+    const createdWithProtection = Boolean(
+      booking?.has_journey_protection || booking?.services?.has_journey_protection
+    );
+
+    if ((breakdownHasProtection || createdWithProtection) && rawFare > protectionPrice) {
+      const sTotal = Number((rawFare - protectionPrice).toFixed(2));
+      return {
+        serviceTotal: sTotal,
+        totalFare: rawFare,
+        isFareAvailable: true
+      };
+    }
+
+    // If protection was recorded separately from rawFare
+    return {
+      serviceTotal: rawFare,
+      totalFare: Number((rawFare + protectionPrice).toFixed(2)),
+      isFareAvailable: true
+    };
+  }, [hasProtection, protectionPrice, rawFare, booking]);
+
+  const fareAmount = totalFare;
   const paymentStatus = isCancelled ? 'CANCELLED' : (booking?.payment_status || 'PAID').toUpperCase();
   const paymentMethod = booking?.payment_method || 'UPI / Card';
 
@@ -507,46 +598,46 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     return list;
   }, [booking?.services]);
 
-  // ── 6. Fare & Payment Line Item Breakdown (SINGLE SOURCE OF PRICING) ──
+  // ── 6. Fare & Payment Line Item Breakdown (STRICTLY FROM DATABASE - ZERO HARDCODED FALLBACKS) ──
   const servicePriceBreakdown = useMemo(() => {
+    // 1. Authoritative stored breakdown from DB (if present on booking record)
+    const dbBreakdown = booking?.services?.pricing_breakdown;
+    if (Array.isArray(dbBreakdown) && dbBreakdown.length > 0) {
+      const assistanceItems = dbBreakdown.filter(
+        (item) => item.service !== 'journey_protection' && item.service !== 'protection'
+      );
+      if (assistanceItems.length > 0) {
+        return assistanceItems.map((item) => ({
+          name: item.label || item.service,
+          price: (item.total != null && !isNaN(Number(item.total)))
+            ? Number(item.total)
+            : (item.unit_price != null && !isNaN(Number(item.unit_price)))
+              ? Number(item.unit_price)
+              : null
+        }));
+      }
+    }
+
+    // 2. If no itemized breakdown array in DB, use selectedServices
     if (selectedServices.length === 0) return [];
 
+    // If single service, the service total belongs entirely to this service
     if (selectedServices.length === 1) {
       return [{
         name: selectedServices[0].name,
-        price: fareAmount > 0 ? fareAmount : 30
+        price: (serviceTotal != null && !isNaN(Number(serviceTotal))) ? serviceTotal : null
       }];
     }
 
-    const defaultRates = {
-      luggage: 60,
-      escort: 50,
-      wheelchair: 30,
-      language: 40,
-      snacks: 60,
-      transport: 90.50,
-    };
-
-    const defaultSum = selectedServices.reduce((acc, s) => acc + (defaultRates[s.key] || 50), 0);
-    if (fareAmount > 0 && Math.abs(defaultSum - fareAmount) > 0.01) {
-      const ratio = fareAmount / defaultSum;
-      return selectedServices.map((s, idx) => {
-        if (idx === selectedServices.length - 1) {
-          const priorSum = selectedServices.slice(0, idx).reduce((acc, ps) => acc + Math.round((defaultRates[ps.key] || 50) * ratio * 100) / 100, 0);
-          return { name: s.name, price: Math.max(0, Math.round((fareAmount - priorSum) * 100) / 100) };
-        }
-        return {
-          name: s.name,
-          price: Math.round((defaultRates[s.key] || 50) * ratio * 100) / 100
-        };
-      });
-    }
-
+    // Multiple selected services without per-item database breakdown:
+    // Do NOT invent fake rates or generate arbitrary numbers on the frontend.
+    // Display each selected service cleanly with price: null (rendered as "Included")
+    // while the authoritative grand total displays totalFare.
     return selectedServices.map((s) => ({
       name: s.name,
-      price: defaultRates[s.key] || 50
+      price: null
     }));
-  }, [selectedServices, fareAmount]);
+  }, [booking?.services?.pricing_breakdown, selectedServices, serviceTotal]);
 
   // ── 7. Journey Progress Milestones (Dynamic Active Step State & Real-time Countdown) ──
   const isServiceDone = isCompleted;
@@ -1420,31 +1511,60 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             </div>
 
             <div>
-              <div className="text-3xl sm:text-4xl font-black text-zinc-900 tracking-tight leading-none">
-                ₹{fareAmount.toFixed(2)}
-              </div>
-              <p className="text-xs font-semibold text-zinc-400 mt-1.5">
-                Assistance Fee
-              </p>
+              {isFareAvailable && totalFare != null ? (
+                <>
+                  <div className="text-3xl sm:text-4xl font-black text-zinc-900 tracking-tight leading-none">
+                    ₹{totalFare.toFixed(2)}
+                  </div>
+                  <p className="text-xs font-semibold text-zinc-400 mt-1.5">
+                    Total Amount
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl sm:text-3xl font-black text-zinc-700 tracking-tight leading-none">
+                    Fare unavailable
+                  </div>
+                  <p className="text-xs font-semibold text-zinc-400 mt-1.5">
+                    Fare information unavailable
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Itemized Service Breakdown */}
             <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
-              {servicePriceBreakdown.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between text-zinc-600 font-medium py-0.5">
-                  <span className="truncate pr-2">{item.name}</span>
+              {servicePriceBreakdown.length > 0 ? (
+                servicePriceBreakdown.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-zinc-600 font-medium py-0.5">
+                    <span className="truncate pr-2">{item.name}</span>
+                    <span className="font-mono font-bold text-zinc-900 shrink-0">
+                      {item.price != null ? `₹${Number(item.price).toFixed(2)}` : 'Included'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-zinc-400 italic py-0.5">
+                  {isFareAvailable ? 'Station Assistance Service' : 'Fare information unavailable'}
+                </div>
+              )}
+
+              {/* Journey Protection Line Item */}
+              {hasProtection && protectionPrice != null && protectionPrice > 0 && (
+                <div className="flex items-center justify-between text-zinc-600 font-medium py-0.5">
+                  <span className="truncate pr-2">Journey Protection</span>
                   <span className="font-mono font-bold text-zinc-900 shrink-0">
-                    ₹{Number(item.price).toFixed(2)}
+                    ₹{protectionPrice.toFixed(2)}
                   </span>
                 </div>
-              ))}
+              )}
             </div>
 
             {/* Total Amount Row */}
             <div className="pt-3 border-t border-slate-200/80 flex items-center justify-between text-xs font-bold">
               <span className="font-extrabold text-zinc-900">Total Amount</span>
               <span className="font-mono font-black text-sm text-zinc-900">
-                ₹{fareAmount.toFixed(2)}
+                {isFareAvailable && totalFare != null ? `₹${totalFare.toFixed(2)}` : 'Unavailable'}
               </span>
             </div>
 
@@ -1493,10 +1613,24 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-semibold text-zinc-400 block leading-none">Journey Protection</span>
-                <span className="text-xl font-black text-zinc-900 block leading-tight mt-1">₹0.50</span>
+                <span className="text-xl font-black text-zinc-900 block leading-tight mt-1">
+                  {hasProtection && protectionPrice != null && protectionPrice > 0
+                    ? `₹${protectionPrice.toFixed(2)}`
+                    : 'Not Added'}
+                </span>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
-                {journeyProtection?.status === 'active' ? 'Active' : 'Active'}
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                hasProtection && (journeyProtection?.status === 'active' || paymentStatus === 'PAID')
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80'
+                  : hasProtection && (journeyProtection?.status === 'pending_payment' || paymentStatus === 'PENDING')
+                    ? 'bg-amber-50 text-amber-800 border border-amber-200/80'
+                    : 'bg-zinc-100 text-zinc-600 border border-zinc-200'
+              }`}>
+                {hasProtection
+                  ? (journeyProtection?.status === 'active' || paymentStatus === 'PAID'
+                    ? 'Active'
+                    : 'Pending Payment')
+                  : 'Not Added'}
               </span>
             </div>
 
@@ -1504,23 +1638,57 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500 font-sans">Protection ID</span>
                 <span className="font-bold text-zinc-900 select-all">
-                  {journeyProtection?.protection_id || `OCP-${(bookingUuid || 'ZC3TPQ36').slice(-8).toUpperCase()}`}
+                  {hasProtection
+                    ? (journeyProtection?.protection_id || `OCP-${(bookingUuid || 'ZC3TPQ36').slice(-8).toUpperCase()}`)
+                    : 'Not Added'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500 font-sans">Coverage</span>
                 <span className="font-bold text-zinc-800 font-sans">
-                  {paymentMethod?.toLowerCase().includes('cash') ? 'Cash / COD' : 'UPI / Card'}
+                  {hasProtection
+                    ? (paymentMethod?.toLowerCase().includes('cash') ? 'Cash / COD' : 'UPI / Card')
+                    : 'None'}
                 </span>
               </div>
             </div>
 
             {/* Protective Callout Banner */}
-            <div className="bg-amber-50/70 border border-amber-200/70 rounded-2xl p-3 flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-[11px] text-amber-900 leading-snug">
-                <p className="font-bold">You're protected for this journey.</p>
-                <p className="text-amber-700 mt-0.5">Protection activates automatically.</p>
+            <div className={`border rounded-2xl p-3 flex items-start gap-2.5 ${
+              hasProtection
+                ? (journeyProtection?.status === 'active' || paymentStatus === 'PAID'
+                  ? 'bg-blue-50/60 border-blue-200/70 text-blue-900'
+                  : 'bg-amber-50/70 border-amber-200/70 text-amber-900')
+                : 'bg-zinc-50 border-zinc-200 text-zinc-700'
+            }`}>
+              <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${
+                hasProtection
+                  ? (journeyProtection?.status === 'active' || paymentStatus === 'PAID'
+                    ? 'text-blue-600'
+                    : 'text-amber-600')
+                  : 'text-zinc-400'
+              }`} />
+              <div className="text-[11px] leading-snug">
+                <p className="font-bold">
+                  {hasProtection
+                    ? (journeyProtection?.status === 'active' || paymentStatus === 'PAID'
+                      ? "You're protected for this journey."
+                      : "Protection pending payment.")
+                    : 'Journey Protection not added.'}
+                </p>
+                <p className={
+                  hasProtection
+                    ? (journeyProtection?.status === 'active' || paymentStatus === 'PAID'
+                      ? 'text-blue-700 mt-0.5'
+                      : 'text-amber-700 mt-0.5')
+                    : 'text-zinc-500 mt-0.5'
+                }>
+                  {hasProtection
+                    ? (journeyProtection?.status === 'active' || paymentStatus === 'PAID'
+                      ? 'Protection is active for this trip.'
+                      : 'Protection activates automatically once payment is completed.')
+                    : 'Protection was not opted in for this booking.'}
+                </p>
               </div>
             </div>
 
