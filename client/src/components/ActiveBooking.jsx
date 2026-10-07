@@ -33,7 +33,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from '../api/axios';
-import vandeBharatClean from '../assets/images/vande_bharat_header_clean.jpg';
 import vandeBharatCrisp from '../assets/images/vande-bharat-crisp.jpg';
 import CancellationModal from './cancellation/CancellationModal';
 import RebookingModal from './cancellation/RebookingModal';
@@ -775,12 +774,16 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             {/* Background Image with Dark Vignette/Gradient Overlay */}
             <div className="absolute inset-0 z-0">
               <img
-                src={vandeBharatClean || vandeBharatCrisp}
+                src={vandeBharatCrisp}
                 alt="Indian Railways Vande Bharat"
-                className="w-full h-full object-cover object-right-bottom sm:object-center"
+                className="w-full h-full object-cover object-[80%_center] sm:object-[82%_center]"
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent sm:hidden" />
+              {/* Smooth gradient blend from solid left banner color into photo (train on right remains clear and unobstructed) */}
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 from-20% via-slate-950/80 via-45% to-transparent to-70% pointer-events-none" />
+              {/* Subtle bottom vignette for trip pills contrast */}
+              <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-slate-950/80 to-transparent pointer-events-none" />
+              {/* Mobile subtle gradient for vertical contrast */}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent pointer-events-none sm:hidden" />
             </div>
 
             {/* Content overlay */}
