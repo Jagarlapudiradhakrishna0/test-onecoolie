@@ -567,40 +567,52 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     }));
   }, [selectedServices, fareAmount]);
 
-  // ── 7. Journey Progress Milestones ──
-  const isAssigned = ['accepted', 'arriving', 'reached', 'arrived', 'in_service', 'completed'].includes(rawStatus);
-  const isReached = ['reached', 'arrived', 'in_service', 'completed'].includes(rawStatus);
-  const isServiceInProgress = ['in_service', 'completed'].includes(rawStatus);
+  // ── 7. Journey Progress Milestones (Dynamic Active Step State) ──
+  const isAssigned = ['accepted', 'arriving', 'reached', 'arrived', 'in_service', 'in_progress', 'completed'].includes(rawStatus);
+  const isReached = ['reached', 'arrived', 'in_service', 'in_progress', 'completed'].includes(rawStatus);
+  const isServiceInProgress = ['in_service', 'in_progress', 'completed'].includes(rawStatus);
   const isServiceDone = rawStatus === 'completed';
+
+  // Derive current active step dynamically from live journey state
+  const currentActiveStepId = useMemo(() => {
+    if (isCancelled || isServiceDone) return null;
+    if (rawStatus === 'in_service' || rawStatus === 'in_progress') return 'in_progress';
+    if (rawStatus === 'reached' || rawStatus === 'arrived') return 'reaches_you';
+    if (['accepted', 'arriving', 'assigned', 'allocated'].includes(rawStatus)) return 'on_the_way';
+    return 'confirmed';
+  }, [rawStatus, isCancelled, isServiceDone]);
+
+  const stepIds = ['confirmed', 'on_the_way', 'reaches_you', 'in_progress', 'completed'];
+  const activeStepIdx = isServiceDone ? 5 : stepIds.indexOf(currentActiveStepId);
 
   const progressSteps = [
     {
       id: 'confirmed',
       label: 'Booking Confirmed',
       sub: paidOnFormatted,
-      isDone: true,
-      isCurrent: !isAssigned && !isCancelled,
+      isDone: isServiceDone || activeStepIdx > 0,
+      isCurrent: currentActiveStepId === 'confirmed',
     },
     {
       id: 'on_the_way',
       label: 'Assistant On the Way',
       sub: isReached ? 'Assigned & en route' : 'Arriving in 8 minutes',
-      isDone: isReached || (isAssigned && !isReached),
-      isCurrent: isAssigned && !isReached,
+      isDone: isServiceDone || activeStepIdx > 1,
+      isCurrent: currentActiveStepId === 'on_the_way',
     },
     {
       id: 'reaches_you',
       label: 'Assistant Reaches You',
       sub: 'At platform',
-      isDone: isReached,
-      isCurrent: isReached && !isServiceInProgress,
+      isDone: isServiceDone || activeStepIdx > 2,
+      isCurrent: currentActiveStepId === 'reaches_you',
     },
     {
       id: 'in_progress',
       label: 'In Progress',
       sub: 'During your journey',
-      isDone: isServiceInProgress,
-      isCurrent: isServiceInProgress && !isServiceDone,
+      isDone: isServiceDone || activeStepIdx > 3,
+      isCurrent: currentActiveStepId === 'in_progress',
     },
     {
       id: 'completed',
@@ -942,7 +954,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       {idx < progressSteps.length - 1 && (
                         <div
                           className={`absolute top-4 left-1/2 w-full h-[2px] -z-0 transition-all ${
-                            progressSteps[idx + 1].isDone || st.isDone ? 'bg-[#1463FF]' : 'bg-slate-200'
+                            idx < activeStepIdx ? 'bg-[#1463FF]' : 'bg-slate-200'
                           }`}
                         />
                       )}
@@ -950,17 +962,21 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       {/* Icon */}
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs relative z-10 transition-all ${
-                          st.isDone
-                            ? 'bg-[#1463FF] text-white shadow-xs'
-                            : st.isCurrent
-                              ? 'bg-white border-2 border-[#1463FF] text-[#1463FF] ring-4 ring-blue-100'
+                          st.isCurrent
+                            ? 'bg-[#1463FF] text-white shadow-xs animate-live-step-pulse'
+                            : st.isDone
+                              ? 'bg-[#1463FF] text-white shadow-xs'
                               : 'bg-white border border-slate-300 text-slate-300'
                         }`}
                       >
                         {st.isDone ? (
                           <Check className="w-4 h-4 stroke-[3]" />
                         ) : st.isCurrent ? (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#1463FF] animate-pulse" />
+                          st.id === 'confirmed' ? (
+                            <Check className="w-4 h-4 stroke-[3]" />
+                          ) : (
+                            <span className="w-2.5 h-2.5 rounded-full bg-white" />
+                          )
                         ) : (
                           <span className="w-2 h-2 rounded-full bg-slate-300" />
                         )}

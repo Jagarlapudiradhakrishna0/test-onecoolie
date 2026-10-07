@@ -751,3 +751,34 @@ h6 {
 .animate-train-glide {
   animation: trainTrackGlide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
+
+/* ============================================================
+   JOURNEY PROGRESS ACTIVE STEP PULSE ANIMATION
+   Soft, professional status indicator pulse with subtle expanding glow
+   ============================================================ */
+@keyframes liveStepPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(20, 99, 255, 0.65), 0 0 0 0 rgba(20, 99, 255, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(20, 99, 255, 0.25), 0 0 0 12px rgba(20, 99, 255, 0);
+    transform: scale(1.06);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(20, 99, 255, 0), 0 0 0 0 rgba(20, 99, 255, 0);
+    transform: scale(1);
+  }
+}
+
+.animate-live-step-pulse {
+  animation: liveStepPulse 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-live-step-pulse {
+    animation: none !important;
+    transform: none !important;
+    box-shadow: 0 0 0 4px rgba(20, 99, 255, 0.3) !important;
+  }
+}
