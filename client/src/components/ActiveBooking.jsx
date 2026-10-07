@@ -239,7 +239,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   // ── 4. Derived Booking Details (From Real Database Booking) ──
   const rawStatus = (booking?.booking_status || booking?.status || 'pending').toLowerCase();
   const isCompleted = rawStatus === 'completed';
-  const isCancelled = rawStatus === 'cancelled';
+  const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled';
   const isInService = rawStatus === 'in_service';
   const canCancel = !isCancelled && !isCompleted && !isInService;
   const isBoarding = !(booking?.action_type === 'collect_from_seat' || booking?.services?.action_type === 'collect_from_seat');
@@ -898,7 +898,8 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
               Trip Progress
             </h3>
 
-            {/* Vertical Timeline */}
+            {/* Vertical Timeline — hidden for cancelled bookings */}
+            {!isCancelled && (
             <div className="relative space-y-5 pl-1">
               {steps.map((step, idx) => {
                 const isDone = step.isDone;
@@ -966,6 +967,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                 );
               })}
             </div>
+            )}
 
             {/* Contextual Blue Info Box underneath Timeline */}
             {!isCancelled && !isCompleted && (

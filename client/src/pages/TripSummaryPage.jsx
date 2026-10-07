@@ -181,7 +181,10 @@ export default function TripSummaryPage() {
   const seatNumber = booking?.seat_number || booking?.services?.seat_number || 'Unassigned';
   const berthType = booking?.berth_type || booking?.services?.berth_type || 'Berth';
   const pnr = booking?.pnr || booking?.services?.pnr || null;
-  const status = (booking?.booking_status || booking?.status || 'COMPLETED').toUpperCase();
+  // Normalize status: handle CANCELED (US) vs CANCELLED (UK) spellings and case
+  const rawStatusUpper = (booking?.booking_status || booking?.status || 'COMPLETED').toUpperCase();
+  const status = rawStatusUpper === 'CANCELED' ? 'CANCELLED' : rawStatusUpper;
+  const isCancelled = status === 'CANCELLED';
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
@@ -357,7 +360,11 @@ export default function TripSummaryPage() {
                 {copiedId ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
               </button>
             </div>
-            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+              isCancelled
+                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}>
               {status}
             </span>
           </div>
@@ -368,7 +375,7 @@ export default function TripSummaryPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
             <div>
               <span className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase font-mono block mb-1">
-                COMPLETED TRIP SUMMARY
+                {isCancelled ? 'CANCELLED BOOKING' : 'COMPLETED TRIP SUMMARY'}
               </span>
               <h1 className="text-2xl sm:text-3xl font-black text-black tracking-tight">
                 Train {trainNo} · <span className="text-[#146BFF]">{trainName}</span>
@@ -631,7 +638,58 @@ export default function TripSummaryPage() {
           )}
         </div>
 
-        {/* ── 3. MISSION TIMELINE MILESTONES ── */}
+        {/* ── 3. MISSION TIMELINE MILESTONES — hidden for cancelled bookings ── */}
+        {isCancelled ? (
+          <div className="bg-rose-50/60 rounded-3xl border border-rose-200/70 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 sm:p-8 space-y-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <h3 className="font-extrabold text-sm sm:text-base text-rose-900">
+                Booking Cancelled
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div className="p-4 bg-white/70 border border-rose-100 rounded-2xl space-y-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 block">
+                  Cancellation Date
+                </span>
+                <p className="text-xs font-bold text-zinc-800">
+                  {formatDateTime(booking.cancelled_at || booking.updated_at || booking.created_at)}
+                </p>
+                <p className="text-[11px] text-zinc-400">Booking was cancelled on this date</p>
+              </div>
+              {(booking.cancellation_reason || booking.cancel_reason) && (
+                <div className="p-4 bg-white/70 border border-rose-100 rounded-2xl space-y-1">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 block">
+                    Cancellation Reason
+                  </span>
+                  <p className="text-xs font-bold text-zinc-800">
+                    {booking.cancellation_reason || booking.cancel_reason}
+                  </p>
+                </div>
+              )}
+            </div>
+            {(booking.refund_amount != null || booking.cancellation_fee != null) && (
+              <div className="p-4 bg-white/70 border border-rose-100 rounded-2xl flex flex-wrap gap-6">
+                {booking.cancellation_fee != null && (
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 block">
+                      Cancellation Fee
+                    </span>
+                    <p className="text-sm font-black text-zinc-900">₹{booking.cancellation_fee}</p>
+                  </div>
+                )}
+                {booking.refund_amount != null && (
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 block">
+                      Refund Amount
+                    </span>
+                    <p className="text-sm font-black text-zinc-900">₹{booking.refund_amount}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 sm:p-8 space-y-4">
 
           <h3 className="font-extrabold text-sm sm:text-base text-zinc-900">
@@ -645,7 +703,7 @@ export default function TripSummaryPage() {
                 ✓ Booking Confirmed
               </span>
               <p className="text-xs font-bold text-zinc-800">{formatDateTime(booking.created_at)}</p>
-              <p className="text-[11px] text-zinc-400">Assistance requested & recorded</p>
+              <p className="text-[11px] text-zinc-400">Assistance requested &amp; recorded</p>
             </div>
 
             {/* Step 2 */}
@@ -671,6 +729,7 @@ export default function TripSummaryPage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* ── 4. RATING & FEEDBACK SECTION (PERSISTENT & INTERACTIVE) ── */}
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 sm:p-8 space-y-4">

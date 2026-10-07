@@ -2837,7 +2837,7 @@ export default function PassengerDashboard() {
                     const { month, day, year, weekday } = formatDateBlock(b.journey_date);
                     const rawStatus = String(b.booking_status || b.status || '').toLowerCase();
                     const isCompleted = rawStatus === 'completed';
-                    const isCancelled = rawStatus === 'cancelled';
+                    const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled';
                     const isInService = rawStatus === 'in_service';
                     const canCancel = !isCancelled && !isCompleted && !isInService;
                     const isPending = !isCompleted && !isCancelled;
@@ -3154,7 +3154,8 @@ export default function PassengerDashboard() {
                             </div>
                           )}
 
-                          {/* Row 4: 4-Stage Horizontal Progress Tracker */}
+                          {/* Row 4: 4-Stage Horizontal Progress Tracker — hidden for cancelled bookings */}
+                          {!isCancelled && (
                           <div className="pt-2 pb-1 overflow-x-auto no-scrollbar">
                             <div className="flex items-start justify-between min-w-[310px]">
                               {trackerSteps.map((step, idx) => {
@@ -3227,6 +3228,7 @@ export default function PassengerDashboard() {
                               })}
                             </div>
                           </div>
+                          )}
 
                           {/* Row 4.5: Journey Protection Section */}
                           {b.journey_protection && b.journey_protection.status === 'active' ? (
@@ -3508,7 +3510,8 @@ export default function PassengerDashboard() {
                               )}
                             </div>
 
-                            {/* Row 3: 4-Stage Horizontal Progress Tracker */}
+                            {/* Row 3: 4-Stage Horizontal Progress Tracker — hidden for cancelled bookings */}
+                            {!isCancelled && (
                             <div className="pt-2 pb-1 overflow-x-auto no-scrollbar">
                               <div className="flex items-start justify-between min-w-[340px] sm:min-w-0">
                                 {trackerSteps.map((step, idx) => {
@@ -3581,6 +3584,7 @@ export default function PassengerDashboard() {
                                 })}
                               </div>
                             </div>
+                            )}
                           </div>
 
                           {/* RIGHT COLUMN: Options Menu + Fee + View Trip Button */}
