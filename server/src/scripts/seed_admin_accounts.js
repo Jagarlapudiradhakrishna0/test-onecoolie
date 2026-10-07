@@ -26,8 +26,10 @@ async function seedAdminAccounts() {
 
   if (existingAdmins && existingAdmins.length > 0 && existingAdmins[0].password) {
     passwordHash = existingAdmins[0].password;
+  } else if (process.env.INITIAL_ADMIN_PASSWORD) {
+    passwordHash = await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD, 12);
   } else {
-    passwordHash = await bcrypt.hash('Password123!', 10);
+    throw new Error('[SECURITY FATAL] INITIAL_ADMIN_PASSWORD environment variable must be provided to provision initial admin accounts.');
   }
 
   // 2. Ensure admin01@onecoolie.in
@@ -113,8 +115,7 @@ async function seedAdminAccounts() {
       .update({
         role: 'admin',
         admin_role: 'super_admin',
-        is_approved: true,
-        password: passwordHash
+        is_approved: true
       })
       .eq('id', admin2.id);
     console.log(`[SEED] Verified admin02@onecoolie.in (${admin2.id})`);
