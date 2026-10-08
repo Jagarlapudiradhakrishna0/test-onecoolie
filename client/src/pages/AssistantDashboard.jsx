@@ -41,6 +41,7 @@ import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import ProfileMenu from '../context/ProfileMenu';
 import AssistantNotifications from '../components/AssistantNotifications';
+import { useNotifications } from '../context/NotificationContext';
 import { activeServices, SERVICE_LABELS } from '../utils/services';
 import AssistantJobCard from '../components/AssistantJobCard';
 import oneCoolieLogo from '../assets/onecoolie-logo.png';
@@ -95,8 +96,21 @@ export default function AssistantDashboard() {
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketSuccess, setTicketSuccess] = useState('');
   const [ticketError, setTicketError] = useState('');
-  /* ── User Auth Session ──────────────────────────────────── */
+  /* ── User Auth Session & Notifications ──────────────────── */
   const { user } = useAuth();
+  const { unreadByType, markReadByType } = useNotifications();
+
+  /* ── Mark Notifications Read Upon Viewing Section ─────────── */
+  useEffect(() => {
+    if (!user?.id) return;
+    if (tab === 'dashboard') {
+      markReadByType('request');
+    } else if (tab === 'history') {
+      markReadByType('job_completed');
+    } else if (tab === 'earnings') {
+      markReadByType('rating');
+    }
+  }, [tab, user?.id, markReadByType]);
 
   const [supportTickets, setSupportTickets] = useState(() => {
     try {
@@ -962,10 +976,30 @@ export default function AssistantDashboard() {
           {/* Navigation Links */}
           <div className="space-y-1">
             {[
-              { id: 'dashboard', label: t('nav.dashboard') || t('dashboard'), icon: LayoutDashboard, badge: hasActiveJob ? null : (requests.length > 0 ? requests.length : null) },
-              { id: 'jobs', label: activeJobs.length <= 1 ? (t('myAssignedJob') || t('nav.jobs')) : (t('myJobs') || t('nav.jobs')), icon: Briefcase, badge: activeJobs.length },
-              { id: 'history', label: t('tripHistory') || t('nav.myTrips'), icon: History, badge: completedJobs.length },
-              { id: 'earnings', label: t('earningsReviews') || t('nav.earnings'), icon: IndianRupee, badge: ratedJobs.length > 0 ? ratedJobs.length : null },
+              {
+                id: 'dashboard',
+                label: t('nav.dashboard') || t('dashboard'),
+                icon: LayoutDashboard,
+                badge: tab !== 'dashboard' && unreadByType?.request > 0 ? unreadByType.request : null
+              },
+              {
+                id: 'jobs',
+                label: activeJobs.length <= 1 ? (t('myAssignedJob') || t('nav.jobs')) : (t('myJobs') || t('nav.jobs')),
+                icon: Briefcase,
+                badge: activeJobs.length > 0 ? activeJobs.length : null
+              },
+              {
+                id: 'history',
+                label: t('tripHistory') || t('nav.myTrips'),
+                icon: History,
+                badge: tab !== 'history' && unreadByType?.job_completed > 0 ? unreadByType.job_completed : null
+              },
+              {
+                id: 'earnings',
+                label: t('earningsReviews') || t('nav.earnings'),
+                icon: IndianRupee,
+                badge: tab !== 'earnings' && unreadByType?.rating > 0 ? unreadByType.rating : null
+              },
               { id: 'wallet', label: t('nav.wallet') || 'Wallet', icon: Wallet, badge: null },
               { id: 'profile', label: t('nav.profile') || t('profile'), icon: User, badge: null },
               { id: 'support', label: t('nav.support') || t('nav.help') || t('support'), icon: LifeBuoy, badge: null },
@@ -2333,12 +2367,32 @@ export default function AssistantDashboard() {
       {/* ── MOBILE BOTTOM NAVIGATION BAR ──────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-black/95 backdrop-blur-md border-t border-slate-200 dark:border-zinc-800 px-2 py-2 flex items-center justify-around">
         {[
-          { id: 'dashboard', label: t('nav.dashboard') || t('dashboard'), icon: LayoutDashboard },
-          { id: 'jobs', label: activeJobs.length <= 1 ? (t('myAssignedJob') || t('nav.jobs')) : (t('myJobs') || t('nav.jobs')), icon: Briefcase },
-          { id: 'history', label: t('tripHistory') || t('nav.myTrips'), icon: History },
-          { id: 'earnings', label: t('earningsReviews') || t('nav.earnings'), icon: IndianRupee },
-          { id: 'wallet', label: t('nav.wallet') || 'Wallet', icon: Wallet },
-          { id: 'profile', label: t('nav.profile') || t('profile'), icon: User },
+          {
+            id: 'dashboard',
+            label: t('nav.dashboard') || t('dashboard'),
+            icon: LayoutDashboard,
+            badge: tab !== 'dashboard' && unreadByType?.request > 0 ? unreadByType.request : null
+          },
+          {
+            id: 'jobs',
+            label: activeJobs.length <= 1 ? (t('myAssignedJob') || t('nav.jobs')) : (t('myJobs') || t('nav.jobs')),
+            icon: Briefcase,
+            badge: activeJobs.length > 0 ? activeJobs.length : null
+          },
+          {
+            id: 'history',
+            label: t('tripHistory') || t('nav.myTrips'),
+            icon: History,
+            badge: tab !== 'history' && unreadByType?.job_completed > 0 ? unreadByType.job_completed : null
+          },
+          {
+            id: 'earnings',
+            label: t('earningsReviews') || t('nav.earnings'),
+            icon: IndianRupee,
+            badge: tab !== 'earnings' && unreadByType?.rating > 0 ? unreadByType.rating : null
+          },
+          { id: 'wallet', label: t('nav.wallet') || 'Wallet', icon: Wallet, badge: null },
+          { id: 'profile', label: t('nav.profile') || t('profile'), icon: User, badge: null },
         ].map((item, i) => {
           const IconComp = item.icon;
           const isActive = tab === item.id;
@@ -2347,10 +2401,17 @@ export default function AssistantDashboard() {
               key={`${item.id}-${i}`}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-xl text-[9px] font-bold transition-all min-w-0 ${isActive ? 'text-[#2563EB] dark:text-blue-400' : 'text-slate-400 dark:text-zinc-500'
+              className={`relative flex flex-col items-center gap-0.5 px-1 py-1 rounded-xl text-[9px] font-bold transition-all min-w-0 ${isActive ? 'text-[#2563EB] dark:text-blue-400' : 'text-slate-400 dark:text-zinc-500'
                 }`}
             >
-              <IconComp size={16} />
+              <div className="relative">
+                <IconComp size={16} />
+                {item.badge !== null && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 px-1 min-w-[13px] h-3.5 flex items-center justify-center rounded-full text-[8px] font-bold bg-[#2563EB] text-white">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
               <span className="truncate max-w-[46px] leading-tight text-center">{item.label}</span>
             </button>
           );

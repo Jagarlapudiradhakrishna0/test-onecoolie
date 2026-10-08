@@ -66,6 +66,7 @@ import {
 } from 'recharts';
 import BookingInspectorModal from './booking-inspector/BookingInspectorModal';
 import toast from 'react-hot-toast';
+import { useNotifications } from '../../context/NotificationContext';
 
 import oneCoolieLogo from '../../assets/onecoolie-logo.png';
 import trainImg from '../../assets/images/vande_bharat_ref_crop.jpg';
@@ -522,26 +523,19 @@ export function AdminTopHeader({
   setSelectedDrawerBooking,
   setSelectedDeskTicketId
 }) {
+  const {
+    notifications: dbNotifications,
+    markAsRead: dbMarkAsRead,
+    markAllAsRead: dbMarkAllAsRead,
+    dismissNotification: dbDismissNotification,
+  } = useNotifications();
+
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notificationFilterTab, setNotificationFilterTab] = useState('ALL');
-  const [readNotificationIds, setReadNotificationIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('admin_read_notifications');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [dismissedNotificationIds, setDismissedNotificationIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('admin_dismissed_notifications');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [readNotificationIds, setReadNotificationIds] = useState([]);
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState([]);
 
   const [isDarkMode, setIsDarkMode] = useState(
     typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : false
@@ -581,19 +575,6 @@ export function AdminTopHeader({
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isNotificationOpen]);
-
-  // Persist read and dismissed notifications
-  useEffect(() => {
-    try {
-      localStorage.setItem('admin_read_notifications', JSON.stringify(readNotificationIds));
-    } catch {}
-  }, [readNotificationIds]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('admin_dismissed_notifications', JSON.stringify(dismissedNotificationIds));
-    } catch {}
-  }, [dismissedNotificationIds]);
 
   const toggleTheme = () => {
     const isDark = document.documentElement.classList.toggle('dark');
@@ -826,6 +807,34 @@ export function AdminTopHeader({
         });
     }
 
+    // 8. Administrative Database Notifications
+    if (Array.isArray(dbNotifications) && dbNotifications.length > 0) {
+      dbNotifications.forEach((bn) => {
+        if (!bn || bn.is_dismissed) return;
+        const isUrgent = bn.type === 'sos' || bn.type === 'security';
+        const isKyc = bn.type === 'kyc';
+        list.push({
+          id: bn.id,
+          dbId: bn.id,
+          type: bn.type || 'system',
+          tabGroup: isUrgent ? 'urgent' : isKyc ? 'kyc' : 'finance',
+          badge: bn.type ? bn.type.toUpperCase() : 'NOTICE',
+          badgeColor: isUrgent
+            ? 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800'
+            : 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800',
+          iconBg: isUrgent
+            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/90 dark:text-rose-400 border-rose-300 dark:border-rose-800'
+            : 'bg-blue-100 text-blue-700 dark:bg-blue-950/90 dark:text-blue-400 border-blue-300 dark:border-blue-800',
+          title: bn.title || 'Administrative Notice',
+          description: bn.message || '',
+          timestamp: bn.created_at || new Date().toISOString(),
+          actionLabel: 'Details',
+          isDbRead: Boolean(bn.is_read),
+          onAction: () => {}
+        });
+      });
+    }
+
     const sorted = list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     const seen = new Set();
     const deduplicated = [];
@@ -838,7 +847,7 @@ export function AdminTopHeader({
       }
     }
     return deduplicated;
-  }, [sosAlerts, kycQueue, securityIncidentsList, incidentsList, payoutsList, supportTickets, bookings, setActiveTab, setSelectedDrawerBooking, setSelectedDeskTicketId]);
+  }, [sosAlerts, kycQueue, securityIncidentsList, incidentsList, payoutsList, supportTickets, bookings, dbNotifications, setActiveTab, setSelectedDrawerBooking, setSelectedDeskTicketId]);
 
   // Filter out dismissed notifications
   const visibleNotifications = useMemo(() => {
@@ -846,7 +855,10 @@ export function AdminTopHeader({
   }, [allNotifications, dismissedNotificationIds]);
 
   const unreadCount = useMemo(() => {
-    return visibleNotifications.filter((n) => !readNotificationIds.includes(n.id)).length;
+    return visibleNotifications.filter((n) => {
+      if (n.isDbRead) return false;
+      return !readNotificationIds.includes(n.id);
+    }).length;
   }, [visibleNotifications, readNotificationIds]);
 
   const urgentCount = useMemo(() => {
@@ -871,16 +883,23 @@ export function AdminTopHeader({
   const handleMarkAllRead = () => {
     const allIds = visibleNotifications.map((n) => n.id);
     setReadNotificationIds((prev) => Array.from(new Set([...prev, ...allIds])));
+    dbMarkAllAsRead();
     toast.success('All administrative notifications marked as read');
   };
 
   const handleDismissNotification = (id, e) => {
     e.stopPropagation();
     setDismissedNotificationIds((prev) => Array.from(new Set([...prev, id])));
+    if (typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) {
+      dbDismissNotification(id);
+    }
   };
 
   const handleNotificationClick = (item) => {
     setReadNotificationIds((prev) => Array.from(new Set([...prev, item.id])));
+    if (item.dbId || (typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id))) {
+      dbMarkAsRead(item.dbId || item.id);
+    }
     setIsNotificationOpen(false);
     if (item.onAction) item.onAction();
   };

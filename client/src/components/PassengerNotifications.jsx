@@ -16,11 +16,11 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
-import axios from '../api/axios';
+import { useNotifications } from '../context/NotificationContext';
 
 /* ============================================================
    ONECOOLIE PASSENGER NOTIFICATIONS — Real-Time Travel Alerts
-   Swiss Minimalist Luxury Design with Live Journey Status
+   Swiss Minimalist Luxury Design with DB-Backed Read State
    ============================================================ */
 
 export default function PassengerNotifications({
@@ -33,59 +33,16 @@ export default function PassengerNotifications({
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { user } = useAuth();
+  const {
+    notifications: dbNotifications,
+    unreadCount: dbUnreadCount,
+    markAsRead,
+    markAllAsRead,
+    dismissNotification,
+  } = useNotifications();
+
   const [open, setOpen] = useState(false);
-
-  const userId = user?.id || user?._id || '';
-  const userKey = userId ? `user_${userId}` : 'guest';
-  const DISMISSED_KEY = `oc_notif_dismissed_${userKey}`;
-  const READ_KEY = `oc_notif_read_${userKey}`;
-
-  const [dismissedIds, setDismissedIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem(DISMISSED_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [readIds, setReadIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem(READ_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [backendNotifications, setBackendNotifications] = useState([]);
-
   const dropdownRef = useRef(null);
-
-  // Synchronize read and dismissed IDs whenever authenticated user changes
-  useEffect(() => {
-    try {
-      const savedDismissed = localStorage.getItem(DISMISSED_KEY);
-      setDismissedIds(savedDismissed ? JSON.parse(savedDismissed) : []);
-      const savedRead = localStorage.getItem(READ_KEY);
-      setReadIds(savedRead ? JSON.parse(savedRead) : []);
-    } catch {
-      setDismissedIds([]);
-      setReadIds([]);
-    }
-  }, [DISMISSED_KEY, READ_KEY]);
-
-  // Load backend notifications for authenticated user
-  useEffect(() => {
-    if (!userId) return;
-    let isMounted = true;
-    axios.get('/notifications')
-      .then((res) => {
-        if (isMounted && res.data?.notifications) {
-          setBackendNotifications(res.data.notifications);
-        }
-      })
-      .catch(() => {});
-    return () => { isMounted = false; };
-  }, [userId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -100,29 +57,51 @@ export default function PassengerNotifications({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  // Persist dismissed and read notifications scoped to userKey
-  useEffect(() => {
-    try {
-      localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedIds));
-    } catch { }
-  }, [dismissedIds, DISMISSED_KEY]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(READ_KEY, JSON.stringify(readIds));
-    } catch { }
-  }, [readIds, READ_KEY]);
-
   // Build notifications feed with deterministic and stable IDs
   const notificationsList = useMemo(() => {
     const list = [];
+    const seenIds = new Set();
 
-    // 1. Active In-Progress / Upcoming Bookings
+    // 1. Backend Database Notifications (Authoritative source of truth)
+    if (Array.isArray(dbNotifications) && dbNotifications.length > 0) {
+      dbNotifications.forEach((bn) => {
+        if (!bn || bn.is_dismissed) return;
+        seenIds.add(bn.id);
+
+        const isSos = bn.type === 'sos';
+        const isBooking = bn.type === 'booking';
+
+        list.push({
+          id: bn.id,
+          dbId: bn.id,
+          bookingId: bn.booking_id,
+          type: bn.type || 'info',
+          urgency: isSos ? 'high' : 'normal',
+          title: bn.title || 'Notification',
+          description: bn.message || '',
+          badge: bn.type ? bn.type.toUpperCase() : 'Notice',
+          badgeStyle: isSos
+            ? 'bg-rose-100 text-rose-800 border-rose-200'
+            : 'bg-slate-100 text-zinc-800 border-slate-200',
+          icon: isSos ? Info : isBooking ? Train : Bell,
+          iconBg: isSos ? 'bg-rose-600 text-white' : 'bg-black text-white',
+          time: bn.created_at
+            ? new Date(bn.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Recent',
+          is_read: Boolean(bn.is_read),
+        });
+      });
+    }
+
+    // 2. Active In-Progress / Upcoming Bookings
     if (activeBookings && activeBookings.length > 0) {
       activeBookings.forEach((b) => {
         if (!b) return;
         const bId = b.id || b.booking_id || b._id || '';
         const stableId = bId ? `active-${bId}` : `active-${b.train_no || 'train'}-${b.journey_date || 'date'}`;
+        if (seenIds.has(stableId)) return;
+        seenIds.add(stableId);
+
         const rawStatus = String(b.booking_status || b.status || '').toLowerCase();
         const isAssigned = Boolean(
           b.assistant_id ||
@@ -149,72 +128,12 @@ export default function PassengerNotifications({
           icon: isAssigned ? Luggage : Train,
           iconBg: isAssigned ? 'bg-emerald-600 text-white' : 'bg-black text-white',
           time: b.journey_time ? `Arrival: ${b.journey_time}` : 'Today',
+          is_read: true,
         });
       });
     }
 
-    // 2. Recent Confirmed Bookings (up to 3)
-    if (bookings && bookings.length > 0) {
-      bookings.slice(0, 3).forEach((b) => {
-        if (!b) return;
-        const bId = b.id || b.booking_id || b._id || '';
-        const stableId = bId ? `booking-${bId}` : `booking-${b.train_no || 'train'}-${b.journey_date || 'date'}`;
-        // Skip if already in active list
-        if (bId && list.some((item) => item.bookingId && String(item.bookingId) === String(bId))) return;
-
-        const rawStatus = String(b.booking_status || b.status || '').toLowerCase();
-        const isCompleted = rawStatus === 'completed';
-        const isCancelled = rawStatus === 'cancelled';
-
-        list.push({
-          id: stableId,
-          bookingId: bId,
-          booking: b,
-          type: 'history',
-          urgency: 'normal',
-          title: isCompleted
-            ? `Trip Completed · Train ${b.train_no || 'Express'}`
-            : isCancelled
-              ? `Booking Cancelled · Train ${b.train_no || 'Express'}`
-              : `Assistance Confirmed · Train ${b.train_no || 'Express'}`,
-          description: isCompleted
-            ? `Assistance at ${b.station_code || 'station'} completed. Thank you for travelling with OneCoolie.`
-            : `Booking Ref #${b.booking_id || b.id || 'N/A'} · Coach ${b.coach || '--'} · Total: ₹${b.total_price || 30}`,
-          badge: isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : 'Confirmed',
-          badgeStyle: isCompleted
-            ? 'bg-slate-100 text-zinc-700 border-slate-200'
-            : isCancelled
-              ? 'bg-rose-100 text-rose-700 border-rose-200'
-              : 'bg-slate-100 text-zinc-900 border-slate-200',
-          icon: isCompleted ? CheckCircle2 : Train,
-          iconBg: isCompleted ? 'bg-zinc-800 text-white' : 'bg-slate-100 text-zinc-800',
-          time: b.journey_date || 'Recent',
-        });
-      });
-    }
-
-    // 3. Backend notifications
-    if (backendNotifications && backendNotifications.length > 0) {
-      backendNotifications.forEach((bn) => {
-        if (!bn || bn.is_dismissed) return;
-        if (list.some((item) => item.id === bn.id)) return;
-        list.push({
-          id: bn.id,
-          bookingId: bn.booking_id,
-          type: bn.type || 'info',
-          urgency: bn.type === 'sos' ? 'high' : 'normal',
-          title: bn.title || 'Notification',
-          description: bn.message || '',
-          badge: bn.type ? bn.type.toUpperCase() : 'Notice',
-          badgeStyle: 'bg-slate-100 text-zinc-800 border-slate-200',
-          icon: bn.type === 'sos' ? Info : Bell,
-          iconBg: bn.type === 'sos' ? 'bg-rose-600 text-white' : 'bg-black text-white',
-          time: bn.created_at ? new Date(bn.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'
-        });
-      });
-    }
-
-    // 4. Platform & Security Essential Notices
+    // 3. Platform & Security Essential Notices
     list.push({
       id: 'tip-otp-security',
       type: 'tip',
@@ -226,6 +145,7 @@ export default function PassengerNotifications({
       icon: ShieldCheck,
       iconBg: 'bg-emerald-600 text-white',
       time: 'Safety Tip',
+      is_read: true,
     });
 
     list.push({
@@ -239,49 +159,33 @@ export default function PassengerNotifications({
       icon: Info,
       iconBg: 'bg-black text-white',
       time: '24/7',
+      is_read: true,
     });
 
     return list;
-  }, [bookings, activeBookings, backendNotifications]);
+  }, [dbNotifications, activeBookings]);
 
-  // Filter out dismissed
-  const visibleNotifications = useMemo(() => {
-    return notificationsList.filter((n) => !dismissedIds.includes(n.id));
-  }, [notificationsList, dismissedIds]);
+  const visibleNotifications = notificationsList;
 
-  // Unread count
-  const unreadCount = useMemo(() => {
-    return visibleNotifications.filter((n) => !readIds.includes(n.id)).length;
-  }, [visibleNotifications, readIds]);
+  // Unread count authoritatively driven by database notifications
+  const unreadCount = dbUnreadCount;
 
   const handleMarkAllRead = (e) => {
     e.stopPropagation();
-    const allIds = visibleNotifications.map((n) => n.id);
-    setDismissedIds((prev) => Array.from(new Set([...prev, ...allIds])));
-    setReadIds((prev) => Array.from(new Set([...prev, ...allIds])));
-    if (userId) {
-      axios.post('/notifications/clear-all').catch(() => {});
-    }
+    markAllAsRead();
   };
 
   const handleDismiss = (id, e) => {
     e.stopPropagation();
-    setDismissedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    if (!readIds.includes(id)) {
-      setReadIds((prev) => [...prev, id]);
-    }
-    if (userId && typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) {
-      axios.patch(`/notifications/${id}/dismiss`).catch(() => {});
+    if (id && typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) {
+      dismissNotification(id);
     }
   };
 
   const handleItemClick = (item) => {
-    // When viewed, mark only that notification as read and persist
-    if (!readIds.includes(item.id)) {
-      setReadIds((prev) => [...prev, item.id]);
-      if (userId && typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id)) {
-        axios.patch(`/notifications/${item.id}/read`).catch(() => {});
-      }
+    // When viewed, mark this notification as read in database
+    if (item.dbId && !item.is_read) {
+      markAsRead(item.dbId);
     }
     setOpen(false);
 
@@ -298,90 +202,93 @@ export default function PassengerNotifications({
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      {/* Trigger Bell Button */}
+      {/* Bell Button */}
       <button
         type="button"
+        id="passenger-notification-bell-btn"
         onClick={() => setOpen((prev) => !prev)}
-        className={
-          buttonClassName ||
-          `w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs ${open ? 'bg-slate-200 ring-2 ring-black/10' : ''
-          }`
-        }
-        title="Notifications & Travel Alerts"
-        aria-label="Notifications"
+        className={`relative p-2.5 rounded-2xl transition-all duration-200 cursor-pointer ${
+          open
+            ? 'bg-zinc-900 text-white shadow-md'
+            : 'bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200/80 shadow-xs'
+        } ${buttonClassName}`}
+        aria-label="Travel notifications and alerts"
+        aria-expanded={open}
       >
-        <Bell className="w-4.5 h-4.5 text-zinc-700 group-hover:scale-110 transition-transform" />
+        <Bell size={18} className="transition-transform group-hover:scale-105" />
         {unreadCount > 0 && (
-          <span className="absolute top-2 right-2 flex h-2.5 w-2.5">
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 ring-2 ring-white" />
+            <span className="relative inline-flex items-center justify-center rounded-full h-4 min-w-[16px] px-1 bg-rose-600 text-[10px] font-black text-white ring-2 ring-white">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
           </span>
         )}
       </button>
 
-      {/* Mobile Backdrop */}
+      {/* Backdrop for Mobile */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/25 z-40 sm:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-xs z-40 sm:hidden"
           onClick={() => setOpen(false)}
         />
       )}
 
-      {/* Flyout Notification Popover Panel */}
+      {/* Dropdown Flyout */}
       {open && (
-        <div className="fixed inset-x-3 top-[68px] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-3 w-auto sm:w-96 max-w-lg bg-white border border-slate-200/90 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] p-4 sm:p-5 z-50 text-zinc-900 animate-scale-in">
+        <div className="fixed inset-x-3 top-[68px] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2.5 w-auto sm:w-[410px] max-w-[calc(100vw-24px)] bg-white border border-zinc-200/90 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] p-4 sm:p-5 z-50 text-zinc-900 animate-in fade-in zoom-in-95 duration-150">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-3">
+          <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 mb-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                <Bell className="w-4 h-4" />
+                <Bell size={14} />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-zinc-900">
-                    {t('notifications.title')}
+                    Travel Alerts
                   </h3>
                   {unreadCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black text-white">
-                      {unreadCount} new
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-200">
+                      {unreadCount} New
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-zinc-400 font-medium">
-                  {t('notifications.subtitle') || 'Trip telemetry & station updates'}
+                <p className="text-[11px] text-zinc-500 font-medium">
+                  Real-time journey updates & platform advisories
                 </p>
               </div>
             </div>
 
-            {visibleNotifications.length > 0 && (
+            {unreadCount > 0 && (
               <button
                 type="button"
+                id="passenger-notif-mark-all-read"
                 onClick={handleMarkAllRead}
-                className="text-[11px] font-bold text-zinc-600 hover:text-black cursor-pointer flex items-center gap-1 transition-colors"
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-blue-50"
               >
-                <Check className="w-3 h-3" />
-                <span>{t('notifications.clearAll') || 'Clear all'}</span>
+                <Check size={12} />
+                <span>Mark read</span>
               </button>
             )}
           </div>
 
-          {/* Notifications Scrollable List */}
-          <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1 no-scrollbar">
+          {/* List */}
+          <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-200">
             {visibleNotifications.length === 0 ? (
               <div className="py-8 text-center">
-                <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-2.5">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                <div className="w-12 h-12 mx-auto rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 mb-2.5">
+                  <CheckCircle2 size={22} className="text-emerald-500" />
                 </div>
-                <p className="text-xs font-bold text-zinc-800">{t('notifications.allCaughtUp') || 'All caught up!'}</p>
-                <p className="text-[11px] text-zinc-400 mt-0.5 max-w-[220px] mx-auto">
-                  {t('notifications.noNotifications')}
+                <p className="text-xs font-bold text-zinc-800">All caught up</p>
+                <p className="text-[11px] text-zinc-500 mt-0.5 max-w-[220px] mx-auto">
+                  No active journey alerts. Safe travels!
                 </p>
               </div>
             ) : (
               visibleNotifications.map((item) => {
                 const IconComponent = item.icon;
-                const isUnread = !readIds.includes(item.id);
-                const isUrgent = item.urgency === 'high';
+                const isUnread = !item.is_read;
 
                 return (
                   <div
@@ -389,52 +296,56 @@ export default function PassengerNotifications({
                     onClick={() => handleItemClick(item)}
                     role="button"
                     tabIndex={0}
-                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${isUrgent
-                      ? 'bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 shadow-2xs'
-                      : isUnread
-                        ? 'bg-slate-50/60 hover:bg-slate-100 border border-transparent'
-                        : 'hover:bg-slate-50 border border-transparent opacity-80 hover:opacity-100'
-                      }`}
+                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${
+                      isUnread
+                        ? 'bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200/60'
+                        : 'hover:bg-zinc-50 border border-transparent opacity-85'
+                    }`}
                   >
                     {/* Icon */}
                     <div
                       className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-xs ${item.iconBg}`}
                     >
-                      <IconComponent className="w-4 h-4" />
+                      <IconComponent size={16} />
                     </div>
 
                     {/* Content */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1.5 mb-0.5">
-                        <p className={`text-xs font-bold truncate ${isUnread ? 'text-zinc-900' : 'text-zinc-700'}`}>
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <p className={`text-xs truncate ${isUnread ? 'font-bold text-zinc-900' : 'font-medium text-zinc-600'}`}>
                           {item.title}
                         </p>
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <span
                             className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border uppercase tracking-wider ${item.badgeStyle}`}
                           >
                             {item.badge}
                           </span>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDismiss(item.id, e)}
-                            className="text-zinc-300 hover:text-zinc-600 p-0.5 rounded transition-colors"
-                            title="Dismiss"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                          {item.dbId && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDismiss(item.id, e)}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-400 hover:text-zinc-700 transition-opacity cursor-pointer"
+                              title="Dismiss alert"
+                              aria-label="Dismiss alert"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      <p className="text-[11px] text-zinc-500 leading-snug font-medium line-clamp-2">
+                      <p className="text-[11px] text-zinc-600 line-clamp-2 leading-relaxed">
                         {item.description}
                       </p>
 
-                      <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-slate-100/60 text-[10px]">
-                        <span className="text-zinc-400 font-mono font-medium">{item.time}</span>
-                        <span className="text-black font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                          <span>{t('common.view')}</span>
-                          <ArrowRight className="w-3 h-3" />
+                      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-zinc-100">
+                        <span className="text-[10px] text-zinc-500 font-medium flex items-center gap-1">
+                          <Clock size={10} />
+                          {item.time}
+                        </span>
+                        <span className="text-[10px] font-bold text-zinc-900 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                          View details <ArrowRight size={10} />
                         </span>
                       </div>
                     </div>
@@ -444,18 +355,22 @@ export default function PassengerNotifications({
             )}
           </div>
 
-          {/* Footer View All Trips Button */}
-          <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between">
+          {/* Footer */}
+          <div className="pt-3 mt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Live Railway Assistance</span>
+            </div>
+
             <button
               type="button"
               onClick={() => {
                 setOpen(false);
                 onNavigateTab?.('trips');
               }}
-              className="text-xs font-bold text-zinc-700 hover:text-black flex items-center gap-1.5 transition-colors cursor-pointer w-full justify-center py-1.5"
+              className="font-bold text-zinc-900 hover:underline flex items-center gap-1 cursor-pointer text-[11px]"
             >
-              <span>{t('nav.myTrips')}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              My Bookings <ArrowRight size={12} />
             </button>
           </div>
         </div>

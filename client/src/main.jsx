@@ -9,6 +9,7 @@ import './index.css';
 import { io } from 'socket.io-client';
 
 import { AuthProvider } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import ToastProvider from './components/Toast';
@@ -87,8 +88,10 @@ ReactDOM.createRoot(
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
-            <ToastProvider />
-            <App />
+            <NotificationProvider>
+              <ToastProvider />
+              <App />
+            </NotificationProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

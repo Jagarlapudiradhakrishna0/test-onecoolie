@@ -13,13 +13,15 @@ import {
   Check,
   Radio,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 
 /* ============================================================
    ONECOOLIE ASSISTANT NOTIFICATIONS — Dispatch & Duty Alerts
-   Apple / Uber-Style Ops Alert Center
+   Apple / Uber-Style Ops Alert Center with DB-Backed Read State
    ============================================================ */
 
 export default function AssistantNotifications({
@@ -33,28 +35,15 @@ export default function AssistantNotifications({
 }) {
   const { lang, t } = useLanguage();
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
-  const [dismissedIds, setDismissedIds] = useState(() => {
-    try {
-      const key = user?.id ? `assistant_dismissed_alerts_${user.id}` : 'assistant_dismissed_alerts';
-      const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const {
+    notifications: dbNotifications,
+    unreadCount: dbUnreadCount,
+    markAsRead,
+    markAllAsRead,
+    dismissNotification,
+  } = useNotifications();
 
-  useEffect(() => {
-    if (!user?.id) return;
-    try {
-      const key = `assistant_dismissed_alerts_${user.id}`;
-      const saved = localStorage.getItem(key);
-      setDismissedIds(saved ? JSON.parse(saved) : []);
-    } catch {
-      setDismissedIds([]);
-    }
-  }, [user?.id]);
-  const [markedAllRead, setMarkedAllRead] = useState(false);
+  const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Close on outside click
@@ -70,49 +59,78 @@ export default function AssistantNotifications({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  // Reset markedAllRead when requests count increases
-  const prevRequestsCountRef = useRef(requests.length);
-  useEffect(() => {
-    if (requests.length > prevRequestsCountRef.current) {
-      setMarkedAllRead(false);
-    }
-    prevRequestsCountRef.current = requests.length;
-  }, [requests.length]);
-
-  // Build notifications list
+  // Build unified notifications list
   const notificationsList = useMemo(() => {
     const list = [];
+    const seenIds = new Set();
 
-    // 1. Available Requests (High Priority)
-    if (requests && requests.length > 0) {
-      requests.forEach((req, idx) => {
-        const reqId = `req-${req.id || idx}`;
-        const pnr = req.pnr_number || req.pnr || 'PNR Pending';
-        const pf = req.platform_number || '1';
-        const bags = req.baggage_count || 1;
-        const fare = req.total_price ? `₹${req.total_price}` : '₹150';
-        const passenger = req.passenger_name || 'Passenger Assistance';
+    // 1. Database Notifications (Official persistent source of truth)
+    if (Array.isArray(dbNotifications) && dbNotifications.length > 0) {
+      dbNotifications
+        .filter((n) => !n.is_dismissed)
+        .forEach((n) => {
+          seenIds.add(n.id);
+          const isReq = n.type === 'request';
+          const isJob = n.type === 'job_completed';
+          const isRating = n.type === 'rating';
+          const isSos = n.type === 'sos';
 
-        list.push({
-          id: reqId,
-          type: 'request',
-          urgency: 'high',
-          title: `New Dispatch: ${passenger}`,
-          description: `Platform ${pf} · PNR: ${pnr} · ${bags} bag(s) · ${fare}`,
-          badge: 'Available Now',
-          badgeStyle: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-          icon: Luggage,
-          iconBg: 'bg-blue-600 text-white',
-          time: 'Action Required',
-          tab: 'dashboard',
+          let icon = Luggage;
+          let iconBg = 'bg-blue-600 text-white';
+          let tab = 'dashboard';
+          let badge = 'Alert';
+          let badgeStyle = 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+
+          if (isReq) {
+            icon = Luggage;
+            iconBg = 'bg-blue-600 text-white';
+            tab = 'dashboard';
+            badge = 'Dispatch';
+          } else if (isJob) {
+            icon = CheckCircle2;
+            iconBg = 'bg-emerald-600 text-white';
+            tab = 'history';
+            badge = 'Completed';
+            badgeStyle = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+          } else if (isRating) {
+            icon = Star;
+            iconBg = 'bg-amber-500 text-white';
+            tab = 'earnings';
+            badge = 'Review';
+            badgeStyle = 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+          } else if (isSos) {
+            icon = AlertTriangle;
+            iconBg = 'bg-rose-600 text-white';
+            tab = 'dashboard';
+            badge = 'SOS';
+            badgeStyle = 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border-rose-200 dark:border-rose-800';
+          }
+
+          list.push({
+            id: n.id,
+            dbId: n.id,
+            type: n.type || 'info',
+            urgency: isReq || isSos ? 'high' : 'normal',
+            title: n.title,
+            description: n.message,
+            badge,
+            badgeStyle,
+            icon,
+            iconBg,
+            time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+            tab,
+            is_read: Boolean(n.is_read),
+          });
         });
-      });
     }
 
-    // 2. Active Jobs In-Progress
+    // 2. Active Jobs In-Progress (Live operational context)
     if (activeJobs && activeJobs.length > 0) {
       activeJobs.forEach((job, idx) => {
-        const jobId = `job-${job.id || idx}`;
+        const jobId = `active-job-${job.id || idx}`;
+        if (seenIds.has(jobId)) return;
+        seenIds.add(jobId);
+
         const coach = job.coach_position || job.coach || 'Coach';
         const pf = job.platform_number || job.platform || '1';
         const statusLabel =
@@ -134,33 +152,12 @@ export default function AssistantNotifications({
           iconBg: 'bg-emerald-600 text-white',
           time: 'Active Duty',
           tab: 'jobs',
+          is_read: true,
         });
       });
     }
 
-    // 3. Recent Ratings Received
-    if (ratedJobs && ratedJobs.length > 0) {
-      ratedJobs.slice(0, 2).forEach((job, idx) => {
-        const ratingId = `rating-${job.id || idx}`;
-        list.push({
-          id: ratingId,
-          type: 'rating',
-          urgency: 'info',
-          title: `Passenger Rating: ★ ${Number(job.rating).toFixed(1)} / 5.0`,
-          description: job.review
-            ? `"${job.review}"`
-            : 'Passenger submitted 5-star feedback for your assistance.',
-          badge: 'Feedback',
-          badgeStyle: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-          icon: Star,
-          iconBg: 'bg-amber-500 text-white',
-          time: 'Recent Review',
-          tab: 'earnings',
-        });
-      });
-    }
-
-    // 4. Station Duty Status
+    // 3. Station Duty Status
     list.push({
       id: 'duty-status',
       type: 'status',
@@ -177,9 +174,10 @@ export default function AssistantNotifications({
       iconBg: online ? 'bg-black text-white dark:bg-zinc-800' : 'bg-slate-400 text-white',
       time: online ? 'Active' : 'Standby',
       tab: 'profile',
+      is_read: true,
     });
 
-    // 5. Emergency Helpline Support
+    // 4. Emergency Helpline Support
     list.push({
       id: 'railway-safety',
       type: 'helpline',
@@ -194,48 +192,36 @@ export default function AssistantNotifications({
       action: () => {
         window.location.href = 'tel:139';
       },
+      is_read: true,
     });
 
     return list;
-  }, [requests, activeJobs, ratedJobs, online, station, stationName]);
+  }, [dbNotifications, activeJobs, online, station, stationName]);
 
-  // Filter out dismissed
-  const visibleNotifications = notificationsList.filter(
-    (n) => !dismissedIds.includes(n.id)
-  );
+  const visibleNotifications = notificationsList;
 
-  const visibleRequestsCount = visibleNotifications.filter((n) => n.type === 'request').length;
+  const visibleRequestsCount = visibleNotifications.filter(
+    (n) => n.type === 'request' && !n.is_read
+  ).length;
 
-  // Unread badge count
-  const unreadCount = markedAllRead
-    ? 0
-    : visibleNotifications.filter((n) => n.urgency === 'high' || n.urgency === 'active').length;
+  // Unread badge count derived authoritatively from database notifications
+  const unreadCount = dbUnreadCount;
 
-  const handleDismissItem = (itemId) => {
-    setDismissedIds((prev) => {
-      const next = prev.includes(itemId) ? prev : [...prev, itemId];
-      try {
-        const key = user?.id ? `assistant_dismissed_alerts_${user.id}` : 'assistant_dismissed_alerts';
-        localStorage.setItem(key, JSON.stringify(next));
-      } catch { }
-      return next;
-    });
+  const handleDismissItem = (item) => {
+    if (item.dbId) {
+      dismissNotification(item.dbId);
+    }
   };
 
   const handleMarkAllRead = () => {
-    const allIds = notificationsList.map((n) => n.id);
-    const nextDismissed = Array.from(new Set([...dismissedIds, ...allIds]));
-    setDismissedIds(nextDismissed);
-    try {
-      const key = user?.id ? `assistant_dismissed_alerts_${user.id}` : 'assistant_dismissed_alerts';
-      localStorage.setItem(key, JSON.stringify(nextDismissed));
-    } catch { }
-    setMarkedAllRead(true);
+    markAllAsRead();
   };
 
   const handleItemClick = (item) => {
-    // Automatically dismiss and remove from notifications list
-    handleDismissItem(item.id);
+    // Mark as read in database
+    if (item.dbId && !item.is_read) {
+      markAsRead(item.dbId);
+    }
 
     if (item.action) {
       item.action();
@@ -294,9 +280,9 @@ export default function AssistantNotifications({
                   <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-zinc-900 dark:text-white">
                     {t('notificationsTitle')}
                   </h3>
-                  {visibleRequestsCount > 0 && (
+                  {unreadCount > 0 && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#2563EB] text-white">
-                      {visibleRequestsCount} {t('active')}
+                      {unreadCount} {t('unread') || 'New'}
                     </span>
                   )}
                 </div>
@@ -335,7 +321,7 @@ export default function AssistantNotifications({
             ) : (
               visibleNotifications.map((item) => {
                 const IconComponent = item.icon;
-                const isUrgent = item.urgency === 'high';
+                const isUnread = !item.is_read;
 
                 return (
                   <div
@@ -343,9 +329,9 @@ export default function AssistantNotifications({
                     onClick={() => handleItemClick(item)}
                     role="button"
                     tabIndex={0}
-                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${isUrgent
+                    className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition-all cursor-pointer group ${isUnread
                       ? 'bg-blue-50/70 dark:bg-blue-950/20 hover:bg-blue-100/70 dark:hover:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/40'
-                      : 'hover:bg-slate-50 dark:hover:bg-zinc-800/50 border border-transparent'
+                      : 'hover:bg-slate-50 dark:hover:bg-zinc-800/50 border border-transparent opacity-80'
                       }`}
                   >
                     {/* Icon */}
@@ -358,7 +344,7 @@ export default function AssistantNotifications({
                     {/* Content */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1.5 mb-1">
-                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        <p className={`text-xs truncate ${isUnread ? 'font-bold text-zinc-900 dark:text-zinc-100' : 'font-medium text-zinc-600 dark:text-zinc-400'}`}>
                           {item.title}
                         </p>
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -367,18 +353,20 @@ export default function AssistantNotifications({
                           >
                             {item.badge}
                           </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDismissItem(item.id);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-opacity cursor-pointer"
-                            title="Dismiss from list"
-                            aria-label="Dismiss from list"
-                          >
-                            <X size={12} />
-                          </button>
+                          {item.dbId && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDismissItem(item);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-opacity cursor-pointer"
+                              title="Dismiss from list"
+                              aria-label="Dismiss from list"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
                         </div>
                       </div>
 

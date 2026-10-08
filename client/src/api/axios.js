@@ -92,13 +92,7 @@ export const clearStoredTokens = () => {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && !PRESERVED_KEYS.has(key)) {
-          // Preserve user-scoped notification read and dismissed states across sessions
-          if (
-            key.startsWith('oc_notif_read_') ||
-            key.startsWith('oc_notif_dismissed_')
-          ) {
-            continue;
-          }
+
 
           if (
             key.startsWith('onecoolie_') ||

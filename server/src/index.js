@@ -165,6 +165,7 @@ const io = new Server(server, {
     credentials: true,
   }
 });
+global.io = io;
 
 // --------------------------------------------------
 // SOCKET.IO AUTHENTICATION MIDDLEWARE (PHASE 6.5 HARDENED)
@@ -378,6 +379,8 @@ io.on('connection', (socket) => {
       socket.join(`assistant_${socket.data.user.id}`);
     } else if (socket.data.user.role === 'passenger') {
       socket.join(`passenger_${socket.data.user.id}`);
+    } else if (socket.data.user.role === 'admin') {
+      socket.join('admin');
     }
   }
 
