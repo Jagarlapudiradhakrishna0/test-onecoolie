@@ -4392,10 +4392,6 @@ export default function PassengerDashboard() {
           isOpen={Boolean(activeRebookBooking)}
           booking={activeRebookBooking}
           onClose={() => setActiveRebookBooking(null)}
-          onRebooked={() => {
-            setActiveRebookBooking(null);
-            fetchBookings();
-          }}
           onSuccess={() => {
             setActiveRebookBooking(null);
             fetchBookings();

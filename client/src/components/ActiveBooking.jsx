@@ -889,7 +889,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       }}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-blue-50 text-[#1463FF] cursor-pointer"
                     >
-                      Change / Rebook
+                      Change Booking / Modify Trip
                     </button>
                   </>
                 )}
@@ -1791,7 +1791,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                     onClick={() => setShowRebookingModal(true)}
                     className="hover:text-[#1463FF] transition-colors cursor-pointer"
                   >
-                    Change / Rebook
+                    Change Booking / Modify Trip
                   </button>
                   <span>•</span>
                 </>
@@ -1814,6 +1814,10 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
           isOpen={showCancellationModal}
           booking={booking}
           onClose={() => setShowCancellationModal(false)}
+          onRequestRebook={() => {
+            setShowCancellationModal(false);
+            setShowRebookingModal(true);
+          }}
           onSuccess={(updatedBooking) => {
             setShowCancellationModal(false);
             if (onUpdate) onUpdate(updatedBooking);
@@ -1831,7 +1835,6 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
           onSuccess={(newBooking) => {
             setShowRebookingModal(false);
             if (onUpdate) onUpdate(newBooking);
-            toast.success('Booking rescheduled successfully.');
           }}
         />
       )}

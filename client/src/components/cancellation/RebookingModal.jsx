@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../api/axios';
 import { toast } from 'react-hot-toast';
@@ -45,6 +45,12 @@ export default function RebookingModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // LIFECYCLE REFS: Prevent background polling or parent re-renders from resetting active user edits
+  const targetBookingId = booking?.id || booking?.booking_id;
+  const prevBookingIdRef = useRef(null);
+  const prevIsOpenRef = useRef(false);
+  const prevFetchedTrainRef = useRef('');
+
   // ── 1. Determine Genuine Assistant Acceptance ──
   const rawStatus = String(booking?.booking_status || booking?.status || '').toLowerCase();
   const rawAssistantStatus = String(booking?.assistant_status || booking?.services?.assistant_status || '').toLowerCase();
@@ -60,39 +66,57 @@ export default function RebookingModal({
     )
   );
 
-  // ── 2. Initialize from Booking Context ──
+  // ── 2. Initialize from Booking Context (LIFECYCLE GUARDED) ──
   useEffect(() => {
-    if (!isOpen || !booking) return;
+    if (!isOpen || !booking) {
+      prevIsOpenRef.current = false;
+      prevBookingIdRef.current = null;
+      prevFetchedTrainRef.current = '';
+      return;
+    }
 
-    setJourneyDate(booking.journey_date || '');
-    setJourneyTime(booking.journey_time || '');
-    setStationCode((booking.station_code || booking.source || 'KZJ').toUpperCase());
-    setDestination((booking.destination || booking.to_station || '').toUpperCase());
-    setTrainNumber(booking.train_no || booking.train_number || '12738');
-    setTrainName(booking.train_name || 'Express');
-    setCoach(booking.coach || booking.services?.coach || '');
-    setSeatNumber(booking.seat_number || booking.services?.seat_number || '');
-    setBerthType(booking.berth_type || booking.services?.berth_type || 'Lower');
-    setPlatform(booking.platform || booking.services?.platform || '1');
-    setErrorMessage('');
-    setIsSubmitting(false);
+    // Only initialize form fields when the modal transitions from closed to open,
+    // or when the target booking ID changes.
+    // NEVER overwrite active user input on background polling or parent re-renders while open!
+    if (!prevIsOpenRef.current || prevBookingIdRef.current !== targetBookingId) {
+      setJourneyDate(booking.journey_date || '');
+      setJourneyTime(booking.journey_time || '');
+      setStationCode((booking.station_code || booking.source || 'KZJ').toUpperCase());
+      setDestination((booking.destination || booking.to_station || '').toUpperCase());
+      setTrainNumber(booking.train_no || booking.train_number || '12738');
+      setTrainName(booking.train_name || 'Express');
+      setCoach(booking.coach || booking.services?.coach || '');
+      setSeatNumber(booking.seat_number || booking.services?.seat_number || '');
+      setBerthType(booking.berth_type || booking.services?.berth_type || 'Lower');
+      setPlatform(booking.platform || booking.services?.platform || '1');
+      setErrorMessage('');
+      setIsSubmitting(false);
 
-    setQuote({
-      currentTotal: Number(booking.total_price || 0),
-      newTotal: Number(booking.total_price || 0),
-      priceDifference: 0,
-      assistantReassignmentRequired: false
-    });
-  }, [isOpen, booking]);
+      setQuote({
+        currentTotal: Number(booking.total_price || 0),
+        newTotal: Number(booking.total_price || 0),
+        priceDifference: 0,
+        assistantReassignmentRequired: false
+      });
+
+      prevBookingIdRef.current = targetBookingId;
+    }
+    prevIsOpenRef.current = true;
+  }, [isOpen, booking, targetBookingId]);
 
   // ── 3. Train-Aware Route & Stop Fetching ──
   useEffect(() => {
     if (!isOpen || !trainNumber) return;
 
-    let isMounted = true;
     const cleanTrainNo = String(trainNumber).trim();
     if (!cleanTrainNo) return;
 
+    // Avoid redundant route fetches if already loaded for this train
+    if (prevFetchedTrainRef.current === cleanTrainNo && trainStops.length > 0) {
+      return;
+    }
+
+    let isMounted = true;
     setIsLoadingStops(true);
     setStopsError('');
 
@@ -102,6 +126,7 @@ export default function RebookingModal({
         if (!isMounted) return;
         const stops = res.data?.stops || [];
         if (stops.length > 0) {
+          prevFetchedTrainRef.current = cleanTrainNo;
           setTrainStops(stops);
           setStopsError('');
           if (res.data.train_name && (!trainName || trainName === 'Express')) {
@@ -235,9 +260,15 @@ export default function RebookingModal({
 
       const updated = res.data?.booking || res.data;
       toast.success(res.data?.message || 'Booking updated successfully!');
-      if (onRebooked) onRebooked(updated);
-      if (onSuccess) onSuccess(updated);
-      onClose();
+
+      // Clean single callback dispatch to prevent duplicate parent re-renders/loops
+      if (onSuccess) {
+        onSuccess(updated);
+      } else if (onRebooked) {
+        onRebooked(updated);
+      } else if (onClose) {
+        onClose();
+      }
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to update booking. Please try again.';
       setErrorMessage(msg);

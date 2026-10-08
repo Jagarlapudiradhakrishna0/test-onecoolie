@@ -352,7 +352,14 @@ export default function BookingLive() {
           <ActiveBooking
             booking={booking}
             distance={distance}
-            onUpdate={(b) => setBooking(b)}
+            onUpdate={(b) => {
+              setBooking(b);
+              try {
+                if (id) sessionStorage.setItem(`booking_${id}`, JSON.stringify(b));
+                if (b?.id) sessionStorage.setItem(`booking_${b.id}`, JSON.stringify(b));
+                if (b?.booking_id) sessionStorage.setItem(`booking_${b.booking_id}`, JSON.stringify(b));
+              } catch (e) {}
+            }}
           />
         </main>
 
