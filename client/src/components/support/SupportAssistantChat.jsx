@@ -17,9 +17,12 @@ export default function SupportAssistantChat({
   initialQuery 
 }) {
   const [messages, setMessages] = useState(() => {
-    const hasTrip = preloadContext === 'trip' && activeTrip;
+    const hasTrip = (preloadContext === 'trip' || Boolean(activeTrip)) && activeTrip;
+    const trainNum = activeTrip?.train_no || activeTrip?.train_number || activeTrip?.trainNo || '';
+    const trainNam = activeTrip?.train_name || activeTrip?.trainName || '';
+    const trainInfo = trainNum ? ` for Train ${trainNum}${trainNam ? ` (${trainNam})` : ''}` : '';
     const welcomeText = hasTrip 
-      ? `Hi! I'm your OneCoolie Support Assistant. I've attached your booking details for Train ${activeTrip.trainNo} (${activeTrip.trainName}) to our conversation.\n\nHow can I help you with your journey today?`
+      ? `Hi! I'm your OneCoolie Support Assistant. I've attached your booking details${trainInfo} to our conversation.\n\nHow can I help you with your journey today?`
       : `Hi! I'm your OneCoolie Support Assistant. Ask me anything about your booking, assistant, luggage, payment or journey. How can I help?`;
 
     return [{

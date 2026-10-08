@@ -11,16 +11,24 @@ export default function RaiseTicketView({ onNavigate, activeTrip, user, bookings
   const [issueType, setIssueType] = useState(initialCategory || 'Booking');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedTripId, setSelectedTripId] = useState(activeTrip?.id || activeTrip?.trainNo || 'none');
+  const activeTripId = activeTrip?.id || activeTrip?.booking_id || (activeTrip?.train_no ? `${activeTrip.train_no}` : (activeTrip?.trainNo ? `${activeTrip.trainNo}` : 'none'));
+  const [selectedTripId, setSelectedTripId] = useState(activeTripId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedTicket, setSubmittedTicket] = useState(null);
 
   // Available trips for dropdown selection
   const tripOptions = [];
   if (activeTrip) {
+    const tripId = activeTrip.id || activeTrip.booking_id || 'active';
+    const trainNum = activeTrip.train_no || activeTrip.train_number || activeTrip.trainNo || 'Train';
+    const trainNam = activeTrip.train_name || activeTrip.trainName || 'Express';
+    const src = activeTrip.station_code || activeTrip.source || activeTrip.from_station || 'Station';
+    const dst = activeTrip.destination || activeTrip.to_station || 'Destination';
+    const jDate = activeTrip.journey_date || (activeTrip.dateDay ? `${activeTrip.dateDay} ${activeTrip.dateMonth || ''} ${activeTrip.dateYear || ''}`.trim() : '');
+    const dateStr = jDate ? ` · ${jDate}` : '';
     tripOptions.push({
-      id: activeTrip.id || 'active',
-      label: `${activeTrip.trainNo} · ${activeTrip.trainName || 'Express'} (${activeTrip.source || 'Station'} → ${activeTrip.destination || 'Destination'} · ${activeTrip.dateDay || '06'} ${activeTrip.dateMonth || 'Sep'} ${activeTrip.dateYear || '2026'})`,
+      id: tripId,
+      label: `${trainNum} · ${trainNam} (${src} → ${dst}${dateStr})`,
       raw: activeTrip
     });
   }

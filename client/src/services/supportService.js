@@ -49,7 +49,8 @@ export function isMobileDevice() {
 export function handleContactSupport(navigate, options = {}) {
   if (!navigate) {
     if (typeof window !== 'undefined') {
-      window.location.href = '/support';
+      const search = options.bookingId ? `?bookingId=${encodeURIComponent(options.bookingId)}` : '';
+      window.location.href = `/support${search}`;
     }
     return;
   }
@@ -60,8 +61,14 @@ export function handleContactSupport(navigate, options = {}) {
     return;
   }
 
-  // Default safe action for all environments: internal router navigation
-  navigate('/support');
+  // Default safe action for all environments: internal router navigation with safe booking context
+  const navState = {};
+  if (options.booking) navState.booking = options.booking;
+  if (options.bookingId) navState.bookingId = options.bookingId;
+  if (options.from) navState.from = options.from;
+
+  const search = options.bookingId ? `?bookingId=${encodeURIComponent(options.bookingId)}` : '';
+  navigate(`/support${search}`, Object.keys(navState).length > 0 ? { state: navState } : undefined);
 }
 
 /**

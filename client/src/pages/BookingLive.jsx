@@ -26,6 +26,7 @@ import ProfileMenu from '../context/ProfileMenu';
 import PassengerNotifications from '../components/PassengerNotifications';
 import { STATIONS } from '../utils/services';
 import TrainLoader from '../components/TrainLoader';
+import { handleContactSupport } from '../services/supportService';
 
 /* ============================================================
    BOOKING LIVE / TRIP DETAILS PAGE (PIXEL PERFECT MATCH TO MOCKUP)
@@ -325,7 +326,11 @@ export default function BookingLive() {
 
               <button
                 type="button"
-                onClick={() => navigate('/dashboard?tab=support')}
+                onClick={() => handleContactSupport(navigate, {
+                  booking,
+                  bookingId: booking?.booking_id || booking?.id || id,
+                  from: 'trip_details'
+                })}
                 className="px-5 lg:px-6 py-2.5 rounded-full text-xs lg:text-sm font-semibold text-zinc-600 hover:text-black transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Headphones className="w-4 h-4 text-zinc-500" />

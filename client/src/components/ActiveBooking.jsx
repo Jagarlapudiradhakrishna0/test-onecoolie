@@ -1754,7 +1754,11 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
 
           {/* Card 3: Need Help? */}
           <div
-            onClick={() => handleContactSupport(navigate)}
+            onClick={() => handleContactSupport(navigate, {
+              booking,
+              bookingId: booking?.booking_id || booking?.id,
+              from: 'trip_details'
+            })}
             className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-4 sm:p-5 flex items-center justify-between hover:border-blue-200 transition-all cursor-pointer group"
           >
             <div className="flex items-center gap-3">

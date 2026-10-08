@@ -21,11 +21,23 @@ export default function HelpSupportPage() {
   const categoryId = searchParams.get('category');
   const initialQuery = searchParams.get('initialQuery') || searchParams.get('q');
 
-  // Load real active trip from session/local storage if available
+  // Load real active trip from location.state, searchParams, or storage if available
   const [activeTrip, setActiveTrip] = useState(null);
 
   useEffect(() => {
     try {
+      if (location.state?.booking) {
+        setActiveTrip(location.state.booking);
+        return;
+      }
+      const bookingIdParam = searchParams.get('bookingId') || location.state?.bookingId;
+      if (bookingIdParam) {
+        const stored = sessionStorage.getItem(`booking_${bookingIdParam}`);
+        if (stored) {
+          setActiveTrip(JSON.parse(stored));
+          return;
+        }
+      }
       const stored = sessionStorage.getItem('active_passenger_booking') || localStorage.getItem('active_passenger_booking');
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -36,17 +48,22 @@ export default function HelpSupportPage() {
     } catch (e) {
       setActiveTrip(null);
     }
-  }, []);
+  }, [location.state, searchParams]);
 
   const handleNavigate = (view, params = {}) => {
     if (view === 'back') {
       if (currentView === 'home') {
-        if (user?.role === 'assistant') {
+        const originBookingId = location.state?.bookingId || searchParams.get('bookingId');
+        if (originBookingId) {
+          navigate(`/booking/${originBookingId}`);
+        } else if (window.history.length > 1) {
+          navigate(-1);
+        } else if (user?.role === 'assistant') {
           navigate('/assistant');
         } else if (user?.role === 'admin') {
           navigate('/admin');
         } else {
-          navigate('/dashboard?tab=book');
+          navigate('/dashboard?tab=trips');
         }
       } else {
         setSearchParams({ view: 'home' });

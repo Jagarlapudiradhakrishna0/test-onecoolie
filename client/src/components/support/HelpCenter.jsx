@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from '../../api/axios';
 import { 
   Search, MessageSquare, Briefcase, UserCheck, 
   CreditCard, Train, Shield, ChevronRight, Phone, 
@@ -25,6 +26,29 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
   const [selectedFaqCategory, setSelectedFaqCategory] = useState('all');
   const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const [expandedFaqId, setExpandedFaqId] = useState(null);
+
+  // Authoritative user trips data for standalone navigation
+  const [allBookings, setAllBookings] = useState([]);
+
+  useEffect(() => {
+    if (user?.role === 'passenger' && !embeddedInDashboard) {
+      axios.get('/bookings/my-bookings')
+        .then((res) => {
+          const list = Array.isArray(res.data) ? res.data : (res.data?.trips || []);
+          setAllBookings(list);
+        })
+        .catch(() => {});
+    }
+  }, [user, embeddedInDashboard]);
+
+  const activeBookings = useMemo(() => {
+    if (!Array.isArray(allBookings)) return [];
+    return allBookings.filter((b) =>
+      ['pending', 'accepted', 'arrived', 'arriving', 'reached', 'in_progress', 'in_service', 'allocated', 'assigned'].includes((b.booking_status || b.status || '').toLowerCase())
+    );
+  }, [allBookings]);
+
+  const activeTripsCount = activeBookings.length;
 
   useEffect(() => {
     setTickets(getTickets());
@@ -76,7 +100,6 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
       {!embeddedInDashboard && (
         <>
           {/* 1A. Mobile Phone Screen Navbar (<md) */}
-          {/* 1A. Mobile Phone Screen Navbar (<md) */}
           <header className="sticky top-2.5 z-40 px-3 max-w-full md:hidden mb-2">
             <div className="bg-white rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-200/80 px-4 py-2 flex items-center justify-between">
               <button type="button" onClick={() => navigate('/')} className="flex items-center cursor-pointer">
@@ -84,6 +107,8 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
               </button>
               <div className="flex items-center gap-2">
                 <PassengerNotifications
+                  bookings={allBookings}
+                  activeBookings={activeBookings}
                   onNavigateTab={(t) => navigate(`/dashboard?tab=${t}`)}
                   buttonClassName="w-9 h-9 rounded-full bg-slate-100 text-zinc-700 flex items-center justify-center relative border border-slate-200/60 shadow-2xs cursor-pointer"
                 />
@@ -104,13 +129,15 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
               <button
                 type="button"
                 onClick={() => navigate('/dashboard?tab=trips')}
-                className="flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 text-zinc-600"
+                className="flex-1 py-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 text-zinc-600 cursor-pointer"
               >
                 <Briefcase className="w-3.5 h-3.5" />
                 <span>{t('nav.myTrips')}</span>
-                <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-black text-white">
-                  3
-                </span>
+                {activeTripsCount > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-black text-white">
+                    {activeTripsCount}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -155,9 +182,11 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                 >
                   <Briefcase className="w-4 h-4" />
                   <span>{t('nav.myTrips')}</span>
-                  <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-black text-white">
-                    3
-                  </span>
+                  {activeTripsCount > 0 && (
+                    <span className="min-w-[20px] h-[20px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-black text-white">
+                      {activeTripsCount}
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -173,6 +202,8 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
               {/* Far Right: Notification Bell + Profile Menu */}
               <div className="flex items-center gap-3.5">
                 <PassengerNotifications
+                  bookings={allBookings}
+                  activeBookings={activeBookings}
                   onNavigateTab={(t) => navigate(`/dashboard?tab=${t}`)}
                   buttonClassName="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs"
                 />
