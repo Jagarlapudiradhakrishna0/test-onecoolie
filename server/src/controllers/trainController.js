@@ -289,3 +289,37 @@ exports.getPnrStatus = async (req, res) => {
     });
   }
 };
+
+const { getTrainRouteStops } = require('../services/trainRouteService');
+
+/**
+ * Train Route & Stops Lookup
+ * GET /api/trains/:trainNo/route
+ */
+exports.getTrainRoute = async (req, res) => {
+  try {
+    const { trainNo } = req.params;
+    if (!trainNo) {
+      return res.status(400).json({ success: false, message: 'Train number is required.' });
+    }
+
+    const routeData = getTrainRouteStops(trainNo);
+    if (!routeData) {
+      return res.status(404).json({
+        success: false,
+        message: `Unable to load stations for train ${trainNo}.`
+      });
+    }
+
+    return res.json({
+      success: true,
+      ...routeData
+    });
+  } catch (error) {
+    console.error('GET TRAIN ROUTE ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Error fetching train route stops.'
+    });
+  }
+};

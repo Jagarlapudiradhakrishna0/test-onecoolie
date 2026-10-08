@@ -7,7 +7,8 @@ const {
   getSupportedStations,
   updateTrainApiKey,
   getPnrStatus,
-  syncTrainsDatabase
+  syncTrainsDatabase,
+  getTrainRoute
 } = require('../controllers/trainController');
 
 // Rate limiter for live station board: 30 requests per minute per IP
@@ -31,6 +32,10 @@ router.get('/live-station', liveStationLimiter, getLiveStationBoard);
 
 // Supported stations list
 router.get('/supported-stations', getSupportedStations);
+
+// Train Route & Stops (Train-Aware Station Lookup)
+router.get('/:trainNo/route', getTrainRoute);
+router.get('/:trainNo/stops', getTrainRoute);
 
 const { protect } = require('../middleware/authMiddleware');
 const { adminOnly, requirePermission } = require('../middleware/adminMiddleware');

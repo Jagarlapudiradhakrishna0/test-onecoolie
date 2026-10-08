@@ -2,7 +2,8 @@ const supabase = require('../config/db');
 const { formatBooking } = require('../utils/bookingFormatter');
 const { broadcast, getIO } = require('./serviceController');
 const { calculateBookingPrice } = require('../config/pricing');
-const { resolveBooking } = require('../utils/bookingResolver');
+const bookingResolver = require('../utils/bookingResolver');
+const resolveBooking = (...args) => bookingResolver.resolveBooking(...args);
 const {
   isValidPaymentMethod,
   isCashPayment,
@@ -15,6 +16,12 @@ const {
   buildServiceDescription,
   generateBookingId
 } = require('../utils/bookingCore');
+const {
+  validateTrainStations,
+  isAssistantAcceptedBooking,
+  canModifyBookingDetails
+} = require('../services/trainRouteService');
+const { createNotification } = require('../services/notificationService');
 
 /*
 |--------------------------------------------------------------------------
@@ -784,6 +791,14 @@ exports.rebookQuote = async (req, res) => {
     const { services, station_code, journey_date } = req.body;
     let newTotal = Number(booking.total_price);
 
+    const isAccepted = isAssistantAcceptedBooking(booking);
+    if (isAccepted && station_code && station_code.trim().toUpperCase() !== String(booking.station_code || '').trim().toUpperCase()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Station and train details cannot be changed after an assistant has accepted this booking.'
+      });
+    }
+
     if (services && typeof services === 'object') {
       try {
         const pricingResult = calculateBookingPrice(services);
@@ -869,11 +884,13 @@ exports.rebookBooking = async (req, res) => {
       train_number: booking.train_number,
       train_name: booking.train_name,
       station_code: booking.station_code,
+      source: booking.source,
+      destination: booking.destination,
       journey_date: booking.journey_date,
       journey_time: booking.journey_time,
-      coach: booking.services?.coach,
-      seat_number: booking.services?.seat_number,
-      berth_type: booking.services?.berth_type,
+      coach: booking.coach || booking.services?.coach,
+      seat_number: booking.seat_number || booking.services?.seat_number,
+      berth_type: booking.berth_type || booking.services?.berth_type,
       total_price: booking.total_price,
       assistant_id: booking.assistant_id,
       rebooked_at: new Date().toISOString()
@@ -882,6 +899,40 @@ exports.rebookBooking = async (req, res) => {
     const updatePayload = {
       updated_at: new Date().toISOString()
     };
+
+    const isAccepted = isAssistantAcceptedBooking(booking);
+
+    if (isAccepted) {
+      // Locked station and train details once assistant has accepted
+      const stationChanged = station_code && station_code.trim().toUpperCase() !== String(booking.station_code || '').trim().toUpperCase();
+      const trainChanged = (train_number || train_no) && (train_number || train_no).trim().toUpperCase() !== String(booking.train_number || booking.train_no || '').trim().toUpperCase();
+      const destChanged = destination && destination.trim().toUpperCase() !== String(booking.destination || '').trim().toUpperCase();
+
+      if (stationChanged || destChanged || trainChanged) {
+        return res.status(400).json({
+          success: false,
+          message: 'Station and train details cannot be changed after an assistant has accepted this booking.'
+        });
+      }
+    } else {
+      // Before assistant acceptance, validate train & stations
+      const targetTrain = (train_number || train_no || booking.train_number || booking.train_no || '').trim();
+      const targetBoarding = (station_code || source || booking.station_code || booking.source || '').trim().toUpperCase();
+      const targetDestination = (destination || booking.destination || '').trim().toUpperCase();
+
+      if (targetTrain && targetBoarding) {
+        const validation = validateTrainStations(targetTrain, targetBoarding, targetDestination);
+        if (!validation.valid) {
+          return res.status(400).json({
+            success: false,
+            message: validation.error
+          });
+        }
+        if (validation.train?.train_name && !train_name) {
+          updatePayload.train_name = validation.train.train_name;
+        }
+      }
+    }
 
     if (train_number || train_no) updatePayload.train_number = (train_number || train_no).trim();
     if (train_name) updatePayload.train_name = train_name.trim();
@@ -906,16 +957,35 @@ exports.rebookBooking = async (req, res) => {
 
     updatePayload.total_price = newPrice;
 
-    if (coach !== undefined) mergedServices.coach = coach.trim().toUpperCase();
-    if (seat_number !== undefined) mergedServices.seat_number = seat_number.trim().toUpperCase();
-    if (berth_type !== undefined) mergedServices.berth_type = berth_type;
-    if (platform !== undefined) mergedServices.platform = platform;
+    if (coach !== undefined) {
+      mergedServices.coach = coach.trim().toUpperCase();
+    }
+    if (seat_number !== undefined) {
+      mergedServices.seat_number = seat_number.trim().toUpperCase();
+    }
+    if (berth_type !== undefined) {
+      mergedServices.berth_type = berth_type;
+    }
+    if (platform !== undefined) {
+      mergedServices.platform = platform;
+    }
+
+    updatePayload.services = mergedServices;
+
+    const serviceText = booking.service || (Array.isArray(booking.services) ? booking.services.join(', ') : 'Station Assistance');
+    updatePayload.service_description = buildServiceDescription(serviceText, {
+      coach: updatePayload.coach || booking.coach || mergedServices.coach,
+      seat_number: updatePayload.seat_number || booking.seat_number || mergedServices.seat_number,
+      berth_type: updatePayload.berth_type || booking.berth_type || mergedServices.berth_type,
+      action_type: mergedServices.action_type || 'load_to_seat',
+      journey_time: updatePayload.journey_time || booking.journey_time
+    });
 
     // Evaluate Assistant Compatibility
     let assistantReassigned = false;
     const prevAssistantId = booking.assistant_id;
 
-    if (prevAssistantId) {
+    if (prevAssistantId && !isAccepted) {
       const stationChanged = station_code && station_code !== booking.station_code;
       const dateChanged = journey_date && journey_date !== booking.journey_date;
 
@@ -973,12 +1043,37 @@ exports.rebookBooking = async (req, res) => {
         io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
         io.to(`passenger_${booking.passenger_id}`).emit('booking_updated', formatted);
         io.to('admin_room').emit('status_update', formatBooking(updated, { includeOTP: false }));
+        io.to('admin_room').emit('booking_updated', formatBooking(updated, { includeOTP: false }));
 
-        if (!assistantReassigned && prevAssistantId) {
-          io.to(`user_${prevAssistantId}`).emit('booking_updated', formatBooking(updated, { includeOTP: false }));
+        if (updated.assistant_id) {
+          io.to(`user_${updated.assistant_id}`).emit('status_update', formatBooking(updated, { includeOTP: false }));
+          io.to(`user_${updated.assistant_id}`).emit('booking_updated', formatBooking(updated, { includeOTP: false }));
+          io.to(`assistant_${updated.assistant_id}`).emit('status_update', formatBooking(updated, { includeOTP: false }));
+          io.to(`assistant_${updated.assistant_id}`).emit('booking_updated', formatBooking(updated, { includeOTP: false }));
         }
       }
     } catch (e) {}
+
+    // Dispatch real-time user notifications
+    if (updated.assistant_id && !assistantReassigned) {
+      createNotification({
+        userId: updated.assistant_id,
+        bookingId: booking.id,
+        title: 'Booking Details Updated',
+        message: `Passenger updated booking details for train ${updatePayload.train_number || booking.train_number}: Coach ${updatePayload.coach || booking.coach || 'TBD'}, Seat ${updatePayload.seat_number || booking.seat_number || 'TBD'}, Platform ${platform || mergedServices.platform || '1'}.`,
+        type: 'info',
+        metadata: { booking_id: booking.id, booking_code: booking.booking_id }
+      }).catch(() => {});
+    }
+
+    createNotification({
+      userId: booking.passenger_id,
+      bookingId: booking.id,
+      title: 'Booking Details Updated',
+      message: 'Your booking details were updated successfully.',
+      type: 'success',
+      metadata: { booking_id: booking.id, booking_code: booking.booking_id }
+    }).catch(() => {});
 
     return res.json({
       success: true,

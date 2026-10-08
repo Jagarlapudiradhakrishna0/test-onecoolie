@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../api/axios';
 import { toast } from 'react-hot-toast';
@@ -13,19 +13,10 @@ import {
   X,
   ArrowRight,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Info
 } from 'lucide-react';
-
-const STATIONS = [
-  { code: 'KZJ', name: 'Kazipet Junction' },
-  { code: 'SC', name: 'Secunderabad Junction' },
-  { code: 'HYB', name: 'Hyderabad Deccan' },
-  { code: 'NDLS', name: 'New Delhi' },
-  { code: 'HWH', name: 'Howrah Junction' },
-  { code: 'BGL', name: 'Bangalore City' },
-  { code: 'MAS', name: 'Chennai Central' },
-  { code: 'CSTM', name: 'Mumbai CSMT' }
-];
 
 export default function RebookingModal({
   isOpen = true,
@@ -37,6 +28,7 @@ export default function RebookingModal({
   const [journeyDate, setJourneyDate] = useState('');
   const [journeyTime, setJourneyTime] = useState('');
   const [stationCode, setStationCode] = useState('');
+  const [destination, setDestination] = useState('');
   const [trainNumber, setTrainNumber] = useState('');
   const [trainName, setTrainName] = useState('');
   const [coach, setCoach] = useState('');
@@ -44,17 +36,39 @@ export default function RebookingModal({
   const [berthType, setBerthType] = useState('Lower');
   const [platform, setPlatform] = useState('1');
 
+  // Train-aware route & stops state
+  const [trainStops, setTrainStops] = useState([]);
+  const [isLoadingStops, setIsLoadingStops] = useState(false);
+  const [stopsError, setStopsError] = useState('');
+
   const [quote, setQuote] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // ── 1. Determine Genuine Assistant Acceptance ──
+  const rawStatus = String(booking?.booking_status || booking?.status || '').toLowerCase();
+  const rawAssistantStatus = String(booking?.assistant_status || booking?.services?.assistant_status || '').toLowerCase();
+  const isAssistantAccepted = Boolean(
+    booking?.assistant_id &&
+    (
+      ['accepted', 'arriving', 'reached', 'arrived', 'in_service', 'completed'].includes(rawAssistantStatus) ||
+      (
+        ['accepted', 'arriving', 'reached', 'arrived', 'in_service', 'completed'].includes(rawStatus) &&
+        rawAssistantStatus !== 'pending' &&
+        rawAssistantStatus !== 'assigned'
+      )
+    )
+  );
+
+  // ── 2. Initialize from Booking Context ──
   useEffect(() => {
     if (!isOpen || !booking) return;
 
     setJourneyDate(booking.journey_date || '');
     setJourneyTime(booking.journey_time || '');
-    setStationCode(booking.station_code || 'KZJ');
-    setTrainNumber(booking.train_no || booking.train_number || '');
+    setStationCode((booking.station_code || booking.source || 'KZJ').toUpperCase());
+    setDestination((booking.destination || booking.to_station || '').toUpperCase());
+    setTrainNumber(booking.train_no || booking.train_number || '12738');
     setTrainName(booking.train_name || 'Express');
     setCoach(booking.coach || booking.services?.coach || '');
     setSeatNumber(booking.seat_number || booking.services?.seat_number || '');
@@ -63,7 +77,6 @@ export default function RebookingModal({
     setErrorMessage('');
     setIsSubmitting(false);
 
-    // Initial quote
     setQuote({
       currentTotal: Number(booking.total_price || 0),
       newTotal: Number(booking.total_price || 0),
@@ -72,23 +85,132 @@ export default function RebookingModal({
     });
   }, [isOpen, booking]);
 
+  // ── 3. Train-Aware Route & Stop Fetching ──
+  useEffect(() => {
+    if (!isOpen || !trainNumber) return;
+
+    let isMounted = true;
+    const cleanTrainNo = String(trainNumber).trim();
+    if (!cleanTrainNo) return;
+
+    setIsLoadingStops(true);
+    setStopsError('');
+
+    axios
+      .get(`/trains/${cleanTrainNo}/route`)
+      .then((res) => {
+        if (!isMounted) return;
+        const stops = res.data?.stops || [];
+        if (stops.length > 0) {
+          setTrainStops(stops);
+          setStopsError('');
+          if (res.data.train_name && (!trainName || trainName === 'Express')) {
+            setTrainName(res.data.train_name);
+          }
+
+          // Validate or default boarding station to train stops
+          const currentBoardingExists = stops.some(
+            (s) => s.code.toUpperCase() === stationCode.toUpperCase()
+          );
+          let activeBoarding = stationCode;
+          if (!currentBoardingExists) {
+            activeBoarding = stops[0].code;
+            setStationCode(stops[0].code);
+          }
+
+          // Validate or default destination to a stop occurring after boarding
+          const bIdx = stops.findIndex(
+            (s) => s.code.toUpperCase() === activeBoarding.toUpperCase()
+          );
+          const validDestinations = bIdx >= 0 ? stops.slice(bIdx + 1) : stops;
+          const currentDestExists = validDestinations.some(
+            (s) => s.code.toUpperCase() === destination.toUpperCase()
+          );
+          if (!currentDestExists && validDestinations.length > 0) {
+            setDestination(validDestinations[validDestinations.length - 1].code);
+          }
+        } else {
+          setTrainStops([]);
+          setStopsError(`Unable to load stations for train ${cleanTrainNo}.`);
+        }
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setTrainStops([]);
+        setStopsError(
+          err.response?.data?.message || `Unable to load stations for train ${cleanTrainNo}.`
+        );
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingStops(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, trainNumber]);
+
+  // Available Destinations: strictly stations appearing AFTER the selected boarding station
+  const availableDestinations = useMemo(() => {
+    if (trainStops.length === 0) return [];
+    const bIndex = trainStops.findIndex(
+      (s) => s.code.toUpperCase() === stationCode.toUpperCase()
+    );
+    if (bIndex === -1) return trainStops;
+    return trainStops.slice(bIndex + 1);
+  }, [trainStops, stationCode]);
+
+  // When passenger changes boarding station, auto-adjust destination if invalid
+  const handleBoardingChange = (newBoardingCode) => {
+    setStationCode(newBoardingCode);
+    const bIndex = trainStops.findIndex(
+      (s) => s.code.toUpperCase() === newBoardingCode.toUpperCase()
+    );
+    const validDests = bIndex >= 0 ? trainStops.slice(bIndex + 1) : [];
+    if (validDests.length > 0) {
+      const isCurrentDestValid = validDests.some(
+        (s) => s.code.toUpperCase() === destination.toUpperCase()
+      );
+      if (!isCurrentDestValid) {
+        setDestination(validDests[validDests.length - 1].code);
+      }
+    } else {
+      setDestination('');
+    }
+  };
+
   const isStationOrDateChanged = Boolean(
     booking && (
-      (stationCode && stationCode !== booking.station_code) ||
+      (stationCode && stationCode.toUpperCase() !== String(booking.station_code || '').toUpperCase()) ||
       (journeyDate && journeyDate !== booking.journey_date)
     )
   );
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
-    if (isSubmitting) return; // Hard guard against double-submission
+    if (isSubmitting) return;
+
     if (!journeyDate) {
       setErrorMessage('Please select a valid journey date.');
+      return;
+    }
+    if (!stationCode) {
+      setErrorMessage('Please select a valid boarding station.');
       return;
     }
     if (!coach.trim() || !seatNumber.trim()) {
       setErrorMessage('Please provide both coach and seat number.');
       return;
+    }
+
+    // Direction validation
+    if (!isAssistantAccepted && destination && stationCode) {
+      const bIdx = trainStops.findIndex((s) => s.code.toUpperCase() === stationCode.toUpperCase());
+      const dIdx = trainStops.findIndex((s) => s.code.toUpperCase() === destination.toUpperCase());
+      if (bIdx !== -1 && dIdx !== -1 && dIdx <= bIdx) {
+        setErrorMessage('Destination station must appear after boarding station on the train route.');
+        return;
+      }
     }
 
     setErrorMessage('');
@@ -100,6 +222,8 @@ export default function RebookingModal({
         journey_date: journeyDate,
         journey_time: journeyTime,
         station_code: stationCode,
+        source: stationCode,
+        destination: destination || undefined,
         train_number: trainNumber,
         train_no: trainNumber,
         train_name: trainName,
@@ -143,6 +267,13 @@ export default function RebookingModal({
 
   if (!isOpen || !booking) return null;
 
+  // Boarding and Destination names for display
+  const currentBoardingStop = trainStops.find((s) => s.code.toUpperCase() === stationCode.toUpperCase());
+  const boardingName = currentBoardingStop?.name || booking.station_name || booking.source_name || stationCode;
+
+  const currentDestStop = trainStops.find((s) => s.code.toUpperCase() === destination.toUpperCase());
+  const destinationName = currentDestStop?.name || booking.destination_name || destination || 'Destination';
+
   const modalContent = (
     <div
       role="dialog"
@@ -166,7 +297,7 @@ export default function RebookingModal({
               <Sparkles className="w-3.5 h-3.5" />
               <span>Modify Trip Schedule</span>
             </div>
-            <h3 className="text-lg font-black text-zinc-900 tracking-tight">
+            <h3 id="rebooking-modal-title" className="text-lg font-black text-zinc-900 tracking-tight">
               Change Booking Details
             </h3>
             <p className="text-xs text-zinc-500 mt-0.5">
@@ -174,8 +305,21 @@ export default function RebookingModal({
             </p>
           </div>
 
-          {/* Reassignment Notice if date/station changed */}
-          {booking.assistant_id && isStationOrDateChanged && (
+          {/* Assistant Acceptance Notice: Station & Train Locked */}
+          {isAssistantAccepted && (
+            <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl text-xs text-blue-950 space-y-1">
+              <span className="font-extrabold flex items-center gap-1.5 text-blue-900">
+                <Lock className="w-3.5 h-3.5 text-blue-600" />
+                Assistant Assigned & Accepted
+              </span>
+              <p className="text-[11px] leading-relaxed text-blue-800">
+                An assistant has accepted this task. Station and train details are locked to ensure service continuity. You may still update your platform, coach, seat, and journey timing.
+              </p>
+            </div>
+          )}
+
+          {/* Reassignment Notice if date/station changed before acceptance */}
+          {!isAssistantAccepted && booking.assistant_id && isStationOrDateChanged && (
             <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
               <span className="font-extrabold flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
@@ -216,23 +360,93 @@ export default function RebookingModal({
               </div>
             </div>
 
-            {/* Row 2: Boarding Station & Platform */}
+            {/* Row 2: Boarding Station & Destination Station */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Boarding Station */}
               <div>
-                <label className="font-bold text-zinc-800 block mb-1">Boarding Station</label>
-                <select
-                  value={stationCode}
-                  onChange={(e) => setStationCode(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-black font-medium"
-                >
-                  {STATIONS.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name} ({s.code})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-zinc-800">Boarding Station</label>
+                  {isAssistantAccepted && (
+                    <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Locked
+                    </span>
+                  )}
+                </div>
+
+                {isAssistantAccepted ? (
+                  <div className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-zinc-700 font-semibold cursor-not-allowed select-none">
+                    {boardingName} ({stationCode})
+                  </div>
+                ) : isLoadingStops ? (
+                  <div className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-zinc-400 flex items-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Loading stops...</span>
+                  </div>
+                ) : stopsError ? (
+                  <div className="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-[11px] font-medium">
+                    {stopsError}
+                  </div>
+                ) : (
+                  <select
+                    value={stationCode}
+                    onChange={(e) => handleBoardingChange(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-black font-medium"
+                    required
+                  >
+                    {trainStops.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.name} ({s.code})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
+              {/* Destination Station */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-zinc-800">Destination Station</label>
+                  {isAssistantAccepted && (
+                    <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Locked
+                    </span>
+                  )}
+                </div>
+
+                {isAssistantAccepted ? (
+                  <div className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-zinc-700 font-semibold cursor-not-allowed select-none">
+                    {destinationName} ({destination || 'N/A'})
+                  </div>
+                ) : isLoadingStops ? (
+                  <div className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-zinc-400 flex items-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Loading stops...</span>
+                  </div>
+                ) : (
+                  <select
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-black font-medium"
+                    disabled={availableDestinations.length === 0}
+                  >
+                    {availableDestinations.length === 0 ? (
+                      <option value="">No subsequent stops</option>
+                    ) : (
+                      availableDestinations.map((s) => (
+                        <option key={s.code} value={s.code}>
+                          {s.name} ({s.code})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            {/* Row 3: Expected Platform & Train Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div>
                 <label className="font-bold text-zinc-800 block mb-1">Expected Platform</label>
                 <input
@@ -243,18 +457,29 @@ export default function RebookingModal({
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-black font-medium"
                 />
               </div>
-            </div>
 
-            {/* Row 3: Train Number & Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="font-bold text-zinc-800 block mb-1">Train Number</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-zinc-800">Train Number</label>
+                  {isAssistantAccepted && (
+                    <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Locked
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={trainNumber}
                   onChange={(e) => setTrainNumber(e.target.value)}
-                  placeholder="e.g. 12724"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-black font-medium uppercase font-mono"
+                  placeholder="e.g. 12738"
+                  disabled={isAssistantAccepted}
+                  title={isAssistantAccepted ? 'Train changes are unavailable after an assistant has accepted this service.' : ''}
+                  className={`w-full p-2.5 border rounded-xl font-medium uppercase font-mono ${
+                    isAssistantAccepted
+                      ? 'bg-slate-100 border-slate-200 text-zinc-500 cursor-not-allowed'
+                      : 'bg-slate-50 border-slate-200 focus:outline-none focus:border-black'
+                  }`}
                   required
                 />
               </div>
@@ -265,8 +490,13 @@ export default function RebookingModal({
                   type="text"
                   value={trainName}
                   onChange={(e) => setTrainName(e.target.value)}
-                  placeholder="e.g. Telangana Express"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-black font-medium"
+                  placeholder="e.g. Gowthami SF Express"
+                  disabled={isAssistantAccepted}
+                  className={`w-full p-2.5 border rounded-xl font-medium ${
+                    isAssistantAccepted
+                      ? 'bg-slate-100 border-slate-200 text-zinc-500 cursor-not-allowed'
+                      : 'bg-slate-50 border-slate-200 focus:outline-none focus:border-black'
+                  }`}
                 />
               </div>
             </div>
