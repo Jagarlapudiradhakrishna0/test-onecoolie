@@ -423,6 +423,9 @@ exports.completeBooking = async (req, res) => {
 
     const formatted = formatBooking(data);
     broadcast(booking.id, formatted);
+    if (booking.booking_id && booking.booking_id !== booking.id) {
+      broadcast(booking.booking_id, formatted);
+    }
 
     res.json(formatted);
   } catch (err) {

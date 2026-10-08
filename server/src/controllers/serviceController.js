@@ -40,6 +40,10 @@ exports.broadcast = (bookingId, booking) => {
 
   // Emit to specific booking room (for active passenger & assistant)
   io.to(`booking_${bookingId}`).emit('status_update', safePayload);
+  if (safePayload.passenger_id) {
+    io.to(`passenger_${safePayload.passenger_id}`).emit('status_update', safePayload);
+    io.to(`user_${safePayload.passenger_id}`).emit('status_update', safePayload);
+  }
   // Emit to authorized admin command center room
   io.to('admin_room').emit('status_update', safePayload);
 };

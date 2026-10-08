@@ -172,6 +172,10 @@ function formatBooking(booking, { includeOTP = false } = {}) {
     // ─── Rating & Review ──────────────────────────────────────────────────────
     rating: booking.rating || null,
     review: booking.review || null,
+    feedback_skipped: !!(booking.feedback_skipped || booking.services?.feedback_skipped),
+    feedback_status: (booking.rating && Number(booking.rating) > 0)
+      ? 'submitted'
+      : ((booking.feedback_skipped || booking.services?.feedback_skipped) ? 'skipped' : 'pending'),
     chat_messages: (booking.services && Array.isArray(booking.services.chat_messages)) ? booking.services.chat_messages : [],
 
     // ─── OTP (conditional) ───────────────────────────────────────────────────

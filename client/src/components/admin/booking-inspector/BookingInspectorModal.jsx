@@ -569,6 +569,21 @@ export default function BookingInspectorModal({
                         <span className="mx-2">•</span>
                         Assistant ID: <strong className="text-zinc-700 dark:text-zinc-300 font-mono">{sahayakId}</strong>
                       </div>
+
+                      {/* Real Passenger Rating & Review Display */}
+                      {currentBooking?.rating && (
+                        <div className="mt-2.5 p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200/80 dark:border-amber-800/60">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-amber-900 dark:text-amber-300">Passenger Rating</span>
+                            <span className="font-extrabold text-amber-600 dark:text-amber-400">★ {currentBooking.rating} / 5</span>
+                          </div>
+                          {currentBooking.review && (
+                            <p className="text-[11px] text-zinc-600 dark:text-zinc-300 mt-1 italic leading-snug">
+                              “{currentBooking.review}”
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 

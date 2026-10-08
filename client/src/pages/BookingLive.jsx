@@ -27,6 +27,7 @@ import PassengerNotifications from '../components/PassengerNotifications';
 import { STATIONS } from '../utils/services';
 import TrainLoader from '../components/TrainLoader';
 import { handleContactSupport } from '../services/supportService';
+import FeedbackModal from '../components/FeedbackModal';
 
 /* ============================================================
    BOOKING LIVE / TRIP DETAILS PAGE (PIXEL PERFECT MATCH TO MOCKUP)
@@ -136,6 +137,61 @@ export default function BookingLive() {
     const interval = setInterval(() => fetchBooking(false), 6000);
     return () => clearInterval(interval);
   }, [fetchBooking]);
+
+  // Real-time task completion detection via WebSocket
+  useEffect(() => {
+    if (!id || typeof window === 'undefined' || !window.socket) return;
+
+    const joinRooms = () => {
+      if (window.socket) {
+        window.socket.emit('join_booking', id);
+        if (booking?.id && booking.id !== id) {
+          window.socket.emit('join_booking', booking.id);
+        }
+        if (booking?.booking_id && booking.booking_id !== id) {
+          window.socket.emit('join_booking', booking.booking_id);
+        }
+      }
+    };
+
+    const handleStatusUpdate = (updated) => {
+      if (!updated) return;
+      const targetId = updated.id || updated.booking_id;
+      if (
+        targetId === id ||
+        (booking && (targetId === booking.id || targetId === booking.booking_id))
+      ) {
+        setBooking((prev) => ({ ...(prev || {}), ...updated }));
+      }
+    };
+
+    joinRooms();
+    window.socket.on('connect', joinRooms);
+    window.socket.on('status_update', handleStatusUpdate);
+
+    return () => {
+      if (window.socket) {
+        window.socket.off('connect', joinRooms);
+        window.socket.off('status_update', handleStatusUpdate);
+      }
+    };
+  }, [id, booking?.id, booking?.booking_id]);
+
+  const [feedbackHandled, setFeedbackHandled] = useState(false);
+
+  const isCompletedStatus = (booking?.booking_status || booking?.status || '').toLowerCase() === 'completed';
+  const hasFeedbackSubmitted = Boolean(booking?.rating && Number(booking.rating) > 0);
+  const hasFeedbackSkipped = Boolean(booking?.feedback_skipped || booking?.services?.feedback_skipped);
+  const showFeedbackModal = isCompletedStatus && !hasFeedbackSubmitted && !hasFeedbackSkipped && !feedbackHandled;
+
+  const handleFeedbackComplete = (action, updatedBooking) => {
+    setFeedbackHandled(true);
+    if (updatedBooking) {
+      setBooking(updatedBooking);
+    }
+    // Return passenger to Home/Main Page — never leave them trapped on Trip Details
+    navigate('/dashboard', { replace: true });
+  };
 
   useEffect(() => {
     if (booking?.booking_status === 'arriving') {
@@ -381,6 +437,14 @@ export default function BookingLive() {
           </div>
         </div>
       </footer>
+
+      {/* ── Post-Completion Passenger Feedback Popup ── */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        booking={booking}
+        onSuccess={handleFeedbackComplete}
+        onClose={() => handleFeedbackComplete('skipped', null)}
+      />
     </div>
   );
 }

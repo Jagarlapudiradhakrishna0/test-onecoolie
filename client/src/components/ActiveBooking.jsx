@@ -1463,7 +1463,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                 )}
               </div>
 
-              {feedbackStatus === 'success' ? (
+              {feedbackStatus === 'success' || (booking?.rating && Number(booking.rating) > 0) ? (
                 <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
                   <p className="text-xs text-zinc-600 font-medium">Thank you for your rating and review.</p>
                   <div className="flex items-center gap-1">
@@ -1484,6 +1484,11 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       “{review}”
                     </p>
                   )}
+                </div>
+              ) : (booking?.feedback_skipped || booking?.services?.feedback_skipped) ? (
+                <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 space-y-1">
+                  <p className="text-xs font-bold text-zinc-700">Trip Completed</p>
+                  <p className="text-xs text-zinc-500">Feedback was skipped for this journey. Thank you for travelling with ONECOOLIE.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1510,36 +1515,54 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                     placeholder="Share any comments about your assistant..."
                     className="w-full bg-[#F8FAFC] border border-slate-200 rounded-2xl p-3 text-xs focus:outline-none focus:border-[#1463FF]"
                   />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!rating) {
-                        toast.error('Please select a star rating first');
-                        return;
-                      }
-                      setFeedbackStatus('loading');
-                      try {
-                        const targetAssistantId = booking?.assistant_id || booking?.assistant?.id;
-                        const res = await axios.post(`/bookings/${bookingUuid}/review`, {
-                          rating,
-                          review,
-                          assistantId: targetAssistantId,
-                        });
-                        setFeedbackStatus('success');
-                        toast.success('Feedback submitted successfully!');
-                        if (res.data?.booking && onUpdate) {
-                          onUpdate(res.data.booking);
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await axios.post(`/bookings/${bookingUuid}/skip-feedback`);
+                          toast.success('Feedback skipped.');
+                          navigate('/dashboard', { replace: true });
+                        } catch (err) {
+                          navigate('/dashboard', { replace: true });
                         }
-                      } catch (err) {
-                        setFeedbackStatus('idle');
-                        const errorMsg = err.response?.data?.message || 'Unable to submit rating right now';
-                        toast.error(errorMsg);
-                      }
-                    }}
-                    className="px-5 py-2.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs transition-colors cursor-pointer"
-                  >
-                    Submit Feedback
-                  </button>
+                      }}
+                      className="px-4 py-2 rounded-full border border-slate-300 hover:bg-slate-100 text-zinc-700 font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Skip
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!rating) {
+                          toast.error('Please select a star rating first');
+                          return;
+                        }
+                        setFeedbackStatus('loading');
+                        try {
+                          const targetAssistantId = booking?.assistant_id || booking?.assistant?.id;
+                          const res = await axios.post(`/bookings/${bookingUuid}/review`, {
+                            rating,
+                            review,
+                            assistantId: targetAssistantId,
+                          });
+                          setFeedbackStatus('success');
+                          toast.success('Feedback submitted successfully!');
+                          if (res.data?.booking && onUpdate) {
+                            onUpdate(res.data.booking);
+                          }
+                          navigate('/dashboard', { replace: true });
+                        } catch (err) {
+                          setFeedbackStatus('idle');
+                          const errorMsg = err.response?.data?.message || 'Unable to submit rating right now';
+                          toast.error(errorMsg);
+                        }
+                      }}
+                      className="px-5 py-2.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Submit Feedback
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

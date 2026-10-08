@@ -83,6 +83,7 @@ import TrainLoader from '../components/TrainLoader';
 import JourneyProtectionCard from '../components/protection/JourneyProtectionCard';
 import JourneyProtectionTermsModal from '../components/protection/JourneyProtectionTermsModal';
 import { purchaseJourneyProtection } from '../services/protectionService';
+import FeedbackModal from '../components/FeedbackModal';
 
 /* ============================================================
    PASSENGER DASHBOARD — Swiss Minimal Product with Premium Icons
@@ -241,6 +242,8 @@ export default function PassengerDashboard() {
   const [bookingStep, setBookingStep] = useState(1); // 1: Journey | 2: Seat & Luggage | 3: Services | 4: Review & Payment
   const [journeyProtectionOptedIn, setJourneyProtectionOptedIn] = useState(false);
   const [activeProtectionModalBooking, setActiveProtectionModalBooking] = useState(null);
+  const [activeFeedbackBooking, setActiveFeedbackBooking] = useState(null);
+  const handledFeedbackIdsRef = useRef(new Set());
 
   // PNR lookup state
   const [pnrInput, setPnrInput] = useState('');
@@ -802,6 +805,27 @@ export default function PassengerDashboard() {
           fetchBookings();
           return;
         }
+
+        // Trigger feedback modal only when an active task transitions to completed in real-time
+        const isCompletedNow = (updated.booking_status || updated.status || '').toLowerCase() === 'completed';
+        const hasRating = Boolean(updated.rating && Number(updated.rating) > 0);
+        const hasSkipped = Boolean(updated.feedback_skipped || updated.services?.feedback_skipped);
+
+        if (isCompletedNow && !hasRating && !hasSkipped && !handledFeedbackIdsRef.current.has(String(updatedId))) {
+          setBookings((currentPrev) => {
+            const existing = (currentPrev || []).find((b) => {
+              const bId = b.id || b.booking_id || b._id;
+              return bId && String(bId) === String(updatedId);
+            });
+            const prevStatus = (existing?.booking_status || existing?.status || '').toLowerCase();
+            if (ACTIVE_STATUSES.includes(prevStatus) || prevStatus === 'in_service' || prevStatus === 'in_progress') {
+              handledFeedbackIdsRef.current.add(String(updatedId));
+              setActiveFeedbackBooking(updated);
+            }
+            return currentPrev;
+          });
+        }
+
         setBookings((prev) => {
           if (!Array.isArray(prev)) return [updated];
           const index = prev.findIndex((b) => {
@@ -850,6 +874,24 @@ export default function PassengerDashboard() {
 
     return () => clearInterval(interval);
   }, [fetchBookings, tab]);
+
+  const handleFeedbackComplete = (action, updatedBooking) => {
+    if (activeFeedbackBooking) {
+      const bId = activeFeedbackBooking.id || activeFeedbackBooking.booking_id;
+      if (bId) handledFeedbackIdsRef.current.add(String(bId));
+    }
+    setActiveFeedbackBooking(null);
+    if (updatedBooking) {
+      setBookings((prev) =>
+        prev.map((b) => {
+          const mId = updatedBooking.id || updatedBooking.booking_id;
+          const bId = b.id || b.booking_id;
+          return (mId && bId && String(mId) === String(bId)) ? { ...b, ...updatedBooking } : b;
+        })
+      );
+    }
+    setTab('book');
+  };
 
   const active = useMemo(() => {
     return bookings.filter((b) => {
@@ -4418,6 +4460,14 @@ export default function PassengerDashboard() {
           hasAccepted={Boolean(activeProtectionModalBooking.journey_protection)}
         />
       )}
+
+      {/* Post-Completion Feedback Modal */}
+      <FeedbackModal
+        isOpen={Boolean(activeFeedbackBooking)}
+        booking={activeFeedbackBooking}
+        onSuccess={handleFeedbackComplete}
+        onClose={() => handleFeedbackComplete('skipped', null)}
+      />
 
       {/* Legacy ConfirmDialog removed — CancellationModal is the single authoritative cancellation path */}
     </div>

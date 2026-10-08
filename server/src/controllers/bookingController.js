@@ -1122,9 +1122,9 @@ exports.rateBooking = async (req, res) => {
     | Validate rating
     |--------------------------------------------------------------------------
     */
-    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
       return res.status(400).json({
-        message: 'Rating must be between 1 and 5.'
+        message: 'Rating must be an integer between 1 and 5.'
       });
     }
 
@@ -1136,7 +1136,7 @@ exports.rateBooking = async (req, res) => {
     const { booking, error: findError } = await resolveBooking(
       supabase,
       req.params.id,
-      'id, booking_id, passenger_id, assistant_id, booking_status, rating, review'
+      'id, booking_id, passenger_id, assistant_id, booking_status, rating, review, services'
     );
 
     if (findError) {
@@ -1211,9 +1211,14 @@ exports.rateBooking = async (req, res) => {
     const reviewText = req.body.review !== undefined ? req.body.review : req.body.comment;
     const finalReview = reviewText ? String(reviewText).slice(0, 1000) : null;
 
+    const servicesObj = (booking.services && typeof booking.services === 'object') ? { ...booking.services } : {};
+    servicesObj.feedback_submitted_at = new Date().toISOString();
+    servicesObj.feedback_skipped = false;
+
     const updatePayload = {
       rating,
       review: finalReview,
+      services: servicesObj,
       updated_at: new Date().toISOString()
     };
 
@@ -1312,6 +1317,110 @@ exports.rateBooking = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Unable to submit rating.'
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| SKIP FEEDBACK
+|--------------------------------------------------------------------------
+|
+| POST /api/bookings/:id/skip-feedback
+|
+| Passenger skips providing feedback. Does NOT create any fake rating or rating=0.
+| Assistant average rating remains unaffected.
+| Stores persistent skip state in database to prevent repeated popups.
+|
+|--------------------------------------------------------------------------
+*/
+exports.skipFeedback = async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        message: 'Authentication required.'
+      });
+    }
+
+    const { booking, error: findError } = await resolveBooking(
+      supabase,
+      req.params.id,
+      'id, booking_id, passenger_id, assistant_id, booking_status, rating, review, services'
+    );
+
+    if (findError) {
+      return res.status(400).json({ message: findError.message });
+    }
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    // 1. Verify passenger ownership
+    if (String(booking.passenger_id) !== String(req.user.id)) {
+      return res.status(403).json({
+        message: 'You are not authorized for this booking.'
+      });
+    }
+
+    // 2. Only completed bookings can record feedback state
+    if (booking.booking_status !== 'completed') {
+      return res.status(400).json({
+        message: 'Only completed bookings can record feedback state.'
+      });
+    }
+
+    // If feedback has already been submitted with a rating, don't overwrite
+    if (booking.rating !== null && booking.rating !== undefined) {
+      return res.status(409).json({
+        message: 'Feedback has already been submitted for this booking.'
+      });
+    }
+
+    const servicesObj = (booking.services && typeof booking.services === 'object') ? { ...booking.services } : {};
+    servicesObj.feedback_skipped = true;
+    servicesObj.feedback_skipped_at = new Date().toISOString();
+
+    const updatePayload = {
+      services: servicesObj,
+      updated_at: new Date().toISOString()
+    };
+
+    const {
+      data,
+      error
+    } = await supabase
+      .from('bookings')
+      .update(updatePayload)
+      .eq('id', booking.id)
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+      .single();
+
+    if (error) {
+      console.error('SKIP FEEDBACK ERROR:', error);
+      return res.status(400).json({
+        message: error.message
+      });
+    }
+
+    const formatted = formatBooking(data, { includeOTP: true });
+    broadcast(booking.id, formatted);
+    if (booking.booking_id && booking.booking_id !== booking.id) {
+      broadcast(booking.booking_id, formatted);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Feedback skipped.',
+      booking: formatted,
+      feedback_skipped: true
+    });
+
+  } catch (error) {
+    console.error('SKIP FEEDBACK SERVER ERROR:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to skip feedback.'
     });
   }
 };

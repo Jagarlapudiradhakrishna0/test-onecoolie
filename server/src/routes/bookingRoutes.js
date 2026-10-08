@@ -15,7 +15,8 @@ const {
     processPayment,
     updateBooking,
     updateBookingServices,
-    rateBooking
+    rateBooking,
+    skipFeedback
 } = require('../controllers/bookingController');
 
 const { bookingCancellationLimiter } = require('../middleware/financialRateLimiter');
@@ -43,5 +44,8 @@ router.put('/:id/pay', protect, processPayment);
 router.post('/:id/rating', protect, rateBooking);
 router.post('/:id/rate', protect, rateBooking);
 router.post('/:id/review', protect, rateBooking);
+router.post('/:id/skip-feedback', protect, skipFeedback);
+router.post('/:id/feedback/skip', protect, skipFeedback);
+router.post('/:id/review/skip', protect, skipFeedback);
 
 module.exports = router;
