@@ -28,6 +28,7 @@ import { STATIONS } from '../utils/services';
 import TrainLoader from '../components/TrainLoader';
 import { handleContactSupport } from '../services/supportService';
 import FeedbackModal from '../components/FeedbackModal';
+import { useAuth } from '../context/AuthContext';
 
 /* ============================================================
    BOOKING LIVE / TRIP DETAILS PAGE (PIXEL PERFECT MATCH TO MOCKUP)
@@ -37,6 +38,7 @@ export default function BookingLive() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
   // Instant state initialization:
   // 1. From navigation state (seamless transition from dashboard after booking)
@@ -151,16 +153,26 @@ export default function BookingLive() {
         if (booking?.booking_id && booking.booking_id !== id) {
           window.socket.emit('join_booking', booking.booking_id);
         }
+        if (user?.id) {
+          window.socket.emit('join_passenger', String(user.id));
+        }
       }
     };
 
     const handleStatusUpdate = (updated) => {
       if (!updated) return;
-      const targetId = updated.id || updated.booking_id;
-      if (
-        targetId === id ||
-        (booking && (targetId === booking.id || targetId === booking.booking_id))
-      ) {
+      const isMatching =
+        updated.id === id ||
+        updated.booking_id === id ||
+        (booking && (
+          updated.id === booking.id ||
+          updated.booking_id === booking.booking_id ||
+          updated.id === booking.booking_id ||
+          updated.booking_id === booking.id
+        ));
+
+      if (isMatching) {
+        console.log('[FEEDBACK] BookingLive received status_update:', updated.booking_status || updated.status);
         setBooking((prev) => ({ ...(prev || {}), ...updated }));
       }
     };
@@ -168,14 +180,16 @@ export default function BookingLive() {
     joinRooms();
     window.socket.on('connect', joinRooms);
     window.socket.on('status_update', handleStatusUpdate);
+    window.socket.on('booking_completed', handleStatusUpdate);
 
     return () => {
       if (window.socket) {
         window.socket.off('connect', joinRooms);
         window.socket.off('status_update', handleStatusUpdate);
+        window.socket.off('booking_completed', handleStatusUpdate);
       }
     };
-  }, [id, booking?.id, booking?.booking_id]);
+  }, [id, booking?.id, booking?.booking_id, user?.id]);
 
   const [feedbackHandled, setFeedbackHandled] = useState(false);
 

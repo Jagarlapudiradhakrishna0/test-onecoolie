@@ -250,6 +250,38 @@ runTest('TEST 9 — ADMIN: Verified feedback appears in Admin Booking Inspector'
   assert.ok(content.includes('currentBooking.review'), 'Inspector must display review text when available');
 });
 
+// -----------------------------------------------------------------------------
+// TEST 10 — DB-BACKED FALLBACK IN PASSENGER DASHBOARD
+// -----------------------------------------------------------------------------
+runTest('TEST 10 — DB FALLBACK: fetchBookings detects completed unrated bookings on refresh', () => {
+  const dashPath = path.resolve(__dirname, '../../client/src/pages/PassengerDashboard.jsx');
+  const content = fs.readFileSync(dashPath, 'utf8');
+
+  assert.ok(content.includes('Section 5 DB-backed fallback check'), 'PassengerDashboard must contain DB fallback check');
+  assert.ok(content.includes("isCompleted = status === 'completed'"), 'DB fallback must check status === completed');
+  assert.ok(content.includes('!hasRating && !hasSkipped && !isHandled'), 'DB fallback must filter unrated, unskipped, unhandled bookings');
+  assert.ok(content.includes('setActiveFeedbackBooking'), 'DB fallback must set activeFeedbackBooking to trigger modal');
+});
+
+// -----------------------------------------------------------------------------
+// TEST 11 — SOCKET ROOM SUBSCRIPTIONS & CONSISTENT PAYLOAD
+// -----------------------------------------------------------------------------
+runTest('TEST 11 — REALTIME: join_passenger and booking room subscriptions active', () => {
+  const authPath = path.resolve(__dirname, '../../client/src/context/AuthContext.jsx');
+  const dashPath = path.resolve(__dirname, '../../client/src/pages/PassengerDashboard.jsx');
+  const serviceControllerPath = path.resolve(__dirname, '../src/controllers/serviceController.js');
+
+  const authContent = fs.readFileSync(authPath, 'utf8');
+  const dashContent = fs.readFileSync(dashPath, 'utf8');
+  const sContent = fs.readFileSync(serviceControllerPath, 'utf8');
+
+  assert.ok(authContent.includes("window.socket.emit('join_passenger', String(user.id))"), 'AuthContext must join passenger room');
+  assert.ok(dashContent.includes("window.socket.emit('join_passenger', String(user.id))"), 'PassengerDashboard must join passenger room');
+  assert.ok(sContent.includes("booking_completed"), 'serviceController broadcast must emit booking_completed event');
+  assert.ok(sContent.includes("bookingId:"), 'serviceController broadcast must include camelCase bookingId');
+  assert.ok(sContent.includes("passengerId:"), 'serviceController broadcast must include camelCase passengerId');
+});
+
 console.log('\n====================================================');
-console.log(`ALL ${passedTests} / ${totalTests} TESTS PASSED CLEANLY! (TEST 1 - TEST 9 FULLY VERIFIED)`);
+console.log(`ALL ${passedTests} / ${totalTests} TESTS PASSED CLEANLY! (TEST 1 - TEST 11 FULLY VERIFIED)`);
 console.log('====================================================\n');

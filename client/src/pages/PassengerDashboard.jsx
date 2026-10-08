@@ -466,6 +466,38 @@ export default function PassengerDashboard() {
       const { data } = await axios.get('/bookings/my-bookings');
       const tripsList = Array.isArray(data) ? data : (data?.trips || []);
       setBookings(tripsList);
+
+      // Section 5 DB-backed fallback check:
+      // When trips load, check if any completed booking requires feedback
+      const eligible = tripsList.filter((b) => {
+        if (!b) return false;
+        const status = (b.booking_status || b.status || '').toLowerCase();
+        const isCompleted = status === 'completed';
+        const hasRating = Boolean(b.rating && Number(b.rating) > 0);
+        const hasSkipped = Boolean(b.feedback_skipped || b.services?.feedback_skipped);
+        const bId = b.id ? String(b.id) : null;
+        const bCode = b.booking_id ? String(b.booking_id) : null;
+        const isHandled =
+          (bId && handledFeedbackIdsRef.current.has(bId)) ||
+          (bCode && handledFeedbackIdsRef.current.has(bCode));
+
+        return isCompleted && !hasRating && !hasSkipped && !isHandled;
+      });
+
+      if (eligible.length > 0) {
+        // Sort to get most recently completed
+        eligible.sort((a, b) => {
+          const tA = new Date(a.completed_at || a.updated_at || a.created_at || 0).getTime();
+          const tB = new Date(b.completed_at || b.updated_at || b.created_at || 0).getTime();
+          return tB - tA;
+        });
+        const targetBooking = eligible[0];
+        setActiveFeedbackBooking((current) => {
+          if (current) return current;
+          console.log('[FEEDBACK] Opening popup from DB fallback for booking:', targetBooking.id || targetBooking.booking_id);
+          return targetBooking;
+        });
+      }
     } catch (e) {
       console.error('Failed to fetch user trips:', e);
       setFetchError('Unable to load your trips. Please try again.');
@@ -795,35 +827,38 @@ export default function PassengerDashboard() {
     const interval = setInterval(fetchBookings, 8000);
 
     if (typeof window !== 'undefined' && window.socket) {
+      if (user?.id) {
+        window.socket.emit('join_passenger', String(user.id));
+      }
+
       const handleLiveTripEvent = (updated) => {
         if (!updated) {
           fetchBookings();
           return;
         }
         const updatedId = updated.id || updated.booking_id || updated._id;
-        if (!updatedId) {
+        const updatedCode = updated.booking_id;
+        if (!updatedId && !updatedCode) {
           fetchBookings();
           return;
         }
 
-        // Trigger feedback modal only when an active task transitions to completed in real-time
+        // Verify this booking belongs to the authenticated passenger
+        if (user?.id && updated.passenger_id && String(updated.passenger_id) !== String(user.id)) {
+          return;
+        }
+
+        // Trigger feedback modal when a task becomes completed in real-time
         const isCompletedNow = (updated.booking_status || updated.status || '').toLowerCase() === 'completed';
         const hasRating = Boolean(updated.rating && Number(updated.rating) > 0);
         const hasSkipped = Boolean(updated.feedback_skipped || updated.services?.feedback_skipped);
+        const isHandled =
+          (updatedId && handledFeedbackIdsRef.current.has(String(updatedId))) ||
+          (updatedCode && handledFeedbackIdsRef.current.has(String(updatedCode)));
 
-        if (isCompletedNow && !hasRating && !hasSkipped && !handledFeedbackIdsRef.current.has(String(updatedId))) {
-          setBookings((currentPrev) => {
-            const existing = (currentPrev || []).find((b) => {
-              const bId = b.id || b.booking_id || b._id;
-              return bId && String(bId) === String(updatedId);
-            });
-            const prevStatus = (existing?.booking_status || existing?.status || '').toLowerCase();
-            if (ACTIVE_STATUSES.includes(prevStatus) || prevStatus === 'in_service' || prevStatus === 'in_progress') {
-              handledFeedbackIdsRef.current.add(String(updatedId));
-              setActiveFeedbackBooking(updated);
-            }
-            return currentPrev;
-          });
+        if (isCompletedNow && !hasRating && !hasSkipped && !isHandled) {
+          console.log('[FEEDBACK] Realtime completion event received for booking:', updatedId || updatedCode);
+          setActiveFeedbackBooking(updated);
         }
 
         setBookings((prev) => {
@@ -831,7 +866,10 @@ export default function PassengerDashboard() {
           const index = prev.findIndex((b) => {
             if (!b) return false;
             const bId = b.id || b.booking_id || b._id;
-            return bId && String(bId) === String(updatedId);
+            return (
+              (bId && String(bId) === String(updatedId)) ||
+              (updatedCode && b.booking_id && String(b.booking_id) === String(updatedCode))
+            );
           });
           if (index >= 0) {
             const next = [...prev];
@@ -851,6 +889,7 @@ export default function PassengerDashboard() {
       };
 
       window.socket.on('status_update', handleLiveTripEvent);
+      window.socket.on('booking_completed', handleLiveTripEvent);
       window.socket.on('booking_cancelled', handleLiveTripEvent);
       window.socket.on('booking_updated', handleLiveTripEvent);
       window.socket.on('booking_created', handleLiveTripEvent);
@@ -862,6 +901,7 @@ export default function PassengerDashboard() {
         clearInterval(interval);
         if (window.socket) {
           window.socket.off('status_update', handleLiveTripEvent);
+          window.socket.off('booking_completed', handleLiveTripEvent);
           window.socket.off('booking_cancelled', handleLiveTripEvent);
           window.socket.off('booking_updated', handleLiveTripEvent);
           window.socket.off('booking_created', handleLiveTripEvent);
@@ -873,12 +913,14 @@ export default function PassengerDashboard() {
     }
 
     return () => clearInterval(interval);
-  }, [fetchBookings, tab]);
+  }, [fetchBookings, tab, user?.id]);
 
   const handleFeedbackComplete = (action, updatedBooking) => {
     if (activeFeedbackBooking) {
-      const bId = activeFeedbackBooking.id || activeFeedbackBooking.booking_id;
+      const bId = activeFeedbackBooking.id;
+      const bCode = activeFeedbackBooking.booking_id;
       if (bId) handledFeedbackIdsRef.current.add(String(bId));
+      if (bCode) handledFeedbackIdsRef.current.add(String(bCode));
     }
     setActiveFeedbackBooking(null);
     if (updatedBooking) {
@@ -892,6 +934,20 @@ export default function PassengerDashboard() {
     }
     setTab('book');
   };
+
+  // Subscribe socket to passenger's booking-specific rooms
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.socket && user?.id) {
+      window.socket.emit('join_passenger', String(user.id));
+      (bookings || []).forEach((b) => {
+        if (!b) return;
+        const bUuid = b.id ? String(b.id) : null;
+        const bCode = b.booking_id ? String(b.booking_id) : null;
+        if (bUuid) window.socket.emit('join_booking', bUuid);
+        if (bCode && bCode !== bUuid) window.socket.emit('join_booking', bCode);
+      });
+    }
+  }, [user?.id, bookings]);
 
   const active = useMemo(() => {
     return bookings.filter((b) => {

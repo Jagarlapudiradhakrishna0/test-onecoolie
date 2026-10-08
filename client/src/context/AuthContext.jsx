@@ -28,8 +28,15 @@ export const AuthProvider = ({ children }) => {
           setUser(parsedUser);
           if (window.socket) {
             window.socket.auth = { token };
-            if (!window.socket.connected) {
+            if (window.socket.connected) {
+              window.socket.disconnect().connect();
+            } else {
               window.socket.connect();
+            }
+            if (parsedUser.id && parsedUser.role === 'passenger') {
+              window.socket.emit('join_passenger', String(parsedUser.id));
+            } else if (parsedUser.id && parsedUser.role === 'assistant') {
+              window.socket.emit('join_assistant', String(parsedUser.id));
             }
           }
         } else {
@@ -59,6 +66,28 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener('session-expired', handleSessionExpired);
     return () => window.removeEventListener('session-expired', handleSessionExpired);
   }, []);
+
+  // Ensure socket joins identity room upon connect / reconnect
+  useEffect(() => {
+    if (!window.socket || !user?.id) return;
+    const rebindRoom = () => {
+      console.log('[FEEDBACK] Socket connected, joining room for user:', user.id, user.role);
+      if (user.role === 'passenger') {
+        window.socket.emit('join_passenger', String(user.id));
+      } else if (user.role === 'assistant') {
+        window.socket.emit('join_assistant', String(user.id));
+      }
+    };
+    if (window.socket.connected) {
+      rebindRoom();
+    }
+    window.socket.on('connect', rebindRoom);
+    return () => {
+      if (window.socket) {
+        window.socket.off('connect', rebindRoom);
+      }
+    };
+  }, [user?.id, user?.role]);
 
   // ============================================================
   // INTERNAL: Persist user session from backend response
@@ -96,8 +125,15 @@ export const AuthProvider = ({ children }) => {
 
     if (window.socket) {
       window.socket.auth = { token };
-      if (!window.socket.connected) {
+      if (window.socket.connected) {
+        window.socket.disconnect().connect();
+      } else {
         window.socket.connect();
+      }
+      if (userData.id && userData.role === 'passenger') {
+        window.socket.emit('join_passenger', String(userData.id));
+      } else if (userData.id && userData.role === 'assistant') {
+        window.socket.emit('join_assistant', String(userData.id));
       }
     }
 

@@ -38,14 +38,48 @@ exports.broadcast = (bookingId, booking) => {
     ...safePayload
   } = booking || {};
 
+  const cleanStatus = (safePayload.booking_status || safePayload.status || '').toLowerCase();
+
+  // Consistent payload with both snake_case and camelCase attributes
+  const broadcastPayload = {
+    ...safePayload,
+    bookingId: safePayload.id || safePayload.booking_id || bookingId,
+    passengerId: safePayload.passenger_id,
+    assistantId: safePayload.assistant_id,
+    status: safePayload.booking_status || safePayload.status
+  };
+
   // Emit to specific booking room (for active passenger & assistant)
-  io.to(`booking_${bookingId}`).emit('status_update', safePayload);
-  if (safePayload.passenger_id) {
-    io.to(`passenger_${safePayload.passenger_id}`).emit('status_update', safePayload);
-    io.to(`user_${safePayload.passenger_id}`).emit('status_update', safePayload);
+  io.to(`booking_${bookingId}`).emit('status_update', broadcastPayload);
+  if (safePayload.id && safePayload.id !== bookingId) {
+    io.to(`booking_${safePayload.id}`).emit('status_update', broadcastPayload);
   }
+  if (safePayload.booking_id && safePayload.booking_id !== bookingId) {
+    io.to(`booking_${safePayload.booking_id}`).emit('status_update', broadcastPayload);
+  }
+
+  if (safePayload.passenger_id) {
+    io.to(`passenger_${safePayload.passenger_id}`).emit('status_update', broadcastPayload);
+    io.to(`user_${safePayload.passenger_id}`).emit('status_update', broadcastPayload);
+  }
+
+  // When task is completed, also emit booking_completed
+  if (cleanStatus === 'completed') {
+    io.to(`booking_${bookingId}`).emit('booking_completed', broadcastPayload);
+    if (safePayload.id && safePayload.id !== bookingId) {
+      io.to(`booking_${safePayload.id}`).emit('booking_completed', broadcastPayload);
+    }
+    if (safePayload.booking_id && safePayload.booking_id !== bookingId) {
+      io.to(`booking_${safePayload.booking_id}`).emit('booking_completed', broadcastPayload);
+    }
+    if (safePayload.passenger_id) {
+      io.to(`passenger_${safePayload.passenger_id}`).emit('booking_completed', broadcastPayload);
+      io.to(`user_${safePayload.passenger_id}`).emit('booking_completed', broadcastPayload);
+    }
+  }
+
   // Emit to authorized admin command center room
-  io.to('admin_room').emit('status_update', safePayload);
+  io.to('admin_room').emit('status_update', broadcastPayload);
 };
 
 // --------------------------------------------------
