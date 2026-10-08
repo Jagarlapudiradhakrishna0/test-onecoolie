@@ -72,6 +72,10 @@ export default function BookingLive() {
   const [distance, setDistance] = useState(500);
   const [copiedId, setCopiedId] = useState(false);
 
+  const initialStatusRef = useRef(null);
+  const [hasLiveTransitionedToCompleted, setHasLiveTransitionedToCompleted] = useState(false);
+  const [feedbackHandled, setFeedbackHandled] = useState(false);
+
   const fetchBooking = useCallback(async (isManual = false) => {
     if (isManual) setIsRetrying(true);
     try {
@@ -101,6 +105,20 @@ export default function BookingLive() {
           } catch (statusErr) {
             // Continue gracefully
           }
+        }
+
+        const newStatus = (data.booking_status || data.status || '').toLowerCase();
+        if (initialStatusRef.current === null) {
+          initialStatusRef.current = newStatus;
+        } else {
+          setBooking((prev) => {
+            const prevStatus = (prev?.booking_status || prev?.status || initialStatusRef.current || '').toLowerCase();
+            if (prevStatus && prevStatus !== 'completed' && prevStatus !== 'cancelled' && newStatus === 'completed') {
+              console.log('[FEEDBACK] BookingLive polling detected completion transition:', { prevStatus, newStatus });
+              setHasLiveTransitionedToCompleted(true);
+            }
+            return prev;
+          });
         }
 
         setBooking(data);
@@ -172,7 +190,13 @@ export default function BookingLive() {
         ));
 
       if (isMatching) {
-        console.log('[FEEDBACK] BookingLive received status_update:', updated.booking_status || updated.status);
+        const newStatus = (updated.booking_status || updated.status || '').toLowerCase();
+        const prevStatus = (booking?.booking_status || booking?.status || initialStatusRef.current || '').toLowerCase();
+        if (prevStatus && prevStatus !== 'completed' && prevStatus !== 'cancelled' && newStatus === 'completed') {
+          console.log('[FEEDBACK] BookingLive live completion transition detected from realtime event:', { prevStatus, newStatus });
+          setHasLiveTransitionedToCompleted(true);
+        }
+        console.log('[FEEDBACK] BookingLive received status_update:', newStatus);
         setBooking((prev) => ({ ...(prev || {}), ...updated }));
       }
     };
@@ -191,12 +215,10 @@ export default function BookingLive() {
     };
   }, [id, booking?.id, booking?.booking_id, user?.id]);
 
-  const [feedbackHandled, setFeedbackHandled] = useState(false);
-
   const isCompletedStatus = (booking?.booking_status || booking?.status || '').toLowerCase() === 'completed';
   const hasFeedbackSubmitted = Boolean(booking?.rating && Number(booking.rating) > 0);
   const hasFeedbackSkipped = Boolean(booking?.feedback_skipped || booking?.services?.feedback_skipped);
-  const showFeedbackModal = isCompletedStatus && !hasFeedbackSubmitted && !hasFeedbackSkipped && !feedbackHandled;
+  const showFeedbackModal = hasLiveTransitionedToCompleted && isCompletedStatus && !hasFeedbackSubmitted && !hasFeedbackSkipped && !feedbackHandled;
 
   const handleFeedbackComplete = (action, updatedBooking) => {
     setFeedbackHandled(true);

@@ -244,6 +244,8 @@ export default function PassengerDashboard() {
   const [activeProtectionModalBooking, setActiveProtectionModalBooking] = useState(null);
   const [activeFeedbackBooking, setActiveFeedbackBooking] = useState(null);
   const handledFeedbackIdsRef = useRef(new Set());
+  const bookingStatusRef = useRef(new Map());
+  const isInitialFetchDoneRef = useRef(false);
 
   // PNR lookup state
   const [pnrInput, setPnrInput] = useState('');
@@ -467,35 +469,61 @@ export default function PassengerDashboard() {
       const tripsList = Array.isArray(data) ? data : (data?.trips || []);
       setBookings(tripsList);
 
-      // Section 5 DB-backed fallback check:
-      // When trips load, check if any completed booking requires feedback
-      const eligible = tripsList.filter((b) => {
-        if (!b) return false;
-        const status = (b.booking_status || b.status || '').toLowerCase();
-        const isCompleted = status === 'completed';
-        const hasRating = Boolean(b.rating && Number(b.rating) > 0);
-        const hasSkipped = Boolean(b.feedback_skipped || b.services?.feedback_skipped);
-        const bId = b.id ? String(b.id) : null;
-        const bCode = b.booking_id ? String(b.booking_id) : null;
-        const isHandled =
-          (bId && handledFeedbackIdsRef.current.has(bId)) ||
-          (bCode && handledFeedbackIdsRef.current.has(bCode));
+      const isInitialLoad = !isInitialFetchDoneRef.current;
 
-        return isCompleted && !hasRating && !hasSkipped && !isHandled;
-      });
-
-      if (eligible.length > 0) {
-        // Sort to get most recently completed
-        eligible.sort((a, b) => {
-          const tA = new Date(a.completed_at || a.updated_at || a.created_at || 0).getTime();
-          const tB = new Date(b.completed_at || b.updated_at || b.created_at || 0).getTime();
-          return tB - tA;
+      if (isInitialLoad) {
+        console.log('[FEEDBACK] Initial booking load — recording known statuses, suppressing auto-popup');
+        // Initial fetch: record status of all bookings in session map.
+        // DO NOT open feedback popup on initial load / login / refresh!
+        tripsList.forEach((b) => {
+          if (!b) return;
+          const status = (b.booking_status || b.status || '').toLowerCase();
+          const bUuid = b.id ? String(b.id) : null;
+          const bCode = b.booking_id ? String(b.booking_id) : null;
+          if (bUuid) bookingStatusRef.current.set(bUuid, status);
+          if (bCode) bookingStatusRef.current.set(bCode, status);
+          console.log('[FEEDBACK] Booking status recorded (initial):', bCode || bUuid, '->', status);
         });
-        const targetBooking = eligible[0];
-        setActiveFeedbackBooking((current) => {
-          if (current) return current;
-          console.log('[FEEDBACK] Opening popup from DB fallback for booking:', targetBooking.id || targetBooking.booking_id);
-          return targetBooking;
+        isInitialFetchDoneRef.current = true;
+      } else {
+        // Subsequent fetch / reconnect fallback:
+        // ONLY trigger popup if a booking that was ACTIVELY tracked in this session has now transitioned to 'completed'
+        tripsList.forEach((b) => {
+          if (!b) return;
+          const bUuid = b.id ? String(b.id) : null;
+          const bCode = b.booking_id ? String(b.booking_id) : null;
+          const newStatus = (b.booking_status || b.status || '').toLowerCase();
+          const prevStatus = (bUuid && bookingStatusRef.current.get(bUuid)) || (bCode && bookingStatusRef.current.get(bCode));
+
+          const hasRating = Boolean(b.rating && Number(b.rating) > 0);
+          const hasSkipped = Boolean(b.feedback_skipped || b.services?.feedback_skipped);
+          const isHandled =
+            (bUuid && handledFeedbackIdsRef.current.has(bUuid)) ||
+            (bCode && handledFeedbackIdsRef.current.has(bCode));
+
+          // Valid transition: it was previously active in this session, now completed, unrated & unskipped
+          const validCompletion =
+            prevStatus &&
+            prevStatus !== 'completed' &&
+            prevStatus !== 'cancelled' &&
+            newStatus === 'completed';
+
+          if (validCompletion && !hasRating && !hasSkipped && !isHandled) {
+            console.log('[FEEDBACK] Valid completion transition detected via DB polling for booking:', bCode || bUuid, {
+              previousStatus: prevStatus,
+              newStatus
+            });
+            setActiveFeedbackBooking((current) => {
+              if (current) return current;
+              return b;
+            });
+          } else if (newStatus === 'completed' && prevStatus === 'completed') {
+            console.log('[FEEDBACK] Historical booking ignored on poll:', bCode || bUuid);
+          }
+
+          // Update status in map
+          if (bUuid) bookingStatusRef.current.set(bUuid, newStatus);
+          if (bCode) bookingStatusRef.current.set(bCode, newStatus);
         });
       }
     } catch (e) {
@@ -845,21 +873,43 @@ export default function PassengerDashboard() {
 
         // Verify this booking belongs to the authenticated passenger
         if (user?.id && updated.passenger_id && String(updated.passenger_id) !== String(user.id)) {
+          console.log('[FEEDBACK] Event ignored: booking belongs to another passenger');
           return;
         }
 
-        // Trigger feedback modal when a task becomes completed in real-time
-        const isCompletedNow = (updated.booking_status || updated.status || '').toLowerCase() === 'completed';
+        const newStatus = (updated.booking_status || updated.status || '').toLowerCase();
+        const prevStatus =
+          (updatedId && bookingStatusRef.current.get(String(updatedId))) ||
+          (updatedCode && bookingStatusRef.current.get(String(updatedCode)));
+
         const hasRating = Boolean(updated.rating && Number(updated.rating) > 0);
         const hasSkipped = Boolean(updated.feedback_skipped || updated.services?.feedback_skipped);
         const isHandled =
           (updatedId && handledFeedbackIdsRef.current.has(String(updatedId))) ||
           (updatedCode && handledFeedbackIdsRef.current.has(String(updatedCode)));
 
-        if (isCompletedNow && !hasRating && !hasSkipped && !isHandled) {
-          console.log('[FEEDBACK] Realtime completion event received for booking:', updatedId || updatedCode);
+        // A valid completion transition means:
+        // 1. The new status is 'completed'
+        // 2. The booking was not ALREADY completed prior to this event (prevStatus !== 'completed')
+        // 3. Feedback is still pending and not handled
+        const isCompletionEvent = newStatus === 'completed';
+        const wasNotAlreadyCompleted = !prevStatus || prevStatus !== 'completed';
+        const validCompletion = isCompletionEvent && wasNotAlreadyCompleted;
+
+        if (validCompletion && !hasRating && !hasSkipped && !isHandled) {
+          console.log('[FEEDBACK] Valid completion transition from realtime event:', {
+            bookingId: updatedCode || updatedId,
+            previousStatus: prevStatus || 'active_session',
+            newStatus
+          });
           setActiveFeedbackBooking(updated);
+        } else if (isCompletionEvent && (prevStatus === 'completed' || isHandled)) {
+          console.log('[FEEDBACK] Historical booking or already handled completion ignored:', updatedCode || updatedId);
         }
+
+        // Always update the known status map
+        if (updatedId) bookingStatusRef.current.set(String(updatedId), newStatus);
+        if (updatedCode) bookingStatusRef.current.set(String(updatedCode), newStatus);
 
         setBookings((prev) => {
           if (!Array.isArray(prev)) return [updated];
@@ -919,8 +969,14 @@ export default function PassengerDashboard() {
     if (activeFeedbackBooking) {
       const bId = activeFeedbackBooking.id;
       const bCode = activeFeedbackBooking.booking_id;
-      if (bId) handledFeedbackIdsRef.current.add(String(bId));
-      if (bCode) handledFeedbackIdsRef.current.add(String(bCode));
+      if (bId) {
+        handledFeedbackIdsRef.current.add(String(bId));
+        bookingStatusRef.current.set(String(bId), 'completed');
+      }
+      if (bCode) {
+        handledFeedbackIdsRef.current.add(String(bCode));
+        bookingStatusRef.current.set(String(bCode), 'completed');
+      }
     }
     setActiveFeedbackBooking(null);
     if (updatedBooking) {

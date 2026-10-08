@@ -251,16 +251,16 @@ runTest('TEST 9 — ADMIN: Verified feedback appears in Admin Booking Inspector'
 });
 
 // -----------------------------------------------------------------------------
-// TEST 10 — DB-BACKED FALLBACK IN PASSENGER DASHBOARD
+// TEST 10 — SUPPRESS ON LOGIN & TRACK SESSION TRANSITIONS
 // -----------------------------------------------------------------------------
-runTest('TEST 10 — DB FALLBACK: fetchBookings detects completed unrated bookings on refresh', () => {
+runTest('TEST 10 — SUPPRESS ON LOGIN: fetchBookings suppresses auto-popup on initial load/refresh and triggers only on session transitions', () => {
   const dashPath = path.resolve(__dirname, '../../client/src/pages/PassengerDashboard.jsx');
   const content = fs.readFileSync(dashPath, 'utf8');
 
-  assert.ok(content.includes('Section 5 DB-backed fallback check'), 'PassengerDashboard must contain DB fallback check');
-  assert.ok(content.includes("isCompleted = status === 'completed'"), 'DB fallback must check status === completed');
-  assert.ok(content.includes('!hasRating && !hasSkipped && !isHandled'), 'DB fallback must filter unrated, unskipped, unhandled bookings');
-  assert.ok(content.includes('setActiveFeedbackBooking'), 'DB fallback must set activeFeedbackBooking to trigger modal');
+  assert.ok(content.includes('isInitialLoad = !isInitialFetchDoneRef.current'), 'PassengerDashboard must detect initial fetch');
+  assert.ok(content.includes('suppressing auto-popup'), 'Initial load must suppress auto-popup');
+  assert.ok(content.includes('prevStatus !== \'completed\''), 'Only bookings previously active in session trigger popup');
+  assert.ok(content.includes('bookingStatusRef'), 'Status transitions must be tracked across polling cycles in ref');
 });
 
 // -----------------------------------------------------------------------------
@@ -282,6 +282,18 @@ runTest('TEST 11 — REALTIME: join_passenger and booking room subscriptions act
   assert.ok(sContent.includes("passengerId:"), 'serviceController broadcast must include camelCase passengerId');
 });
 
+// -----------------------------------------------------------------------------
+// TEST 12 — TRIP DETAILS (BOOKINGLIVE) TRIGGER ISOLATION
+// -----------------------------------------------------------------------------
+runTest('TEST 12 — TRIP DETAILS: BookingLive suppresses auto-popup on load and opens only on live completion transition', () => {
+  const livePath = path.resolve(__dirname, '../../client/src/pages/BookingLive.jsx');
+  const content = fs.readFileSync(livePath, 'utf8');
+
+  assert.ok(content.includes('hasLiveTransitionedToCompleted'), 'BookingLive must track live transition');
+  assert.ok(content.includes('initialStatusRef'), 'BookingLive must record initial status on mount to ignore historical completed');
+  assert.ok(content.includes('showFeedbackModal = hasLiveTransitionedToCompleted'), 'showFeedbackModal must require live transition');
+});
+
 console.log('\n====================================================');
-console.log(`ALL ${passedTests} / ${totalTests} TESTS PASSED CLEANLY! (TEST 1 - TEST 11 FULLY VERIFIED)`);
+console.log(`ALL ${passedTests} / ${totalTests} TESTS PASSED CLEANLY! (TEST 1 - TEST 12 FULLY VERIFIED)`);
 console.log('====================================================\n');
