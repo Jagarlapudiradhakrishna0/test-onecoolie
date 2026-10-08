@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import {
   LayoutDashboard,
@@ -62,19 +63,32 @@ const STATIONS = [
   { code: 'SC', name: 'Secunderabad Junction' },
 ];
 
-export default function AssistantDashboard() {
+export default function AssistantDashboard({ initialTab = 'dashboard' }) {
   const { lang, t } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const resolvedInitialTab = searchParams.get('tab') || location.state?.tab || initialTab || 'dashboard';
+
   const [profile, setProfile] = useState(null);
   const [station, setStation] = useState('KZJ');
   const [requests, setRequests] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
-  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'jobs' | 'history' | 'earnings' | 'profile' | 'support'
+  const [tab, setTab] = useState(resolvedInitialTab); // 'dashboard' | 'jobs' | 'history' | 'earnings' | 'profile' | 'support'
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Keep tab in sync if URL query or state changes (e.g. navigation / refresh)
+  useEffect(() => {
+    const requested = searchParams.get('tab') || location.state?.tab;
+    if (requested && requested !== tab) {
+      setTab(requested);
+    }
+  }, [searchParams, location.state]);
 
   /* ── Sound Alert Tracking Refs ───────────────────────────── */
   const prevRequestIdsRef = useRef(new Set());
@@ -96,6 +110,7 @@ export default function AssistantDashboard() {
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketSuccess, setTicketSuccess] = useState('');
   const [ticketError, setTicketError] = useState('');
+  const [expandedFaq, setExpandedFaq] = useState(null);
   /* ── User Auth Session & Notifications ──────────────────── */
   const { user } = useAuth();
   const { unreadByType, markReadByType } = useNotifications();

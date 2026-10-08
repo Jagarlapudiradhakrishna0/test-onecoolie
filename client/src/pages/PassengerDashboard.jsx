@@ -78,6 +78,7 @@ import TicketDetailView from '../components/support/TicketDetailView';
 import FaqView from '../components/support/FaqView';
 import RaiseTicketView from '../components/support/RaiseTicketView';
 import { FAQ_QUESTIONS, FAQ_CATEGORIES } from '../utils/supportFaqData';
+import { handleContactSupport } from '../services/supportService';
 import Footer from '../components/Footer';
 import TrainLoader from '../components/TrainLoader';
 import JourneyProtectionCard from '../components/protection/JourneyProtectionCard';

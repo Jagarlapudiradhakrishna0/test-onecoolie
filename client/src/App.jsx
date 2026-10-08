@@ -251,6 +251,18 @@ export default function App() {
               }
             />
 
+            {/* Assistant Support Route */}
+            <Route
+              path="/assistant/support"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['assistant']}
+                >
+                  <AssistantDashboard initialTab="support" />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Admin */}
             <Route
               path="/admin"

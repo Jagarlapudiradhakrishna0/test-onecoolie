@@ -265,7 +265,14 @@ export default function ProfileMenu({ role, onNavigate }) {
           key: 'help',
           label: t('nav.support'),
           sub: 'Get assistance anytime',
-          act: () => setModal('help'),
+          act: () => {
+            setOpen(false);
+            if (onNavigate) {
+              onNavigate('support');
+            } else {
+              navigate('/assistant?tab=support');
+            }
+          },
           icon: HelpCircle,
         },
         {

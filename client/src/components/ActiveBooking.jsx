@@ -43,6 +43,7 @@ import {
   saveLocalChat,
   mergeChatMessages,
   fetchRemoteChat,
+  persistRemoteChat,
 } from '../utils/chatSync';
 import { handleContactSupport, isMobileDevice } from '../services/supportService';
 import JourneyProtectionTermsModal from './protection/JourneyProtectionTermsModal';

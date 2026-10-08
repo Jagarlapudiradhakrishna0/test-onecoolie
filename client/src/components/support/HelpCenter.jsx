@@ -93,6 +93,15 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
   // Top 2 tickets for the summary view
   const displayedTickets = tickets.slice(0, 2);
 
+  const userRole = user?.role || 'passenger';
+  const handleNavTab = (t) => {
+    if (userRole === 'assistant') {
+      navigate(`/assistant?tab=${t}`);
+    } else {
+      navigate(`/dashboard?tab=${t}`);
+    }
+  };
+
   return (
     <div className={`${embeddedInDashboard ? 'w-full' : 'min-h-screen flex flex-col bg-[#F8FAFC]'} text-slate-900 font-sans selection:bg-[#1463FF] selection:text-white`}>
       
@@ -109,10 +118,10 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                 <PassengerNotifications
                   bookings={allBookings}
                   activeBookings={activeBookings}
-                  onNavigateTab={(t) => navigate(`/dashboard?tab=${t}`)}
+                  onNavigateTab={handleNavTab}
                   buttonClassName="w-9 h-9 rounded-full bg-slate-100 text-zinc-700 flex items-center justify-center relative border border-slate-200/60 shadow-2xs cursor-pointer"
                 />
-                <ProfileMenu role="passenger" onNavigate={(t) => navigate(`/dashboard?tab=${t}`)} />
+                <ProfileMenu role={userRole} onNavigate={handleNavTab} />
               </div>
             </div>
 
@@ -204,11 +213,11 @@ export default function HelpCenter({ onNavigate, activeTrip, user, embeddedInDas
                 <PassengerNotifications
                   bookings={allBookings}
                   activeBookings={activeBookings}
-                  onNavigateTab={(t) => navigate(`/dashboard?tab=${t}`)}
+                  onNavigateTab={handleNavTab}
                   buttonClassName="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 flex items-center justify-center transition-colors relative cursor-pointer group border border-slate-200/60 shadow-2xs"
                 />
 
-                <ProfileMenu role="passenger" onNavigate={(t) => navigate(`/dashboard?tab=${t}`)} />
+                <ProfileMenu role={userRole} onNavigate={handleNavTab} />
               </div>
             </div>
           </header>
