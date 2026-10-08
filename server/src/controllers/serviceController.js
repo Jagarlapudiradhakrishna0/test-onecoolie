@@ -514,7 +514,7 @@ exports.markPaid = async (req, res) => {
 exports.rateBooking = async (req, res) => {
   try {
     const { booking_id } = req.params;
-    const { rating, review } = req.body;
+    const { rating, review, comment, assistantId, assistant_id } = req.body;
 
     const numericRating = Number(rating);
 
@@ -522,32 +522,57 @@ exports.rateBooking = async (req, res) => {
       return res.status(400).json({ message: 'Rating must be between 1 and 5.' });
     }
 
-    const { data: booking, error: bookingError } = await supabase
-      .from('bookings')
-      .select('id, passenger_id, booking_status')
-      .eq('id', booking_id)
-      .single();
+    const { booking, error: bookingError } = await resolveBooking(
+      supabase,
+      booking_id,
+      'id, booking_id, passenger_id, assistant_id, booking_status, rating, review'
+    );
 
     if (bookingError || !booking) {
       return res.status(404).json({ message: 'Booking not found.' });
     }
 
-    if (booking.passenger_id !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized.' });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: 'Authentication required.' });
     }
 
+    // 1. Verify passenger owns booking
+    if (String(booking.passenger_id) !== String(req.user.id)) {
+      return res.status(403).json({ message: 'You are not authorized to rate this booking.' });
+    }
+
+    // 2. Verify service/task is completed
     if (booking.booking_status !== 'completed') {
       return res.status(400).json({ message: 'Can only rate completed bookings.' });
     }
+
+    // 3. Verify an assistant was actually assigned
+    if (!booking.assistant_id) {
+      return res.status(400).json({ message: 'No assistant was assigned to this booking.' });
+    }
+
+    // 4. Verify assistant being rated matches assigned assistant
+    const submittedAssistantId = assistantId || assistant_id;
+    if (submittedAssistantId && String(submittedAssistantId) !== String(booking.assistant_id)) {
+      return res.status(400).json({ message: 'The assistant being rated does not match the assigned assistant.' });
+    }
+
+    // 5. Prevent duplicate feedback for the same completed service
+    if (booking.rating !== null && booking.rating !== undefined) {
+      return res.status(409).json({ message: 'Feedback has already been submitted for this booking.' });
+    }
+
+    const reviewText = review !== undefined ? review : comment;
+    const finalReview = reviewText ? String(reviewText).slice(0, 1000) : null;
 
     const { data, error } = await supabase
       .from('bookings')
       .update({
         rating: numericRating,
-        review: review ? String(review).slice(0, 1000) : null,
+        review: finalReview,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', booking_id)
+      .eq('id', booking.id)
       .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 
@@ -555,31 +580,73 @@ exports.rateBooking = async (req, res) => {
       return res.status(400).json({ message: error.message });
     }
 
-    if (data?.assistant && data.assistant_id) {
-      try {
-        const { data: assistantJobs } = await supabase
-          .from('bookings')
-          .select('rating, booking_status')
-          .eq('assistant_id', data.assistant_id);
+    // Authoritatively calculate assistant's real rating and stats from database
+    let assistantAvgRating = null;
+    let assistantTotalRatings = 0;
+    try {
+      const { data: assistantJobs } = await supabase
+        .from('bookings')
+        .select('rating, booking_status')
+        .eq('assistant_id', booking.assistant_id);
 
-        if (assistantJobs) {
-          const completed = assistantJobs.filter((j) => j.booking_status === 'completed');
-          const rated = completed.filter((j) => j.rating);
-          const avg = rated.length
-            ? (rated.reduce((s, j) => s + Number(j.rating), 0) / rated.length).toFixed(1)
-            : null;
+      if (assistantJobs) {
+        const completed = assistantJobs.filter((j) => j.booking_status === 'completed');
+        const rated = completed.filter((j) => j.rating && Number(j.rating) > 0);
+        assistantTotalRatings = rated.length;
+        assistantAvgRating = rated.length
+          ? (rated.reduce((s, j) => s + Number(j.rating), 0) / rated.length).toFixed(1)
+          : null;
+
+        if (data?.assistant) {
           data.assistant.completed_jobs = completed.length;
-          data.assistant.rating = avg;
+          data.assistant.rating = assistantAvgRating;
+          data.assistant.total_ratings = assistantTotalRatings;
         }
-      } catch (err) {
-        // Non-blocking assistant stats
       }
+    } catch (err) {
+      // Non-blocking assistant stats calculation
     }
 
     const formatted = formatBooking(data, { includeOTP: true });
-    exports.broadcast(booking_id, formatted);
+    exports.broadcast(booking.id, formatted);
+    if (booking.booking_id && booking.booking_id !== booking.id) {
+      exports.broadcast(booking.booking_id, formatted);
+    }
 
-    return res.json(formatted);
+    // Realtime notification to assistant room, booking room, and admin
+    if (io) {
+      const ratingEventPayload = {
+        bookingId: booking.id,
+        booking_id: booking.id,
+        bookingCode: booking.booking_id,
+        assistantId: booking.assistant_id,
+        assistant_id: booking.assistant_id,
+        rating: numericRating,
+        review: finalReview,
+        averageRating: assistantAvgRating,
+        average_rating: assistantAvgRating,
+        totalRatings: assistantTotalRatings,
+        total_ratings: assistantTotalRatings,
+        timestamp: new Date().toISOString(),
+      };
+      io.to(`assistant_${booking.assistant_id}`).emit('rating_submitted', ratingEventPayload);
+      io.to(`user_${booking.assistant_id}`).emit('rating_submitted', ratingEventPayload);
+      io.to(`booking_${booking.id}`).emit('rating_submitted', ratingEventPayload);
+      if (booking.booking_id && booking.booking_id !== booking.id) {
+        io.to(`booking_${booking.booking_id}`).emit('rating_submitted', ratingEventPayload);
+      }
+      io.to('admin_room').emit('rating_submitted', ratingEventPayload);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Feedback submitted successfully.',
+      booking: formatted,
+      rating: numericRating,
+      review: finalReview,
+      average_rating: assistantAvgRating,
+      total_ratings: assistantTotalRatings,
+    });
 
   } catch (err) {
     console.error('RATE BOOKING ERROR:', err);
@@ -675,22 +742,19 @@ exports.triggerSOS = async (req, res) => {
 exports.getChatMessages = async (req, res) => {
   try {
     const { booking_id } = req.params;
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking_id);
 
-    let query = supabase.from('bookings').select('id, booking_id, services, passenger_id, assistant_id');
-    if (isUUID) {
-      query = query.eq('id', booking_id);
-    } else {
-      query = query.eq('booking_id', booking_id);
-    }
+    const { booking, error } = await resolveBooking(
+      supabase,
+      booking_id,
+      'id, booking_id, services, passenger_id, assistant_id'
+    );
 
-    const { data: booking, error } = await query.maybeSingle();
     if (error || !booking) {
       return res.status(404).json({ message: 'Booking not found.' });
     }
 
-    const isPassenger = booking.passenger_id === req.user?.id;
-    const isAssistant = booking.assistant_id && booking.assistant_id === req.user?.id;
+    const isPassenger = booking.passenger_id && String(booking.passenger_id) === String(req.user?.id);
+    const isAssistant = booking.assistant_id && String(booking.assistant_id) === String(req.user?.id);
     const isAdmin = req.user?.role === 'admin';
 
     if (!isPassenger && !isAssistant && !isAdmin) {
@@ -702,19 +766,35 @@ exports.getChatMessages = async (req, res) => {
       : [];
 
     // Ensure all messages have canonical structure and are sorted chronologically
-    const messages = rawMessages.map((m, idx) => ({
-      id: m.id || `msg-${m.timestamp || idx}-${idx}`,
-      clientMessageId: m.clientMessageId || m.id || `msg-${idx}`,
-      bookingId: booking.id,
-      bookingCode: booking.booking_id,
-      from: m.from || m.senderRole || 'passenger',
-      senderRole: m.senderRole || m.from || 'passenger',
-      senderId: m.senderId || null,
-      senderName: m.senderName || '',
-      text: m.text || '',
-      timestamp: m.timestamp || new Date().toISOString(),
-      status: m.status || 'delivered',
-    })).sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+    const messages = rawMessages.map((m, idx) => {
+      const canonicalId = m.id || m.message_id || `msg-${m.timestamp || m.created_at || idx}-${idx}`;
+      const msgTime = m.timestamp || m.created_at || new Date().toISOString();
+      const sRole = m.sender_role || m.senderRole || m.from || 'passenger';
+      const msgContent = m.message || m.text || '';
+      return {
+        id: canonicalId,
+        message_id: canonicalId,
+        clientMessageId: m.clientMessageId || m.client_message_id || canonicalId,
+        conversation_id: booking.id,
+        booking_id: booking.id,
+        bookingId: booking.id,
+        bookingCode: booking.booking_id,
+        from: sRole,
+        sender_role: sRole,
+        senderRole: sRole,
+        sender_id: m.sender_id || m.senderId || null,
+        senderId: m.sender_id || m.senderId || null,
+        senderName: m.senderName || m.sender_name || '',
+        receiver_id: m.receiver_id || m.receiverId || (sRole === 'passenger' ? booking.assistant_id : (sRole === 'assistant' ? booking.passenger_id : null)),
+        receiverId: m.receiver_id || m.receiverId || (sRole === 'passenger' ? booking.assistant_id : (sRole === 'assistant' ? booking.passenger_id : null)),
+        message: msgContent,
+        text: msgContent,
+        created_at: msgTime,
+        timestamp: msgTime,
+        read_at: m.read_at || null,
+        status: m.status || 'delivered',
+      };
+    }).sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
 
     return res.json({ messages });
   } catch (err) {
@@ -734,23 +814,19 @@ async function saveAndBroadcastChatMessage({ bookingRef, user, text, clientMessa
   }
   const cleanText = String(text).trim().slice(0, 1000);
 
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingRef);
-  let query = supabase.from('bookings').select('id, booking_id, services, passenger_id, assistant_id');
-  if (isUUID) {
-    query = query.eq('id', bookingRef);
-  } else {
-    query = query.eq('booking_id', bookingRef);
-  }
-
-  const { data: booking, error } = await query.maybeSingle();
+  const { booking, error } = await resolveBooking(
+    supabase,
+    bookingRef,
+    'id, booking_id, services, passenger_id, assistant_id'
+  );
   if (error || !booking) {
     const notFoundErr = new Error('Booking not found.');
     notFoundErr.statusCode = 404;
     throw notFoundErr;
   }
 
-  const isPassenger = booking.passenger_id === user?.id;
-  const isAssistant = booking.assistant_id && booking.assistant_id === user?.id;
+  const isPassenger = booking.passenger_id && String(booking.passenger_id) === String(user?.id);
+  const isAssistant = booking.assistant_id && String(booking.assistant_id) === String(user?.id);
   const isAdmin = user?.role === 'admin';
 
   if (!isPassenger && !isAssistant && !isAdmin) {
@@ -760,6 +836,10 @@ async function saveAndBroadcastChatMessage({ bookingRef, user, text, clientMessa
   }
 
   const authorSender = isAdmin ? 'admin' : (isAssistant ? 'assistant' : 'passenger');
+  const receiverId = authorSender === 'passenger'
+    ? booking.assistant_id
+    : (authorSender === 'assistant' ? booking.passenger_id : null);
+
   const curServices = (booking.services && typeof booking.services === 'object') ? booking.services : {};
   const oldMsgs = Array.isArray(curServices.chat_messages) ? curServices.chat_messages : [];
 
@@ -767,11 +847,13 @@ async function saveAndBroadcastChatMessage({ bookingRef, user, text, clientMessa
 
   // Idempotency check: if message already exists by clientMessageId or exact match within 4s
   const existingMsg = oldMsgs.find((m) => {
-    if (effectiveClientId && (m.clientMessageId === effectiveClientId || m.id === effectiveClientId)) {
+    if (effectiveClientId && (m.clientMessageId === effectiveClientId || m.id === effectiveClientId || m.message_id === effectiveClientId)) {
       return true;
     }
-    if (m.from === authorSender && m.text === cleanText) {
-      const mTime = new Date(m.timestamp).getTime();
+    const mRole = m.sender_role || m.senderRole || m.from;
+    const mText = m.message || m.text;
+    if (mRole === authorSender && mText === cleanText) {
+      const mTime = new Date(m.timestamp || m.created_at).getTime();
       const reqTime = new Date(timestamp || Date.now()).getTime();
       return Math.abs(mTime - reqTime) < 4000;
     }
@@ -789,15 +871,24 @@ async function saveAndBroadcastChatMessage({ bookingRef, user, text, clientMessa
 
   const newMessage = {
     id: canonicalId,
+    message_id: canonicalId,
     clientMessageId: effectiveClientId || canonicalId,
+    conversation_id: booking.id,
+    booking_id: booking.id,
     bookingId: booking.id,
     bookingCode: booking.booking_id,
-    from: authorSender,
-    senderRole: authorSender,
+    sender_id: user?.id || null,
     senderId: user?.id || null,
+    sender_role: authorSender,
+    senderRole: authorSender,
     senderName: user?.name || (authorSender === 'admin' ? 'Support Desk' : (authorSender === 'assistant' ? 'Assistant' : 'Passenger')),
+    receiver_id: receiverId,
+    receiverId: receiverId,
+    message: cleanText,
     text: cleanText,
+    created_at: validTimestamp,
     timestamp: validTimestamp,
+    read_at: null,
     status: 'delivered',
   };
 
@@ -814,11 +905,19 @@ async function saveAndBroadcastChatMessage({ bookingRef, user, text, clientMessa
     })
     .eq('id', booking.id);
 
-  // Broadcast ONCE across both room aliases using array to prevent duplicates
+  // Broadcast across booking room aliases, plus direct passenger and assistant identity rooms
   if (io) {
     const rooms = [`booking_${booking.id}`];
     if (booking.booking_id && booking.booking_id !== booking.id) {
       rooms.push(`booking_${booking.booking_id}`);
+    }
+    if (booking.passenger_id) {
+      rooms.push(`passenger_${booking.passenger_id}`);
+      rooms.push(`user_${booking.passenger_id}`);
+    }
+    if (booking.assistant_id) {
+      rooms.push(`assistant_${booking.assistant_id}`);
+      rooms.push(`user_${booking.assistant_id}`);
     }
     io.to(rooms).emit('chat_message', newMessage);
   }

@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 /* ============================================================
    ONECOOLIE ASSISTANT NOTIFICATIONS — Dispatch & Duty Alerts
@@ -31,15 +32,28 @@ export default function AssistantNotifications({
   onNavigate,
 }) {
   const { lang, t } = useLanguage();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState(() => {
     try {
-      const saved = localStorage.getItem('assistant_dismissed_alerts');
+      const key = user?.id ? `assistant_dismissed_alerts_${user.id}` : 'assistant_dismissed_alerts';
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const key = `assistant_dismissed_alerts_${user.id}`;
+      const saved = localStorage.getItem(key);
+      setDismissedIds(saved ? JSON.parse(saved) : []);
+    } catch {
+      setDismissedIds([]);
+    }
+  }, [user?.id]);
   const [markedAllRead, setMarkedAllRead] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -201,7 +215,8 @@ export default function AssistantNotifications({
     setDismissedIds((prev) => {
       const next = prev.includes(itemId) ? prev : [...prev, itemId];
       try {
-        localStorage.setItem('assistant_dismissed_alerts', JSON.stringify(next));
+        const key = user?.id ? `assistant_dismissed_alerts_${user.id}` : 'assistant_dismissed_alerts';
+        localStorage.setItem(key, JSON.stringify(next));
       } catch { }
       return next;
     });
@@ -212,7 +227,8 @@ export default function AssistantNotifications({
     const nextDismissed = Array.from(new Set([...dismissedIds, ...allIds]));
     setDismissedIds(nextDismissed);
     try {
-      localStorage.setItem('assistant_dismissed_alerts', JSON.stringify(nextDismissed));
+      const key = user?.id ? `assistant_dismissed_alerts_${user.id}` : 'assistant_dismissed_alerts';
+      localStorage.setItem(key, JSON.stringify(nextDismissed));
     } catch { }
     setMarkedAllRead(true);
   };

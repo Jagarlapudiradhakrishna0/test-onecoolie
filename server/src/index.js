@@ -585,18 +585,20 @@ io.on('connection', (socket) => {
 
   // Chat — authoritative database persistence and broadcast to the booking room
   socket.on('chat_message', async (payload) => {
-    if (!payload?.bookingId || !payload?.text) return;
+    const bookingRef = payload?.bookingId || payload?.booking_id || payload?.bookingCode;
+    const text = payload?.text || payload?.message;
+    if (!bookingRef || !text) return;
     try {
       const user = socket.data?.user;
       if (!user || !user.id) {
         return socket.emit('chat_error', { message: 'Unauthorized: Authentication required.' });
       }
       await serviceController.saveAndBroadcastChatMessage({
-        bookingRef: payload.bookingId,
-        user,
-        text: payload.text,
-        clientMessageId: payload.clientMessageId || payload.id,
-        timestamp: payload.timestamp,
+        bookingRef,
+        user: socket.data?.user || socket.user,
+        text,
+        clientMessageId: payload.clientMessageId || payload.client_message_id || payload.id || payload.message_id,
+        timestamp: payload.timestamp || payload.created_at,
       });
     } catch (err) {
       logger.warn('Socket chat_message handling notice:', {

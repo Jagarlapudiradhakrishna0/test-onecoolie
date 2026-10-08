@@ -495,15 +495,21 @@ export default function TripSummaryPage() {
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500 font-medium">Assistant Rating</span>
                 <span className="font-bold text-zinc-900 inline-flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                  <span>{booking.assistant?.rating ? `${booking.assistant.rating} / 5` : 'Top Rated'}</span>
+                  {booking.assistant?.rating ? (
+                    <>
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <span>{Number(booking.assistant.rating).toFixed(1)} / 5</span>
+                    </>
+                  ) : (
+                    <span>No ratings yet</span>
+                  )}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500 font-medium">Completed Missions</span>
                 <span className="font-bold text-zinc-900">
-                  {booking.assistant?.completed_jobs ?? booking.assistant?.total_completed ?? '100+'} Trips
+                  {booking.assistant?.completed_jobs ?? booking.assistant?.total_completed ?? 0} Trips
                 </span>
               </div>
             </div>

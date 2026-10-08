@@ -126,7 +126,7 @@ export function mergeChatMessages(existing = [], incoming = []) {
 }
 
 /**
- * Fetch remote chat history from backend /service/:id/chat with Supabase REST fallback
+ * Fetch remote chat history from backend /service/:id/chat
  */
 export async function fetchRemoteChat(bookingId, bookingCode) {
   const ref = bookingId || bookingCode;
@@ -138,37 +138,13 @@ export async function fetchRemoteChat(bookingId, bookingCode) {
       return res.data.messages;
     }
   } catch (backendErr) {
-    // Fallback to direct Supabase read if server is booting or backend is restarting
-    try {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
-      const filter = isUUID ? `id=eq.${ref}` : `booking_id=eq.${ref}`;
-      const url = `${SUPABASE_URL}/rest/v1/bookings?${filter}&select=services`;
-
-      const res = await fetch(url, {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const services = data[0]?.services;
-          if (services && Array.isArray(services.chat_messages)) {
-            return services.chat_messages;
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('Direct chat fetch notice:', err);
-    }
+    console.warn('Fetch remote chat notice:', backendErr.response?.data?.message || backendErr.message);
   }
   return [];
 }
 
 /**
- * Persist a new message into backend /service/:id/chat with Supabase REST fallback
+ * Persist a new message into backend /service/:id/chat
  */
 export async function persistRemoteChat(bookingId, bookingCode, message) {
   const ref = bookingId || bookingCode;
@@ -176,66 +152,11 @@ export async function persistRemoteChat(bookingId, bookingCode, message) {
 
   try {
     await axios.post(`/service/${ref}/chat`, {
-      text: message.text,
-      clientMessageId: message.clientMessageId || message.id,
-      timestamp: message.timestamp,
+      text: message.text || message.message,
+      clientMessageId: message.clientMessageId || message.id || message.message_id,
+      timestamp: message.timestamp || message.created_at,
     });
   } catch (backendErr) {
-    // Fallback to direct Supabase PATCH only if backend service returned an error
-    try {
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref);
-      const filter = isUUID ? `id=eq.${ref}` : `booking_id=eq.${ref}`;
-      const url = `${SUPABASE_URL}/rest/v1/bookings?${filter}&select=id,services`;
-
-      const getRes = await fetch(url, {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-      });
-
-      if (!getRes.ok) return;
-      const data = await getRes.json();
-      if (!Array.isArray(data) || data.length === 0) return;
-
-      const row = data[0];
-      const currentServices = row.services && typeof row.services === 'object' ? row.services : {};
-      const oldMessages = Array.isArray(currentServices.chat_messages) ? currentServices.chat_messages : [];
-
-      const msgTime = message.timestamp ? new Date(message.timestamp).getTime() : Date.now();
-      const alreadyExists = oldMessages.some((m) => {
-        if (m.clientMessageId && message.clientMessageId && m.clientMessageId === message.clientMessageId) {
-          return true;
-        }
-        if (m.from === message.from && m.text === message.text) {
-          const mTime = m.timestamp ? new Date(m.timestamp).getTime() : Date.now();
-          return Math.abs(mTime - msgTime) < 4000;
-        }
-        return false;
-      });
-
-      if (alreadyExists) return;
-
-      const updatedMessages = [...oldMessages, message];
-
-      await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${row.id}`, {
-        method: 'PATCH',
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
-        },
-        body: JSON.stringify({
-          services: {
-            ...currentServices,
-            chat_messages: updatedMessages,
-          },
-          updated_at: new Date().toISOString(),
-        }),
-      });
-    } catch (err) {
-      console.warn('Direct chat persist notice:', err);
-    }
+    console.warn('Persist remote chat notice:', backendErr.response?.data?.message || backendErr.message);
   }
 }

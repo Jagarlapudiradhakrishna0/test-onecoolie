@@ -1013,42 +1013,35 @@ exports.rebookBooking = async (req, res) => {
 
 exports.rateBooking = async (req, res) => {
   try {
-
     if (!req.user || !req.user.id) {
       return res.status(401).json({
         message: 'Authentication required.'
       });
     }
 
-
-    const rating =
-      Number(req.body.rating);
-
+    const rating = Number(req.body.rating);
 
     /*
     |--------------------------------------------------------------------------
     | Validate rating
     |--------------------------------------------------------------------------
     */
-
-    if (
-      !Number.isInteger(rating) ||
-      rating < 1 ||
-      rating > 5
-    ) {
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
       return res.status(400).json({
         message: 'Rating must be between 1 and 5.'
       });
     }
-
 
     /*
     |--------------------------------------------------------------------------
     | Find booking
     |--------------------------------------------------------------------------
     */
-
-    const { booking, error: findError } = await resolveBooking(supabase, req.params.id, 'id, passenger_id, booking_status');
+    const { booking, error: findError } = await resolveBooking(
+      supabase,
+      req.params.id,
+      'id, booking_id, passenger_id, assistant_id, booking_status, rating, review'
+    );
 
     if (findError) {
       return res.status(400).json({ message: findError.message });
@@ -1058,53 +1051,75 @@ exports.rateBooking = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found.' });
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | Verify passenger
+    | 1. Verify passenger ownership
     |--------------------------------------------------------------------------
     */
-
-    if (
-      booking.passenger_id !==
-      req.user.id
-    ) {
+    if (String(booking.passenger_id) !== String(req.user.id)) {
       return res.status(403).json({
         message: 'You are not authorized to rate this booking.'
       });
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | Only completed bookings can be rated
+    | 2. Only completed bookings can be rated
     |--------------------------------------------------------------------------
     */
-
-    if (
-      booking.booking_status !==
-      'completed'
-    ) {
+    if (booking.booking_status !== 'completed') {
       return res.status(400).json({
         message: 'Only completed bookings can be rated.'
       });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | 3. Verify assistant was actually assigned
+    |--------------------------------------------------------------------------
+    */
+    if (!booking.assistant_id) {
+      return res.status(400).json({
+        message: 'No assistant was assigned to this booking.'
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 4. Verify submitted assistant ID matches assigned assistant
+    |--------------------------------------------------------------------------
+    */
+    const submittedAssistantId = req.body.assistantId || req.body.assistant_id;
+    if (submittedAssistantId && String(submittedAssistantId) !== String(booking.assistant_id)) {
+      return res.status(400).json({
+        message: 'The assistant being rated does not match the assigned assistant.'
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 5. Prevent duplicate feedback
+    |--------------------------------------------------------------------------
+    */
+    if (booking.rating !== null && booking.rating !== undefined) {
+      return res.status(409).json({
+        message: 'Feedback has already been submitted for this booking.'
+      });
+    }
 
     /*
     |--------------------------------------------------------------------------
     | Save rating & review
     |--------------------------------------------------------------------------
     */
+    const reviewText = req.body.review !== undefined ? req.body.review : req.body.comment;
+    const finalReview = reviewText ? String(reviewText).slice(0, 1000) : null;
 
     const updatePayload = {
       rating,
+      review: finalReview,
       updated_at: new Date().toISOString()
     };
-    const reviewText = req.body.review !== undefined ? req.body.review : req.body.comment;
-    if (reviewText !== undefined) {
-      updatePayload.review = reviewText ? String(reviewText).slice(0, 1000) : null;
-    }
 
     const {
       data,
@@ -1112,23 +1127,42 @@ exports.rateBooking = async (req, res) => {
     } = await supabase
       .from('bookings')
       .update(updatePayload)
-      .eq(
-        'id',
-        booking.id
-      )
+      .eq('id', booking.id)
       .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 
-
     if (error) {
-      console.error(
-        'RATE BOOKING ERROR:',
-        error
-      );
-
+      console.error('RATE BOOKING ERROR:', error);
       return res.status(400).json({
         message: error.message
       });
+    }
+
+    // Authoritatively calculate assistant's real rating and stats from database
+    let assistantAvgRating = null;
+    let assistantTotalRatings = 0;
+    try {
+      const { data: assistantJobs } = await supabase
+        .from('bookings')
+        .select('rating, booking_status')
+        .eq('assistant_id', booking.assistant_id);
+
+      if (assistantJobs) {
+        const completed = assistantJobs.filter((j) => j.booking_status === 'completed');
+        const rated = completed.filter((j) => j.rating && Number(j.rating) > 0);
+        assistantTotalRatings = rated.length;
+        assistantAvgRating = rated.length
+          ? (rated.reduce((s, j) => s + Number(j.rating), 0) / rated.length).toFixed(1)
+          : null;
+
+        if (data?.assistant) {
+          data.assistant.completed_jobs = completed.length;
+          data.assistant.rating = assistantAvgRating;
+          data.assistant.total_ratings = assistantTotalRatings;
+        }
+      }
+    } catch (err) {
+      // Non-blocking assistant stats calculation
     }
 
     const formatted = formatBooking(data, { includeOTP: true });
@@ -1137,10 +1171,40 @@ exports.rateBooking = async (req, res) => {
       broadcast(booking.booking_id, formatted);
     }
 
+    // Realtime notification to assistant room, booking room, and admin
+    const socketIO = getIO ? getIO() : null;
+    if (socketIO) {
+      const ratingEventPayload = {
+        bookingId: booking.id,
+        booking_id: booking.id,
+        bookingCode: booking.booking_id,
+        assistantId: booking.assistant_id,
+        assistant_id: booking.assistant_id,
+        rating,
+        review: finalReview,
+        averageRating: assistantAvgRating,
+        average_rating: assistantAvgRating,
+        totalRatings: assistantTotalRatings,
+        total_ratings: assistantTotalRatings,
+        timestamp: new Date().toISOString(),
+      };
+      socketIO.to(`assistant_${booking.assistant_id}`).emit('rating_submitted', ratingEventPayload);
+      socketIO.to(`user_${booking.assistant_id}`).emit('rating_submitted', ratingEventPayload);
+      socketIO.to(`booking_${booking.id}`).emit('rating_submitted', ratingEventPayload);
+      if (booking.booking_id && booking.booking_id !== booking.id) {
+        socketIO.to(`booking_${booking.booking_id}`).emit('rating_submitted', ratingEventPayload);
+      }
+      socketIO.to('admin_room').emit('rating_submitted', ratingEventPayload);
+    }
+
     return res.json({
       success: true,
       message: 'Feedback submitted successfully.',
-      booking: formatted
+      booking: formatted,
+      rating,
+      review: finalReview,
+      average_rating: assistantAvgRating,
+      total_ratings: assistantTotalRatings,
     });
 
   } catch (error) {

@@ -67,12 +67,36 @@ exports.getMe = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, name, email, role, station_code, is_online, is_approved')
+      .select('id, name, email, phone, role, station_code, is_online, is_approved')
       .eq('id', req.user.id)
       .single();
 
     if (error || !data) {
       return res.status(401).json({ message: 'Session expired or user not found. Please log in again.' });
+    }
+
+    // Authoritatively calculate real assistant metrics from database records
+    try {
+      const { data: assistantJobs } = await supabase
+        .from('bookings')
+        .select('rating, booking_status')
+        .eq('assistant_id', req.user.id);
+
+      const completed = (assistantJobs || []).filter((j) => j.booking_status === 'completed');
+      const rated = completed.filter((j) => j.rating && Number(j.rating) > 0);
+      const avgRating = rated.length > 0
+        ? (rated.reduce((s, j) => s + Number(j.rating), 0) / rated.length).toFixed(1)
+        : null;
+
+      data.completed_jobs = completed.length;
+      data.total_completed = completed.length;
+      data.rating = avgRating;
+      data.total_ratings = rated.length;
+    } catch (statsErr) {
+      data.completed_jobs = 0;
+      data.total_completed = 0;
+      data.rating = null;
+      data.total_ratings = 0;
     }
 
     res.json(data);
@@ -115,6 +139,7 @@ exports.getAvailableBookings = async (req, res) => {
       .select('*, passenger:passenger_id(id, name, email, phone)')
       .eq('station_code', user.station_code)
       .eq('booking_status', 'pending')
+      .is('assistant_id', null)
       .gte('created_at', new Date(Date.now() - FRESH_WINDOW_MS).toISOString())
       .order('created_at', { ascending: false });
 

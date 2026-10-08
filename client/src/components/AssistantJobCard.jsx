@@ -303,6 +303,23 @@ export default function AssistantJobCard({ job, onUpdate }) {
       }
     };
 
+    const syncRemoteChat = () => {
+      fetchRemoteChat(jobUuid, jobCode).then((remoteMsgs) => {
+        if (Array.isArray(remoteMsgs) && remoteMsgs.length > 0) {
+          setChatMsgs((prev) => {
+            const { merged, changed } = mergeChatMessages(prev, remoteMsgs);
+            if (changed) {
+              saveLocalChat(jobUuid, jobCode, merged);
+              return merged;
+            }
+            return prev;
+          });
+        }
+      });
+    };
+
+    const pollInterval = setInterval(syncRemoteChat, 4000);
+
     if (window.socket) {
       joinRooms();
       window.socket.on('connect', joinRooms);
@@ -311,6 +328,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
     }
 
     return () => {
+      clearInterval(pollInterval);
       if (bc) {
         try { bc.close(); } catch (e) { }
       }
@@ -454,6 +472,7 @@ export default function AssistantJobCard({ job, onUpdate }) {
     lastSentRef.current = { text, time: now };
 
     const clientMsgId = `cmsg-${now}-${Math.random().toString(36).slice(2, 9)}`;
+    const timestamp = new Date().toISOString();
     const msg = {
       id: clientMsgId,
       clientMessageId: clientMsgId,
@@ -462,7 +481,9 @@ export default function AssistantJobCard({ job, onUpdate }) {
       from: 'assistant',
       senderRole: 'assistant',
       text,
-      timestamp: new Date().toISOString(),
+      message: text,
+      timestamp,
+      created_at: timestamp,
       status: 'sending',
     };
 
@@ -476,6 +497,11 @@ export default function AssistantJobCard({ job, onUpdate }) {
 
     // Instant cross-tab broadcast in the same browser
     broadcastChatTab(jobUuid, jobCode, msg);
+
+    // Socket real-time broadcast
+    if (window.socket && window.socket.connected) {
+      window.socket.emit('chat_message', msg);
+    }
 
     // Authoritative backend persistence & real-time broadcast
     persistRemoteChat(jobUuid, jobCode, msg);

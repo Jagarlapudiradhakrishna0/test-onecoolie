@@ -90,7 +90,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   const lastSentRef = useRef({ text: '', time: 0 });
   const chatBottomRef = useRef(null);
 
-  // Sync chat from local storage & Supabase
+  // Sync chat from local storage & backend + periodic polling
   useEffect(() => {
     if (!bookingUuid && !bookingCode) return;
     const local = getLocalChat(bookingUuid, bookingCode);
@@ -102,21 +102,27 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     }
 
     let isMounted = true;
-    fetchRemoteChat(bookingUuid, bookingCode).then((remoteMsgs) => {
-      if (isMounted && Array.isArray(remoteMsgs) && remoteMsgs.length > 0) {
-        setChatMsgs((prev) => {
-          const { merged, changed } = mergeChatMessages(prev, remoteMsgs);
-          if (changed) {
-            saveLocalChat(bookingUuid, bookingCode, merged);
-            return merged;
-          }
-          return prev;
-        });
-      }
-    });
+    const syncRemote = () => {
+      fetchRemoteChat(bookingUuid, bookingCode).then((remoteMsgs) => {
+        if (isMounted && Array.isArray(remoteMsgs) && remoteMsgs.length > 0) {
+          setChatMsgs((prev) => {
+            const { merged, changed } = mergeChatMessages(prev, remoteMsgs);
+            if (changed) {
+              saveLocalChat(bookingUuid, bookingCode, merged);
+              return merged;
+            }
+            return prev;
+          });
+        }
+      });
+    };
+
+    syncRemote();
+    const interval = setInterval(syncRemote, 4000);
 
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, [bookingUuid, bookingCode]);
 
@@ -757,7 +763,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     (booking?.assistant_id || booking?.assistant?.id || (booking?.assistant?.name && isAssistantAccepted))
   );
   const assistantName = booking?.assistant?.name || 'Assigned Sahayak';
-  const assistantRating = booking?.assistant?.rating ? Number(booking.assistant.rating).toFixed(1) : '5.0';
+  const assistantRating = booking?.assistant?.rating ? Number(booking.assistant.rating).toFixed(1) : null;
   const assistantBookingsCount = booking?.assistant?.completed_jobs ?? booking?.assistant?.total_completed ?? 0;
 
   // Actions
@@ -777,26 +783,33 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     lastSentRef.current = { text, time: now };
 
     const clientMsgId = `cmsg-${now}-${Math.random().toString(36).slice(2, 9)}`;
+    const timestamp = new Date().toISOString();
     const msg = {
       id: clientMsgId,
+      clientMessageId: clientMsgId,
       bookingId: bookingUuid,
       bookingCode,
       sender: user?.name || 'Passenger',
       from: 'passenger',
+      senderRole: 'passenger',
       text,
-      created_at: new Date().toISOString(),
+      message: text,
+      timestamp,
+      created_at: timestamp,
     };
 
     setChatMsgs((prev) => {
-      const merged = [...prev, msg];
+      const { merged } = mergeChatMessages(prev, [msg]);
       saveLocalChat(bookingUuid, bookingCode, merged);
       return merged;
     });
     setMsgInput('');
 
-    if (window.socket) {
+    if (window.socket && window.socket.connected) {
       window.socket.emit('chat_message', msg);
     }
+    // Authoritative backend persistence
+    persistRemoteChat(bookingUuid, bookingCode, msg);
   };
 
   const displayId = booking?.booking_id || bookingUuid || 'RM-MUXRKWSM-SUBJ5';
@@ -1159,9 +1172,17 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       </span>
                     </div>
                     <p className="text-xs text-zinc-500 font-medium mt-1 flex items-center gap-1.5">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
-                      <span className="font-bold text-zinc-800">{assistantRating}</span>
-                      <span className="text-zinc-400 font-normal">({assistantBookingsCount > 0 ? `${assistantBookingsCount}+ trips` : '320+ trips'})</span>
+                      {assistantRating ? (
+                        <>
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                          <span className="font-bold text-zinc-800">{assistantRating}</span>
+                        </>
+                      ) : (
+                        <span className="font-bold text-zinc-500">No ratings yet</span>
+                      )}
+                      <span className="text-zinc-400 font-normal">
+                        ({assistantBookingsCount > 0 ? `${assistantBookingsCount}+ trips` : 'New Assistant'})
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -1186,7 +1207,11 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                   <button
                     type="button"
                     onClick={() => {
-                      const phone = booking?.assistant?.phone || '9876543210';
+                      const phone = booking?.assistant?.phone;
+                      if (!phone) {
+                        toast.error('Assistant contact number is not available.');
+                        return;
+                      }
                       if (isMobileDevice()) {
                         window.location.href = `tel:${phone}`;
                       } else {
@@ -1479,12 +1504,21 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                       }
                       setFeedbackStatus('loading');
                       try {
-                        await axios.post(`/bookings/${bookingUuid}/review`, { rating, review });
+                        const targetAssistantId = booking?.assistant_id || booking?.assistant?.id;
+                        const res = await axios.post(`/bookings/${bookingUuid}/review`, {
+                          rating,
+                          review,
+                          assistantId: targetAssistantId,
+                        });
                         setFeedbackStatus('success');
                         toast.success('Feedback submitted successfully!');
+                        if (res.data?.booking && onUpdate) {
+                          onUpdate(res.data.booking);
+                        }
                       } catch (err) {
                         setFeedbackStatus('idle');
-                        toast.error('Unable to submit rating right now');
+                        const errorMsg = err.response?.data?.message || 'Unable to submit rating right now';
+                        toast.error(errorMsg);
                       }
                     }}
                     className="px-5 py-2.5 rounded-full bg-black hover:bg-zinc-800 text-white font-bold text-xs transition-colors cursor-pointer"

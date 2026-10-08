@@ -39,5 +39,6 @@ router.put('/:id/assign', protect, assignAssistant);
 router.put('/:id/pay', protect, processPayment);
 router.post('/:id/rating', protect, rateBooking);
 router.post('/:id/rate', protect, rateBooking);
+router.post('/:id/review', protect, rateBooking);
 
 module.exports = router;

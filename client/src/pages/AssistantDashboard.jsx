@@ -95,10 +95,13 @@ export default function AssistantDashboard() {
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketSuccess, setTicketSuccess] = useState('');
   const [ticketError, setTicketError] = useState('');
-  const [expandedFaq, setExpandedFaq] = useState(null);
+  /* ── User Auth Session ──────────────────────────────────── */
+  const { user } = useAuth();
+
   const [supportTickets, setSupportTickets] = useState(() => {
     try {
-      const saved = localStorage.getItem('assistant_support_tickets');
+      const key = user?.id ? `assistant_support_tickets_${user.id}` : 'assistant_support_tickets';
+      const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
     } catch (err) {
       console.error(err);
@@ -106,15 +109,24 @@ export default function AssistantDashboard() {
     return [];
   });
 
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const key = `assistant_support_tickets_${user.id}`;
+      const saved = localStorage.getItem(key);
+      if (saved) setSupportTickets(JSON.parse(saved));
+      else setSupportTickets([]);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [user?.id]);
+
   /* ── Auto-dismiss Success Banner ────────────────────────── */
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(() => setMessage(''), 6000);
     return () => clearTimeout(timer);
   }, [message]);
-
-  /* ── User Auth Session ──────────────────────────────────── */
-  const { user } = useAuth();
 
   /* ── Live Ticking Clock ──────────────────────────────────── */
   useEffect(() => {
@@ -606,10 +618,10 @@ export default function AssistantDashboard() {
         ratedJobs.reduce((t, j) => t + Number(j.rating), 0) /
         ratedJobs.length
       ).toFixed(1)
-      : '—';
+      : (profile?.rating ? Number(profile.rating).toFixed(1) : null);
 
   const currentStationObj = STATIONS.find((s) => s.code === station) || STATIONS[0];
-  const assistantName = profile?.name || 'Sai Coolie';
+  const assistantName = profile?.name || user?.name || 'Assistant';
   const firstName = assistantName.split(' ')[0] || 'Assistant';
 
   const formattedTimeWithSeconds = currentTime.toLocaleTimeString('en-US', {
@@ -729,7 +741,8 @@ export default function AssistantDashboard() {
       const updated = [serverTicket, ...supportTickets.filter((t) => t.id !== serverTicket.id)];
       setSupportTickets(updated);
       try {
-        localStorage.setItem('assistant_support_tickets', JSON.stringify(updated));
+        const storageKey = user?.id ? `assistant_support_tickets_${user.id}` : 'assistant_support_tickets';
+        localStorage.setItem(storageKey, JSON.stringify(updated));
       } catch (err) {
         console.error(err);
       }
@@ -1160,7 +1173,7 @@ export default function AssistantDashboard() {
                   {
                     id: 'rating',
                     label: t('averageRating'),
-                    value: averageRating !== '—' ? `${averageRating} ★` : '—',
+                    value: averageRating ? `${averageRating} ★` : 'No ratings yet',
                     sub: ratedJobs.length > 0 ? `${ratedJobs.length} ${t('passengerReviews')}` : t('noReviewsYet'),
                     icon: Star,
                     color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400',
@@ -1612,7 +1625,9 @@ export default function AssistantDashboard() {
                         <div>
                           <span className="text-[10px] font-extrabold text-slate-400 dark:text-zinc-500 uppercase tracking-widest block">SATISFACTION</span>
                           <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
-                            {((ratedJobs.filter((j) => Number(j.rating) >= 4).length / ratedJobs.length) * 100).toFixed(0)}% Positive
+                            {ratedJobs.length > 0
+                              ? `${((ratedJobs.filter((j) => Number(j.rating) >= 4).length / ratedJobs.length) * 100).toFixed(0)}% Positive`
+                              : 'No ratings yet'}
                           </span>
                         </div>
                       </div>

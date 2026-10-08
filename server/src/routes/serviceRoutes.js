@@ -38,6 +38,12 @@ router.post(
 );
 
 router.post(
+  '/:booking_id/review',
+  protect,
+  rateBooking
+);
+
+router.post(
   '/:booking_id/sos',
   protect,
   triggerSOS
