@@ -802,7 +802,7 @@ export default function AssistantDashboard() {
       hasWave: false,
     },
     support: {
-      title: t('support'),
+      title: t('nav.support') || t('support.title') || t('support'),
       prefix: t('helpDesk'),
       sub: t('supportSub'),
       hasWave: false,
@@ -962,13 +962,13 @@ export default function AssistantDashboard() {
           {/* Navigation Links */}
           <div className="space-y-1">
             {[
-              { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard, badge: hasActiveJob ? null : (requests.length > 0 ? requests.length : null) },
-              { id: 'jobs', label: activeJobs.length <= 1 ? t('myAssignedJob') : t('myJobs'), icon: Briefcase, badge: activeJobs.length },
-              { id: 'history', label: t('tripHistory'), icon: History, badge: completedJobs.length },
-              { id: 'earnings', label: t('earningsReviews'), icon: IndianRupee, badge: ratedJobs.length > 0 ? ratedJobs.length : null },
-              { id: 'wallet', label: 'Wallet', icon: Wallet, badge: null },
-              { id: 'profile', label: t('profile'), icon: User, badge: null },
-              { id: 'support', label: t('support'), icon: LifeBuoy, badge: null },
+              { id: 'dashboard', label: t('nav.dashboard') || t('dashboard'), icon: LayoutDashboard, badge: hasActiveJob ? null : (requests.length > 0 ? requests.length : null) },
+              { id: 'jobs', label: activeJobs.length <= 1 ? (t('myAssignedJob') || t('nav.jobs')) : (t('myJobs') || t('nav.jobs')), icon: Briefcase, badge: activeJobs.length },
+              { id: 'history', label: t('tripHistory') || t('nav.myTrips'), icon: History, badge: completedJobs.length },
+              { id: 'earnings', label: t('earningsReviews') || t('nav.earnings'), icon: IndianRupee, badge: ratedJobs.length > 0 ? ratedJobs.length : null },
+              { id: 'wallet', label: t('nav.wallet') || 'Wallet', icon: Wallet, badge: null },
+              { id: 'profile', label: t('nav.profile') || t('profile'), icon: User, badge: null },
+              { id: 'support', label: t('nav.support') || t('nav.help') || t('support'), icon: LifeBuoy, badge: null },
             ].map((item, idx) => {
               const IconComp = item.icon;
               const isActive = tab === item.id;
@@ -1220,7 +1220,7 @@ export default function AssistantDashboard() {
                       {t('availableRequests')}
                     </h2>
                     <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                      {t('realTimeRequestsAt')} {currentStationObj.name} ({station})
+                      {t('realTimeRequestsAt', { station: `${currentStationObj.name} (${station})` })}
                     </p>
                   </div>
                 </div>
@@ -2333,12 +2333,12 @@ export default function AssistantDashboard() {
       {/* ── MOBILE BOTTOM NAVIGATION BAR ──────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-black/95 backdrop-blur-md border-t border-slate-200 dark:border-zinc-800 px-2 py-2 flex items-center justify-around">
         {[
-          { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
-          { id: 'jobs', label: activeJobs.length <= 1 ? t('myAssignedJob') : t('myJobs'), icon: Briefcase },
-          { id: 'history', label: t('tripHistory'), icon: History },
-          { id: 'earnings', label: t('earningsReviews'), icon: IndianRupee },
-          { id: 'wallet', label: 'Wallet', icon: Wallet },
-          { id: 'profile', label: t('profile'), icon: User },
+          { id: 'dashboard', label: t('nav.dashboard') || t('dashboard'), icon: LayoutDashboard },
+          { id: 'jobs', label: activeJobs.length <= 1 ? (t('myAssignedJob') || t('nav.jobs')) : (t('myJobs') || t('nav.jobs')), icon: Briefcase },
+          { id: 'history', label: t('tripHistory') || t('nav.myTrips'), icon: History },
+          { id: 'earnings', label: t('earningsReviews') || t('nav.earnings'), icon: IndianRupee },
+          { id: 'wallet', label: t('nav.wallet') || 'Wallet', icon: Wallet },
+          { id: 'profile', label: t('nav.profile') || t('profile'), icon: User },
         ].map((item, i) => {
           const IconComp = item.icon;
           const isActive = tab === item.id;

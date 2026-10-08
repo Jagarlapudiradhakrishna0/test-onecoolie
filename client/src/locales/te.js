@@ -74,7 +74,8 @@ export default {
     "safety": "భద్రత",
     "help": "సహాయం",
     "jobs": "నా పనులు",
-    "earnings": "ఆదాయం"
+    "earnings": "ఆదాయం",
+    "wallet": "వాలెట్"
   },
   "dashboard": {
     "welcome": "స్వాగతం, {name}",
@@ -707,5 +708,6 @@ export default {
   "noPendingAlerts": "పెండింగ్ హెచ్చరికలు లేవు.",
   "stationRadar": "స్టేషన్ రాడార్",
   "availableRequests": "అందుబాటులో ఉన్న అభ్యర్థనలు",
-  "myAssignedJob": "నాకు కేటాయించిన పని"
+  "myAssignedJob": "నాకు కేటాయించిన పని",
+  "wallet": "వాలెట్"
 };

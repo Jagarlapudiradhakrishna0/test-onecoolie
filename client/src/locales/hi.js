@@ -74,7 +74,8 @@ export default {
     "safety": "सुरक्षा",
     "help": "सहायता",
     "jobs": "मेरे कार्य",
-    "earnings": "कमाई"
+    "earnings": "कमाई",
+    "wallet": "वॉलेट"
   },
   "dashboard": {
     "welcome": "स्वागत है, {name}",
@@ -707,5 +708,6 @@ export default {
   "noPendingAlerts": "कोई लंबित सूचना नहीं।",
   "stationRadar": "स्टेशन रडार",
   "availableRequests": "उपलब्ध अनुरोध",
-  "myAssignedJob": "मेरा निर्धारित कार्य"
+  "myAssignedJob": "मेरा निर्धारित कार्य",
+  "wallet": "वॉलेट"
 };

@@ -90,41 +90,72 @@ export function LanguageProvider({ children }) {
    * Helper to deeply look up keys by dot notation
    */
   const lookupKey = useCallback((dict, keyPath) => {
-    if (!dict) return undefined;
-    if (keyPath in dict) return dict[keyPath];
+    if (!dict || !keyPath) return undefined;
 
-    const parts = keyPath.split('.');
-    let current = dict;
-    for (const part of parts) {
-      if (current && typeof current === 'object' && part in current) {
-        current = current[part];
-      } else {
-        current = undefined;
-        break;
+    // 1. Direct match at root only if it is a string (never return namespace objects!)
+    if (keyPath in dict && typeof dict[keyPath] === 'string') {
+      return dict[keyPath];
+    }
+
+    // 2. Traversal by dot notation (e.g. 'nav.dashboard' or 'booking.step1')
+    if (keyPath.includes('.')) {
+      const parts = keyPath.split('.');
+      let current = dict;
+      for (const part of parts) {
+        if (current && typeof current === 'object' && part in current) {
+          current = current[part];
+        } else {
+          current = undefined;
+          break;
+        }
+      }
+      if (current !== undefined && typeof current === 'string') {
+        return current;
       }
     }
-    if (current !== undefined && typeof current === 'string') {
-      return current;
-    }
 
-    // Secondary scan across namespaces if single key was provided
+    // 3. For single-token keys (no dot), check specific namespaces in priority order:
+    // First, prioritize 'nav' namespace (menu items like 'dashboard', 'profile', 'support', 'wallet', 'jobs')
     if (!keyPath.includes('.')) {
+      if (dict.nav && typeof dict.nav === 'object' && keyPath in dict.nav && typeof dict.nav[keyPath] === 'string') {
+        return dict.nav[keyPath];
+      }
+
+      // Next, check 'common' and 'common.actions'
+      if (dict.common && typeof dict.common === 'object') {
+        if (keyPath in dict.common && typeof dict.common[keyPath] === 'string') {
+          return dict.common[keyPath];
+        }
+        if (dict.common.actions && typeof dict.common.actions === 'object' && keyPath in dict.common.actions && typeof dict.common.actions[keyPath] === 'string') {
+          return dict.common.actions[keyPath];
+        }
+      }
+
+      // Next, check 'assistant' namespace for assistant console strings
+      if (dict.assistant && typeof dict.assistant === 'object' && keyPath in dict.assistant && typeof dict.assistant[keyPath] === 'string') {
+        return dict.assistant[keyPath];
+      }
+
+      // Secondary scan across any other namespace sections
       for (const section of Object.values(dict)) {
         if (section && typeof section === 'object') {
           if (keyPath in section && typeof section[keyPath] === 'string') {
             return section[keyPath];
           }
-          if (section.actions && typeof section.actions === 'object' && keyPath in section.actions) {
+          if (section.actions && typeof section.actions === 'object' && keyPath in section.actions && typeof section.actions[keyPath] === 'string') {
             return section.actions[keyPath];
           }
         }
       }
     }
 
-    // Also check if last token exists at root level of dict
-    const lastPart = parts[parts.length - 1];
-    if (lastPart in dict && typeof dict[lastPart] === 'string') {
-      return dict[lastPart];
+    // 4. Also check if last token exists at root level of dict as a string
+    if (keyPath.includes('.')) {
+      const parts = keyPath.split('.');
+      const lastPart = parts[parts.length - 1];
+      if (lastPart in dict && typeof dict[lastPart] === 'string') {
+        return dict[lastPart];
+      }
     }
 
     return undefined;
@@ -156,13 +187,13 @@ export function LanguageProvider({ children }) {
     // 1. Check in selected language
     let value = lookupKey(currentDict, key);
 
-    // 2. If missing in selected language, fall back to English
-    if (value === undefined && lang !== 'en') {
+    // 2. If missing or not a string in selected language, fall back to English
+    if ((value === undefined || typeof value !== 'string') && lang !== 'en') {
       value = lookupKey(fallbackDict, key);
     }
 
-    // 3. If missing in both, log warning in dev and use safe fallback
-    if (value === undefined) {
+    // 3. If missing in both or not a string, log warning in dev and use safe fallback
+    if (value === undefined || typeof value !== 'string') {
       try {
         if (
           (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') ||
@@ -171,6 +202,11 @@ export function LanguageProvider({ children }) {
           console.warn(`[ONECOOLIE i18n] Missing translation for key: "${key}" in language "${lang}"`);
         }
       } catch (e) {}
+      value = getSafeFallback(key);
+    }
+
+    // Guarantee that value is a string, NEVER an object
+    if (typeof value !== 'string') {
       value = getSafeFallback(key);
     }
 

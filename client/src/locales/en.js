@@ -74,7 +74,8 @@ export default {
     "safety": "Safety",
     "help": "Help & Support",
     "jobs": "My Jobs",
-    "earnings": "Earnings"
+    "earnings": "Earnings",
+    "wallet": "Wallet"
   },
   "dashboard": {
     "welcome": "Welcome, {name}",
@@ -707,5 +708,6 @@ export default {
   "noPendingAlerts": "No pending alerts right now.",
   "stationRadar": "Station Radar",
   "availableRequests": "Available Requests",
-  "myAssignedJob": "My Assigned Job"
+  "myAssignedJob": "My Assigned Job",
+  "wallet": "Wallet"
 };
