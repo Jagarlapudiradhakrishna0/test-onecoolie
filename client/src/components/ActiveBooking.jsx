@@ -37,6 +37,7 @@ import vandeBharatCrisp from '../assets/images/vande-bharat-crisp.jpg';
 import CancellationModal from './cancellation/CancellationModal';
 import RebookingModal from './cancellation/RebookingModal';
 import CancellationPolicyModal from './cancellation/CancellationPolicyModal';
+import EditServicesModal from './EditServicesModal';
 import {
   getLocalChat,
   saveLocalChat,
@@ -224,6 +225,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
   const [feedbackError, setFeedbackError] = useState('');
   const [showCancellationModal, setShowCancellationModal] = useState(false);
   const [showRebookingModal, setShowRebookingModal] = useState(false);
+  const [showEditServicesModal, setShowEditServicesModal] = useState(false);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [showSosModal, setShowSosModal] = useState(false);
   const [showThreeDotMenu, setShowThreeDotMenu] = useState(false);
@@ -255,6 +257,7 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
     rawAssistantStatus === 'arrived'
   );
   const canCancel = !isCancelled && !isCompleted && !isInService;
+  const isServiceEditable = !isCancelled && !isCompleted && !isInService;
 
   // Genuine assistant acceptance from persisted backend/database state
   // Only true when assistant has actually accepted or progressed to downstream states.
@@ -1031,8 +1034,20 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
               </h3>
               <button
                 type="button"
-                onClick={() => navigate('/dashboard?tab=book')}
-                className="text-xs font-bold text-[#1463FF] bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3.5 py-1.5 rounded-full transition-colors cursor-pointer"
+                onClick={() => {
+                  if (!isServiceEditable) {
+                    toast.error('Services can no longer be edited for this booking.');
+                    return;
+                  }
+                  setShowEditServicesModal(true);
+                }}
+                disabled={!isServiceEditable}
+                title={!isServiceEditable ? 'Services can no longer be edited for this booking.' : 'Edit services for this booking'}
+                className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition-colors cursor-pointer border ${
+                  isServiceEditable
+                    ? 'text-[#1463FF] bg-blue-50 hover:bg-blue-100 border-blue-100'
+                    : 'text-zinc-400 bg-zinc-100 border-zinc-200 cursor-not-allowed opacity-60'
+                }`}
               >
                 Edit Services
               </button>
@@ -1817,6 +1832,19 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
             setShowRebookingModal(false);
             if (onUpdate) onUpdate(newBooking);
             toast.success('Booking rescheduled successfully.');
+          }}
+        />
+      )}
+
+      {/* ── Edit Services Modal ── */}
+      {showEditServicesModal && (
+        <EditServicesModal
+          isOpen={showEditServicesModal}
+          booking={booking}
+          onClose={() => setShowEditServicesModal(false)}
+          onSuccess={(updatedBooking) => {
+            setShowEditServicesModal(false);
+            if (onUpdate) onUpdate(updatedBooking);
           }}
         />
       )}

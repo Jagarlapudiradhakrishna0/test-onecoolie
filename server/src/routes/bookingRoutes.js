@@ -14,6 +14,7 @@ const {
     assignAssistant,
     processPayment,
     updateBooking,
+    updateBookingServices,
     rateBooking
 } = require('../controllers/bookingController');
 
@@ -27,6 +28,8 @@ router.get('/my-bookings', protect, getMyBookings);
 router.get('/:id/summary', protect, getBookingSummary);
 router.get('/:id', protect, getBookingById);
 router.put('/:id', protect, updateBooking);
+router.put('/:id/services', protect, updateBookingServices);
+router.patch('/:id/services', protect, updateBookingServices);
 
 // Cancellation & Rebooking Routes
 router.post('/:id/cancel-quote', protect, getCancelQuote);

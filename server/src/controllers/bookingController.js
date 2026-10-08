@@ -12,6 +12,7 @@ const {
 const {
   createBookingRecordInDB,
   buildServiceData,
+  buildServiceDescription,
   generateBookingId
 } = require('../utils/bookingCore');
 
@@ -1429,6 +1430,170 @@ exports.processPayment = async (req, res) => {
   }
 };
 
+/**
+ * Authoritative service update helper used by updateBookingServices and updateBooking.
+ */
+async function processServiceUpdate(booking, services, reqUser) {
+  if (reqUser && booking.passenger_id && booking.passenger_id !== reqUser.id && reqUser.role !== 'admin') {
+    throw {
+      status: 403,
+      message: 'You are not authorized to update this booking.'
+    };
+  }
+
+  const currentStatus = String(booking.booking_status || booking.status || '').toLowerCase();
+  if (['in_service', 'in_progress', 'completed', 'cancelled', 'canceled'].includes(currentStatus)) {
+    throw {
+      status: 400,
+      message: 'Services can no longer be edited for this booking.'
+    };
+  }
+
+  if (!services || typeof services !== 'object') {
+    throw {
+      status: 400,
+      message: 'Please provide valid services to update.'
+    };
+  }
+
+  // Normalize services (handle luggageCounts vs luggage object/count)
+  const normalizedServices = { ...(services || {}) };
+  if (normalizedServices.luggage && typeof normalizedServices.luggage === 'object') {
+    if (!normalizedServices.luggageCounts) {
+      normalizedServices.luggageCounts = normalizedServices.luggage;
+    }
+    const tot = (Number(normalizedServices.luggage.small) || 0) + (Number(normalizedServices.luggage.medium) || 0) + (Number(normalizedServices.luggage.large) || 0);
+    normalizedServices.luggage = tot;
+  }
+
+  // Authoritative pricing recalculation
+  const pricingResult = calculateBookingPrice(normalizedServices);
+
+  // Preserve journey protection if previously active on booking
+  const hasProtection = Boolean(
+    booking.services?.has_journey_protection ||
+    (Array.isArray(booking.services?.pricing_breakdown) && booking.services.pricing_breakdown.some((b) => b.service === 'journey_protection'))
+  );
+
+  let finalTotalPrice = pricingResult.total;
+  if (hasProtection) {
+    finalTotalPrice = Number((pricingResult.total + 0.50).toFixed(2));
+    pricingResult.total = finalTotalPrice;
+    pricingResult.breakdown.push({
+      service: 'journey_protection',
+      label: 'ONECOOLIE Journey Protection (Pre-Launch)',
+      quantity: 1,
+      unit_price: 0.50,
+      total: 0.50
+    });
+  }
+
+  const selectedServices = buildServiceData(normalizedServices);
+  if (selectedServices.length === 0) {
+    throw { status: 400, message: 'Please select at least one assistance service.' };
+  }
+  const serviceText = selectedServices.join(', ');
+
+  const existingServices = (booking.services && typeof booking.services === 'object') ? booking.services : {};
+  const serviceDescription = buildServiceDescription(serviceText, {
+    coach: booking.coach || existingServices.coach,
+    seat_number: booking.seat_number || existingServices.seat_number,
+    berth_type: booking.berth_type || existingServices.berth_type,
+    action_type: existingServices.action_type || 'load_to_seat',
+    journey_time: booking.journey_time
+  });
+
+  const mergedServices = {
+    ...existingServices,
+    ...services,
+    pricing_breakdown: pricingResult.breakdown,
+    has_journey_protection: hasProtection,
+  };
+  if (services.luggage_details) {
+    mergedServices.luggage_details = services.luggage_details;
+  }
+
+  const updatePayload = {
+    services: mergedServices,
+    service: serviceText,
+    service_description: serviceDescription,
+    total_price: finalTotalPrice,
+    updated_at: new Date().toISOString()
+  };
+
+  // Update pending payment record if applicable (cash or pending payment)
+  if (booking.payment_status === 'pending' || booking.payment_method === 'cash') {
+    try {
+      await supabase
+        .from('payments')
+        .update({ amount: finalTotalPrice, updated_at: new Date().toISOString() })
+        .eq('booking_id', booking.id)
+        .eq('status', 'pending');
+    } catch (payErr) {
+      console.warn('[UPDATE SERVICES] Payment update warning:', payErr?.message);
+    }
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from('bookings')
+    .update(updatePayload)
+    .eq('id', booking.id)
+    .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+    .single();
+
+  if (updateError) {
+    throw { status: 400, message: updateError.message };
+  }
+
+  const formatted = formatBooking(updated, { includeOTP: true });
+  try {
+    const io = getIO();
+    if (io) {
+      io.to(`booking_${booking.id}`).emit('status_update', formatted);
+      io.to(`passenger_${booking.passenger_id}`).emit('status_update', formatted);
+      if (updated.assistant_id) {
+        io.to(`assistant_${updated.assistant_id}`).emit('status_update', formatBooking(updated, { includeOTP: false }));
+      }
+      io.to('admin_room').emit('status_update', formatBooking(updated, { includeOTP: false }));
+    }
+  } catch (e) {}
+
+  return formatted;
+}
+
+exports.updateBookingServices = async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    const { booking, error: findError } = await resolveBooking(supabase, req.params.id);
+
+    if (findError || !booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    if (booking.passenger_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You are not authorized to update this booking.' });
+    }
+
+    const formatted = await processServiceUpdate(booking, req.body.services, req.user);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Services updated successfully.',
+      booking: formatted,
+      ...formatted
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Server error while updating services.'
+    });
+  }
+};
+
 exports.updateBooking = async (req, res) => {
   try {
     if (!req.user || !req.user.id) {
@@ -1441,13 +1606,24 @@ exports.updateBooking = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found.' });
     }
 
-    if (booking.passenger_id !== req.user.id) {
+    if (booking.passenger_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'You are not authorized to update this booking.' });
     }
 
-    // Check if assistant is assigned
-    if (booking.assistant_id || (booking.booking_status && booking.booking_status !== 'pending' && booking.booking_status !== 'created')) {
-      return res.status(400).json({ message: 'Cannot edit booking after an assistant has been assigned.' });
+    // If services update is provided, use processServiceUpdate
+    if (req.body.services && typeof req.body.services === 'object') {
+      const formatted = await processServiceUpdate(booking, req.body.services, req.user);
+      return res.json({
+        success: true,
+        message: 'Services updated successfully.',
+        booking: formatted,
+        ...formatted
+      });
+    }
+
+    const currentStatus = String(booking.booking_status || '').toLowerCase();
+    if (['in_service', 'completed', 'cancelled'].includes(currentStatus)) {
+      return res.status(400).json({ message: 'Cannot edit booking at this stage.' });
     }
 
     const { coach, seat_number, berth_type, journey_date, journey_time } = req.body;
@@ -1457,6 +1633,7 @@ exports.updateBooking = async (req, res) => {
     if (berth_type !== undefined) updateData.berth_type = berth_type;
     if (journey_date !== undefined) updateData.journey_date = journey_date;
     if (journey_time !== undefined) updateData.journey_time = journey_time;
+    updateData.updated_at = new Date().toISOString();
 
     const { data: updated, error: updateError } = await supabase
       .from('bookings')
@@ -1485,6 +1662,8 @@ exports.updateBooking = async (req, res) => {
     return res.json(formatted);
   } catch (error) {
     console.error('UPDATE BOOKING ERROR:', error);
-    return res.status(500).json({ message: 'Server error while updating booking.' });
+    return res.status(error.status || 500).json({ message: error.message || 'Server error while updating booking.' });
   }
 };
+
+exports.processServiceUpdate = processServiceUpdate;

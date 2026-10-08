@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node tests/test_cancellation_suite.js && node tests/test_cash_journey_protection_suite.js && node tests/test_cors_csrf_suite.js && node tests/test_journey_protection_suite.js && node tests/test_journey_progress_suite.js && node tests/test_my_trips_sorting_suite.js && node tests/test_security_suite.js && node tests/test_translations_suite.js && node tests/test_authoritative_fare_suite.js && node tests/test_universal_notification_suite.js"
+    "test": "node tests/test_cancellation_suite.js && node tests/test_cash_journey_protection_suite.js && node tests/test_cors_csrf_suite.js && node tests/test_journey_protection_suite.js && node tests/test_journey_progress_suite.js && node tests/test_my_trips_sorting_suite.js && node tests/test_security_suite.js && node tests/test_translations_suite.js && node tests/test_authoritative_fare_suite.js && node tests/test_universal_notification_suite.js && node tests/test_edit_services_suite.js"
   },
   "keywords": [],
   "author": "",
