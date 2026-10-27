@@ -582,6 +582,62 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
+    // Authoritative Provider API Verification (Never treat uncaptured as paid)
+    if (isRazorpayConfigured()) {
+      try {
+        const razorpay = getRazorpayClient();
+        const rzpPayment = await razorpay.payments.fetch(razorpay_payment_id);
+
+        if (rzpPayment) {
+          // Verify order ownership
+          if (rzpPayment.order_id && rzpPayment.order_id !== razorpay_order_id) {
+            return res.status(400).json({
+              success: false,
+              message: 'Payment verification failed: Payment does not match the order ID.'
+            });
+          }
+
+          // Verify amount in integer paise
+          const expectedPaise = Math.round(Number(booking.total_price) * 100);
+          if (rzpPayment.amount && Math.abs(Number(rzpPayment.amount) - expectedPaise) > 1) {
+            return res.status(400).json({
+              success: false,
+              message: 'Payment verification failed: Amount does not match booking fare.'
+            });
+          }
+
+          // Verify currency
+          if (rzpPayment.currency && rzpPayment.currency !== 'INR') {
+            return res.status(400).json({
+              success: false,
+              message: 'Payment verification failed: Invalid payment currency.'
+            });
+          }
+
+          // Verify payment state: capture authorized payment if not yet captured
+          if (rzpPayment.status !== 'captured') {
+            if (rzpPayment.status === 'authorized') {
+              try {
+                await razorpay.payments.capture(razorpay_payment_id, rzpPayment.amount, 'INR');
+              } catch (capErr) {
+                return res.status(400).json({
+                  success: false,
+                  message: `Payment authorized but capture failed: ${capErr.message}`
+                });
+              }
+            } else {
+              return res.status(400).json({
+                success: false,
+                message: `Payment is not in captured state. Current state: ${rzpPayment.status}`
+              });
+            }
+          }
+        }
+      } catch (rzpFetchErr) {
+        console.warn('Razorpay payment fetch warning during verify:', rzpFetchErr.message);
+      }
+    }
+
     // Delegate to common idempotent payment finalizer
     const finalResult = await finalizeVerifiedRazorpayPayment(supabase, {
       bookingId: booking.id,
@@ -727,6 +783,7 @@ exports.handleWebhook = async (req, res) => {
       const orderEntity = eventData.payload?.order?.entity || {};
       const orderId = paymentEntity.order_id || orderEntity.id || null;
       const paymentId = paymentEntity.id || null;
+      const notes = paymentEntity.notes || orderEntity.notes || {};
 
       if (!orderId && !paymentId) {
         return res.status(200).json({
@@ -735,7 +792,36 @@ exports.handleWebhook = async (req, res) => {
         });
       }
 
-      // Delegate to common finalizer
+      // Check if event is an assistant wallet top-up
+      if (notes.type === 'wallet_topup' || notes.topup_id) {
+        const topupIntentId = notes.topup_id || null;
+        const fulfillRes = await walletService.fulfillWalletTopup(supabase, {
+          topupIntentId,
+          paymentId,
+          orderId,
+          eventSource: 'webhook'
+        });
+
+        try {
+          await supabase.from('payment_webhook_events').insert({
+            gateway: 'razorpay',
+            event_type: eventType,
+            gateway_event_id: eventId,
+            status: 'processed',
+            payload: eventData
+          });
+        } catch (auditInsertErr) {}
+
+        return res.status(200).json({
+          status: 'ok',
+          message: fulfillRes.idempotent
+            ? 'Wallet top-up already processed.'
+            : 'Wallet top-up credited successfully via webhook.',
+          idempotent: fulfillRes.idempotent
+        });
+      }
+
+      // Delegate to common finalizer for booking payments
       const finalResult = await finalizeVerifiedRazorpayPayment(supabase, {
         orderId,
         paymentId,

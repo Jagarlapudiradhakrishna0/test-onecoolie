@@ -1,20 +1,17 @@
-import { useState, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck,
   Check,
-  Clock,
-  QrCode,
-  Info,
   RotateCw,
   ArrowRight,
   ArrowLeft,
-  Train,
   Banknote,
   X,
-  ExternalLink,
-  Smartphone,
-  ChevronRight,
+  CreditCard,
+  AlertTriangle,
+  Lock,
+  Loader2,
+  RefreshCw,
   CheckCircle2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -25,124 +22,87 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
 /* ============================================================
-   ONECOOLIE PAYMENT MODAL — Swiss Mobility Fintech Checkout
-   • UPI Merchant: onecoolie@ybl (VPA hidden from display as requested)
-   • Desktop: QR code with 15-minute countdown timer & 5-step walkthrough
-   • Phone Screen: Direct 1-tap native UPI app launchers
-   • Razorpay Live Online Payment Checkout Integration
-   • Cash on Service direct confirmation
+   ONECOOLIE PRODUCTION PAYMENT MODAL — Razorpay Standard Checkout
+   • Production Razorpay Standard Checkout (UPI, Cards, NetBanking, Wallets)
+   • Server-Authoritative Fare & Order Creation (Paise accuracy)
+   • Cryptographic Server-Side Verification (POST /api/payments/verify)
+   • Realtime Socket.IO & Controlled Polling Fallback
+   • Cash on Service Direct Booking Option
+   • Zero Demo QR Codes, Zero Fake Countdown Timers, Zero Secrets
    ============================================================ */
-
-const UPI_MERCHANT_ID = 'onecoolie@ybl';
-const MERCHANT_NAME = 'OneCoolie';
 
 export default function PaymentModal({ open, total = 0, onClose, onPaid, bookingData }) {
   const { user } = useAuth();
   const { t } = useLanguage();
+
   const [processing, setProcessing] = useState(false);
-  const [paymentStep, setPaymentStep] = useState('select'); // 'select' | 'online'
-  const [timeLeft, setTimeLeft] = useState(899); // 14:59 (15 minutes)
-  const [qrKey, setQrKey] = useState(0);
-  const [bookingRef, setBookingRef] = useState('OC386022');
+  const [paymentStep, setPaymentStep] = useState('select'); // 'select' | 'online_review'
   const [activeBooking, setActiveBooking] = useState(null);
-  const [initializingOrder, setInitializingOrder] = useState(false);
+  const [razorpayOrder, setRazorpayOrder] = useState(null);
+  const [orderInitializing, setOrderInitializing] = useState(false);
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
+  const [verifiedPaymentId, setVerifiedPaymentId] = useState(null);
 
-  // Load or restore active session when modal opens
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Reset state on modal open
   useEffect(() => {
     if (open) {
       setPaymentVerified(false);
       setPaymentError(null);
+      setPaymentStep('select');
+      setActiveBooking(null);
+      setRazorpayOrder(null);
+      setVerifiedPaymentId(null);
+      setProcessing(false);
+      setOrderInitializing(false);
+
+      // Check if there is an active incomplete payment session saved
       try {
         const raw = sessionStorage.getItem('onecoolie_active_payment');
         if (raw) {
           const saved = JSON.parse(raw);
-          if (saved && saved.active && saved.expireAt && saved.expireAt > Date.now()) {
-            setBookingRef(saved.bookingRef || 'OC386022');
-            setPaymentStep(saved.paymentStep || 'online');
-            if (saved.activeBooking) setActiveBooking(saved.activeBooking);
-            const remaining = Math.max(0, Math.floor((saved.expireAt - Date.now()) / 1000));
-            setTimeLeft(remaining);
-            return;
+          if (saved && saved.activeBooking && saved.bookingId) {
+            setActiveBooking(saved.activeBooking);
+            if (saved.razorpayOrder) setRazorpayOrder(saved.razorpayOrder);
           }
         }
       } catch (e) {
         // ignore
       }
-
-      // Fresh opening
-      const randNum = Math.floor(100000 + Math.random() * 900000);
-      setBookingRef(`OC${randNum}`);
-      setTimeLeft(899);
-      setPaymentStep('select');
-      setActiveBooking(null);
     }
   }, [open]);
 
-  // Sync remaining time with real timestamp on visibilitychange / focus & interval
+  // Real-time Socket.IO Listener and Controlled Polling Fallback
   useEffect(() => {
-    if (!open || paymentStep !== 'online') return;
-
-    const syncTime = () => {
-      try {
-        const raw = sessionStorage.getItem('onecoolie_active_payment');
-        if (raw) {
-          const saved = JSON.parse(raw);
-          if (saved && saved.expireAt) {
-            const remaining = Math.max(0, Math.floor((saved.expireAt - Date.now()) / 1000));
-            if (remaining <= 0) {
-              const newExpire = Date.now() + 899 * 1000;
-              saved.expireAt = newExpire;
-              sessionStorage.setItem('onecoolie_active_payment', JSON.stringify(saved));
-              setQrKey((k) => k + 1);
-              setTimeLeft(899);
-            } else {
-              setTimeLeft(remaining);
-            }
-            return;
-          }
-        }
-      } catch (e) { }
-
-      setTimeLeft((prev) => (prev > 1 ? prev - 1 : 899));
-    };
-
-    const interval = setInterval(syncTime, 1000);
-
-    const handleVisibilityOrFocus = () => {
-      syncTime();
-    };
-
-    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    window.addEventListener('focus', handleVisibilityOrFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      window.removeEventListener('focus', handleVisibilityOrFocus);
-    };
-  }, [open, paymentStep]);
-
-  // Real-Time Socket.IO Listener and Controlled Polling when on Online Payment
-  useEffect(() => {
-    if (!open || paymentStep !== 'online' || !activeBooking?.id || paymentVerified) return;
+    if (!open || !activeBooking?.id || paymentVerified) return;
 
     let pollCount = 0;
-    const maxPolls = 30; // 90 seconds (every 3 seconds)
+    const maxPolls = 20; // Up to 60s
     let pollTimer = null;
     let isSubscribed = true;
 
-    const onComplete = async (bookingData) => {
-      if (!isSubscribed) return;
+    const onPaymentSuccess = async (bookingObj, pId = null) => {
+      if (!isSubscribed || paymentVerified) return;
       setPaymentVerified(true);
-      toast.success('Payment verified! Confirming booking...');
+      if (pId) setVerifiedPaymentId(pId);
+      toast.success('Payment successfully verified by Razorpay!');
+
       try {
         sessionStorage.removeItem('onecoolie_active_payment');
       } catch (e) { }
+
       setTimeout(async () => {
         if (isSubscribed) {
-          await onPaid('online', bookingData || activeBooking);
+          await onPaid('online', bookingObj || activeBooking);
         }
       }, 700);
     };
@@ -151,7 +111,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
     const handleSocketPayment = (payload) => {
       const bId = payload?.bookingId || payload?.booking_id || payload?.booking?.id || payload?.booking?.booking_id;
       if (bId && (String(bId) === String(activeBooking.id) || String(bId) === String(activeBooking.booking_id))) {
-        onComplete(payload.booking || activeBooking);
+        onPaymentSuccess(payload.booking || activeBooking, payload.payment_id);
       }
     };
 
@@ -160,20 +120,20 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
       window.socket.on('payment_verified', handleSocketPayment);
     }
 
-    // 2. Controlled Polling Fallback (every 3s up to 90s)
+    // 2. Controlled Polling Fallback (every 3s)
     const checkPaymentStatus = async () => {
       if (!isSubscribed || paymentVerified) return true;
       try {
         const { data } = await axios.get(`/payments/${activeBooking.id}/status`);
-        if (data?.payment_status === 'paid') {
-          onComplete(data.booking || activeBooking);
+        if (data?.payment_status === 'paid' || data?.status === 'paid') {
+          onPaymentSuccess(data.booking || activeBooking, data.gateway_payment_id);
           return true;
         } else if (data?.payment_status === 'failed') {
           setPaymentError(data.failure_reason || 'Payment was not completed. Please retry.');
           return true;
         }
       } catch (err) {
-        // Silently continue polling on temporary network hiccups
+        // Ignore temporary network hiccups during poll
       }
       return false;
     };
@@ -197,25 +157,14 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
         window.socket.off('payment_verified', handleSocketPayment);
       }
     };
-  }, [open, paymentStep, activeBooking?.id, paymentVerified]);
+  }, [open, activeBooking?.id, paymentVerified, onPaid]);
 
   if (!open) return null;
 
-  const formattedAmount = Number(total || 0).toFixed(2);
-  const transactionNote = encodeURIComponent(`OneCoolie Booking #${bookingRef}`);
-
-  // Official NPCI UPI Intent & App Schemes with dynamic amount pre-filled
-  const genericUpiUri = `upi://pay?pa=${UPI_MERCHANT_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${formattedAmount}&cu=INR&tn=${transactionNote}&mode=02&purpose=00`;
-  const phonePeUri = `phonepe://pay?pa=${UPI_MERCHANT_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${formattedAmount}&cu=INR&tn=${transactionNote}&mode=02`;
-  const gPayUri = `tez://upi/pay?pa=${UPI_MERCHANT_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${formattedAmount}&cu=INR&tn=${transactionNote}&mode=02`;
-  const paytmUri = `paytmmp://pay?pa=${UPI_MERCHANT_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${formattedAmount}&cu=INR&tn=${transactionNote}&mode=02`;
-
-  const handleSelectOnline = async () => {
-    setPaymentStep('online');
-    setInitializingOrder(true);
+  // Initialize or fetch existing order from server
+  const initializeOnlineOrder = async () => {
+    setOrderInitializing(true);
     setPaymentError(null);
-    const expireTimestamp = Date.now() + 899 * 1000;
-    setTimeLeft(899);
 
     try {
       const orderPayload = {
@@ -238,39 +187,179 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
         action_type: bookingData?.actionType || 'load_to_seat',
         pnr: bookingData?.pnrInput || '',
         platform: bookingData?.selectedTrain?.platform || '2',
+        journey_protection: Boolean(bookingData?.journeyProtection),
+        terms_accepted: Boolean(bookingData?.journeyProtection),
+        terms_version: 'ONECOOLIE-PROTECTION-PRELAUNCH-v2'
       };
 
       const { data: orderRes } = await axios.post('/payments/create-order', orderPayload);
 
-      if (orderRes && orderRes.booking) {
-        setActiveBooking(orderRes.booking);
-        setBookingRef(orderRes.booking.booking_id || bookingRef);
-
-        sessionStorage.setItem('onecoolie_active_payment', JSON.stringify({
-          active: true,
-          paymentStep: 'online',
-          bookingId: orderRes.booking.id,
-          bookingRef: orderRes.booking.booking_id || bookingRef,
-          activeBooking: orderRes.booking,
-          expireAt: expireTimestamp,
-          total,
-          ...(bookingData || {})
-        }));
+      if (!orderRes || !orderRes.booking) {
+        throw new Error(orderRes?.message || 'Failed to initialize payment gateway order.');
       }
+
+      setActiveBooking(orderRes.booking);
+      if (orderRes.razorpay) {
+        setRazorpayOrder(orderRes.razorpay);
+      }
+
+      sessionStorage.setItem('onecoolie_active_payment', JSON.stringify({
+        active: true,
+        bookingId: orderRes.booking.id,
+        bookingRef: orderRes.booking.booking_id,
+        activeBooking: orderRes.booking,
+        razorpayOrder: orderRes.razorpay,
+        total,
+        ...(bookingData || {})
+      }));
+
+      return { booking: orderRes.booking, razorpay: orderRes.razorpay };
     } catch (err) {
-      console.warn('Online order initialization note:', err.message);
-      // Even if order init reports an issue, keep UI stable and allow retry
-      setPaymentError(err.response?.data?.message || 'Unable to connect to payment server. Please retry.');
+      console.error('Create order error:', err);
+      const msg = err.response?.data?.message || err.message || 'Unable to connect to payment server. Please retry.';
+      setPaymentError(msg);
+      toast.error(msg);
+      return null;
     } finally {
-      setInitializingOrder(false);
+      if (isMountedRef.current) setOrderInitializing(false);
     }
   };
 
-  const handleBackToSelect = () => {
-    setPaymentStep('select');
+  // Launch Razorpay Standard Checkout Dialog
+  const launchRazorpayCheckout = async (bookingObj, rzpData) => {
+    setProcessing(true);
+    setPaymentError(null);
+
+    try {
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || typeof window === 'undefined' || !window.Razorpay) {
+        throw new Error('Razorpay Checkout SDK could not be loaded. Please check your internet connection.');
+      }
+
+      if (!rzpData || !rzpData.order_id || !rzpData.key_id) {
+        throw new Error('Razorpay order details missing from server response.');
+      }
+
+      const targetBookingId = bookingObj.id || bookingObj.booking_id;
+
+      const options = {
+        key: rzpData.key_id,
+        amount: rzpData.amount,
+        currency: rzpData.currency || 'INR',
+        name: 'ONECOOLIE',
+        description: `Station Assistance #${bookingObj.booking_id || targetBookingId}`,
+        image: oneCoolieLogo,
+        order_id: rzpData.order_id,
+        handler: async function (response) {
+          try {
+            setProcessing(true);
+            setPaymentError(null);
+
+            // Authoritative server-side verification with cryptographic HMAC signature
+            const { data: verifyRes } = await axios.post('/payments/verify', {
+              booking_id: targetBookingId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            if (!verifyRes || !verifyRes.success) {
+              throw new Error(verifyRes?.message || 'Payment signature verification failed.');
+            }
+
+            setPaymentVerified(true);
+            setVerifiedPaymentId(response.razorpay_payment_id);
+            toast.success('Payment verified successfully!');
+
+            try {
+              sessionStorage.removeItem('onecoolie_active_payment');
+            } catch (e) { }
+
+            setTimeout(async () => {
+              if (isMountedRef.current) {
+                await onPaid('online', verifyRes.booking || bookingObj);
+              }
+            }, 600);
+
+          } catch (vErr) {
+            console.error('Verification error:', vErr);
+            const errMsg = vErr.response?.data?.message || vErr.message || 'Payment verification failed.';
+            setPaymentError(errMsg);
+            toast.error(errMsg);
+          } finally {
+            if (isMountedRef.current) setProcessing(false);
+          }
+        },
+        prefill: {
+          name: user?.name || user?.full_name || '',
+          email: user?.email || '',
+          contact: user?.phone || user?.phoneNumber || user?.phone_number || ''
+        },
+        notes: {
+          booking_id: String(targetBookingId),
+          passenger_id: String(user?.id || '')
+        },
+        theme: {
+          color: '#1463FF'
+        },
+        modal: {
+          ondismiss: function () {
+            if (isMountedRef.current) {
+              setProcessing(false);
+              toast('Checkout was closed. You can retry anytime.', { icon: 'ℹ️' });
+            }
+          }
+        }
+      };
+
+      const rzpInstance = new window.Razorpay(options);
+      rzpInstance.on('payment.failed', function (resp) {
+        const desc = resp?.error?.description || 'Transaction cancelled or failed at gateway';
+        setPaymentError(`Payment failed: ${desc}`);
+        toast.error(`Payment failed: ${desc}`);
+        if (isMountedRef.current) setProcessing(false);
+      });
+
+      rzpInstance.open();
+    } catch (err) {
+      console.error('Razorpay launch error:', err);
+      const msg = err.response?.data?.message || err.message || 'Unable to open payment checkout.';
+      setPaymentError(msg);
+      toast.error(msg);
+      if (isMountedRef.current) setProcessing(false);
+    }
+  };
+
+  // Passenger clicks "Online Payment"
+  const handleSelectOnline = async () => {
+    setPaymentStep('online_review');
+    const orderResult = await initializeOnlineOrder();
+    if (orderResult && orderResult.razorpay) {
+      await launchRazorpayCheckout(orderResult.booking, orderResult.razorpay);
+    }
+  };
+
+  // Re-open checkout button
+  const handleRetryOnline = async () => {
+    if (activeBooking && razorpayOrder) {
+      await launchRazorpayCheckout(activeBooking, razorpayOrder);
+    } else {
+      const orderResult = await initializeOnlineOrder();
+      if (orderResult && orderResult.razorpay) {
+        await launchRazorpayCheckout(orderResult.booking, orderResult.razorpay);
+      }
+    }
+  };
+
+  // Passenger chooses Cash on Service
+  const handleCashConfirm = async () => {
+    setProcessing(true);
     try {
       sessionStorage.removeItem('onecoolie_active_payment');
-    } catch (e) { }
+      await onPaid('cash');
+    } finally {
+      if (isMountedRef.current) setProcessing(false);
+    }
   };
 
   const handleModalClose = () => {
@@ -280,202 +369,43 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
     onClose();
   };
 
-  const handleRegenerateQr = () => {
-    setQrKey((k) => k + 1);
-    const expireTimestamp = Date.now() + 899 * 1000;
-    setTimeLeft(899);
-    try {
-      const raw = sessionStorage.getItem('onecoolie_active_payment');
-      if (raw) {
-        const saved = JSON.parse(raw);
-        saved.expireAt = expireTimestamp;
-        sessionStorage.setItem('onecoolie_active_payment', JSON.stringify(saved));
-      }
-    } catch (e) { }
-  };
-
-  const handleUpiAppLaunch = () => {
-    try {
-      const expireTimestamp = Date.now() + timeLeft * 1000;
-      sessionStorage.setItem(
-        'onecoolie_active_payment',
-        JSON.stringify({
-          active: true,
-          paymentStep: 'online',
-          bookingRef,
-          expireAt: expireTimestamp,
-          total,
-          ...(bookingData || {})
-        })
-      );
-    } catch (e) { }
-  };
-
-  const handleConfirmPayment = async () => {
-    setProcessing(true);
-    try {
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded || typeof window === 'undefined' || !window.Razorpay) {
-        toast.error('Payment gateway SDK failed to load. Please check your connection.');
-        setProcessing(false);
-        return;
-      }
-
-      // 1. Create order on backend with authoritative pricing & Option C rules
-      const orderPayload = {
-        train_no: bookingData?.selectedTrain?.train_no || '12727',
-        train_name: bookingData?.selectedTrain?.train_name || 'Godavari Express',
-        station_code: bookingData?.station || 'KZJ',
-        journey_date: bookingData?.journeyDate || new Date().toISOString().split('T')[0],
-        journey_time: bookingData?.journeyTime || '10:00',
-        services: {
-          ...(bookingData?.services || {}),
-          platform: bookingData?.selectedTrain?.platform || '2',
-          luggage: bookingData?.luggageTotalCount || 0,
-          luggageCounts: bookingData?.luggageCounts || { small: 0, medium: 0, large: 0 },
-          luggage_details: bookingData?.luggageSummaryLabel || '',
-        },
-        payment_method: 'online',
-        coach: bookingData?.coach || 'S1',
-        seat_number: bookingData?.seatNumber || '1',
-        berth_type: bookingData?.berthType || 'LB',
-        action_type: bookingData?.actionType || 'load_to_seat',
-        pnr: bookingData?.pnrInput || '',
-        platform: bookingData?.selectedTrain?.platform || '2',
-      };
-
-      const { data: orderRes } = await axios.post('/payments/create-order', orderPayload);
-
-      if (!orderRes || !orderRes.razorpay || !orderRes.razorpay.order_id) {
-        throw new Error(orderRes?.message || 'Failed to initialize payment gateway order.');
-      }
-
-      const bookingObj = orderRes.booking || {};
-      const targetBookingId = bookingObj.id || orderRes.booking_id;
-
-      // 2. Launch Razorpay Standard Checkout
-      const options = {
-        key: orderRes.razorpay.key_id,
-        amount: orderRes.razorpay.amount,
-        currency: orderRes.razorpay.currency || 'INR',
-        name: 'OneCoolie',
-        description: `Station Assistance #${bookingObj.booking_id || targetBookingId}`,
-        image: oneCoolieLogo,
-        order_id: orderRes.razorpay.order_id,
-        handler: async function (response) {
-          try {
-            setProcessing(true);
-            const { data: verifyRes } = await axios.post('/payments/verify', {
-              booking_id: targetBookingId,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-
-            sessionStorage.removeItem('onecoolie_active_payment');
-            await onPaid('online', verifyRes.booking || bookingObj);
-          } catch (vErr) {
-            console.error('Verification error:', vErr);
-            toast.error(vErr.response?.data?.message || 'Payment verification failed. Please contact support.');
-          } finally {
-            setProcessing(false);
-          }
-        },
-        prefill: {
-          name: user?.name || user?.full_name || '',
-          email: user?.email || '',
-          contact: user?.phone || user?.phoneNumber || user?.phone_number || ''
-        },
-        theme: {
-          color: '#1463FF'
-        },
-        modal: {
-          ondismiss: function () {
-            setProcessing(false);
-          }
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (resp) {
-        toast.error(`Payment failed: ${resp?.error?.description || 'Transaction cancelled'}`);
-        setProcessing(false);
-      });
-      rzp.open();
-    } catch (err) {
-      console.error('Razorpay checkout error:', err);
-      const msg = err.response?.data?.message || err.message || 'Unable to open online checkout';
-      toast.error(msg);
-      setProcessing(false);
-    }
-  };
-
-  const handleCashConfirm = async () => {
-    setProcessing(true);
-    try {
-      sessionStorage.removeItem('onecoolie_active_payment');
-      await onPaid('cash');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const minutes = Math.floor(timeLeft / 60);
-  const seconds = timeLeft % 60;
+  const formattedAmount = Number(total || 0).toFixed(2);
+  const displayAmount = Number(total) % 1 === 0 ? total : formattedAmount;
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-900/50 backdrop-blur-md animate-fade-in select-none overflow-y-auto"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-md animate-fade-in select-none overflow-y-auto"
       onClick={handleModalClose}
     >
       <div
-        className={`w-full ${paymentStep === 'select' ? 'max-w-xl' : 'max-w-4xl'
-          } bg-white rounded-[26px] sm:rounded-[32px] border border-slate-200/90 shadow-[0_25px_70px_-15px_rgba(7,26,61,0.22)] p-5 sm:p-7 relative animate-scale-in text-zinc-900 my-auto overflow-hidden transition-all duration-200`}
+        className="w-full max-w-xl bg-white rounded-[28px] sm:rounded-[32px] border border-slate-200/90 shadow-[0_25px_70px_-15px_rgba(7,26,61,0.22)] p-5 sm:p-7 relative animate-scale-in text-zinc-900 my-auto overflow-hidden transition-all duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Realtime / Polling Verified Success Transition Overlay */}
+        {/* Verified Success Overlay */}
         {paymentVerified && (
-          <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-center space-y-3 animate-fade-in">
+          <div className="absolute inset-0 bg-white/98 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-center space-y-3 animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto border-2 border-emerald-300 animate-scale-in">
               <Check className="w-8 h-8 stroke-[3]" />
             </div>
-            <h3 className="text-xl font-black text-slate-900">Payment Verified!</h3>
-            <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-              Transaction verified by payment provider. Confirming your station assistance booking...
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900">Payment Verified!</h3>
+            <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
+              Your transaction was verified authoritatively with Razorpay. Confirming your station assistance booking...
             </p>
-          </div>
-        )}
-
-        {/* Order Initialization Loader */}
-        {initializingOrder && (
-          <div className="absolute inset-0 bg-white/90 backdrop-blur-xs z-40 flex flex-col items-center justify-center p-6 text-center space-y-3 animate-fade-in">
-            <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs font-bold text-slate-700">Connecting to secure payment network...</p>
-          </div>
-        )}
-
-        {/* Payment Error Banner if any */}
-        {paymentError && (
-          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center justify-between gap-2 animate-fade-in">
-            <span>{paymentError}</span>
-            <button
-              type="button"
-              onClick={() => setPaymentError(null)}
-              className="text-rose-500 hover:text-rose-800 font-bold px-2 py-0.5 cursor-pointer"
-            >
-              Dismiss
-            </button>
+            {verifiedPaymentId && (
+              <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-3 py-1 rounded-full font-bold">
+                Ref: {verifiedPaymentId}
+              </span>
+            )}
           </div>
         )}
 
         {/* ── Top Header Bar ────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3.5 mb-5">
-          {/* Left: Brand Logo + Back Button (if on step 2) */}
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {paymentStep === 'online' && (
+            {paymentStep === 'online_review' && (
               <button
                 type="button"
-                onClick={handleBackToSelect}
+                onClick={() => setPaymentStep('select')}
                 className="px-2.5 sm:px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 hover:text-zinc-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                 aria-label="Back to payment methods"
               >
@@ -490,7 +420,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
             />
           </div>
 
-          {/* Right: Security Trust Badge & Close Button */}
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2 text-right">
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
@@ -498,7 +427,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
               </div>
               <div className="hidden sm:block text-left">
                 <span className="text-xs font-extrabold text-[#071A3D] block leading-tight">
-                  {paymentStep === 'online' ? 'Secure UPI Payment' : 'Secure Payment'}
+                  Razorpay Checkout
                 </span>
                 <span className="text-[11px] font-medium text-[#7C8494] block leading-tight">
                   256-bit encrypted
@@ -519,8 +448,25 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
           </div>
         </div>
 
+        {/* Payment Error Banner if any */}
+        {paymentError && (
+          <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-start justify-between gap-2.5 animate-fade-in">
+            <div className="flex items-start gap-2 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span className="font-semibold leading-relaxed">{paymentError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaymentError(null)}
+              className="text-rose-500 hover:text-rose-800 font-bold px-1.5 py-0.5 cursor-pointer shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* ────────────────────────────────────────────────────────────
-            STEP 1: SELECT PAYMENT METHOD (Online Payment OR Cash on Payment)
+            STEP 1: SELECT PAYMENT METHOD (Online via Razorpay OR Cash on Service)
             ──────────────────────────────────────────────────────────── */}
         {paymentStep === 'select' && (
           <div className="space-y-5 animate-fade-in">
@@ -540,15 +486,15 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                   {t('payments.amount')}
                 </span>
                 <span className="text-2xl sm:text-3xl font-black text-[#1463FF] tracking-tight font-sans">
-                  ₹{Number(total) % 1 === 0 ? total : Number(total).toFixed(2)}
+                  ₹{displayAmount}
                 </span>
               </div>
             </div>
 
-            {/* The Two Prominent Options */}
+            {/* The Two Official Payment Options */}
             <div className="space-y-3 pt-1">
 
-              {/* Option 1: Online Payment */}
+              {/* Option 1: Online Payment (Razorpay Standard Checkout) */}
               <div
                 role="button"
                 tabIndex={0}
@@ -561,29 +507,26 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
                     <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#1463FF] flex items-center justify-center shrink-0 border border-blue-200/80 group-hover:scale-105 group-hover:bg-[#1463FF] group-hover:text-white transition-all duration-150">
-                      <QrCode className="w-6 h-6" />
+                      <CreditCard className="w-6 h-6" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-base sm:text-lg font-black text-[#071A3D] group-hover:text-[#1463FF] transition-colors leading-tight">
                           {t('payments.onlinePayment')}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold tracking-wide uppercase">
-                          {t('payments.fastDirect')}
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#1463FF] border border-blue-200 text-[10px] font-extrabold tracking-wide uppercase">
+                          Razorpay Standard
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
-                          PhonePe
+                          UPI (GPay / PhonePe / Paytm)
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
-                          Google Pay
+                          Debit & Credit Cards
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
-                          Paytm
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#1463FF] text-[10px] font-bold border border-blue-200/70">
-                          UPI QR
+                          Net Banking
                         </span>
                       </div>
                     </div>
@@ -595,7 +538,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                 </div>
               </div>
 
-              {/* Option 2: Cash on Payment */}
+              {/* Option 2: Cash on Service */}
               <div
                 role="button"
                 tabIndex={0}
@@ -623,9 +566,6 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
                           {t('payments.cashUponArrival')}
                         </span>
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-zinc-700 text-[10px] font-bold">
-                          {t('payments.assistantQr')}
-                        </span>
                         {bookingData?.journeyProtection && (
                           <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
                             {t('payments.protectionAdded')}
@@ -651,491 +591,136 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
             <div className="pt-2 text-center border-t border-slate-100">
               <p className="text-[11px] text-zinc-400 flex items-center justify-center gap-1.5 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{t('payments.verifiedAssistants')}</span>
+                <span>Protected by Razorpay 256-bit PCI-DSS Level 1 compliance</span>
               </p>
             </div>
           </div>
         )}
 
         {/* ────────────────────────────────────────────────────────────
-            STEP 2: ONLINE PAYMENT (Redirect from Option 1)
+            STEP 2: ONLINE CHECKOUT CONTROLS & STATUS
             ──────────────────────────────────────────────────────────── */}
-        {paymentStep === 'online' && (
-          <div className="space-y-4 animate-fade-in">
-            {/* Phone / Mobile View (< md): NO QR, direct UPI app launchers */}
-            <div className="md:hidden space-y-4">
-              {/* Header & Dynamic Amount */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-black text-[#071A3D] tracking-tight leading-tight">
-                    {t('payments.completePayment')}
-                  </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5 font-medium">
-                    {t('payments.tapAppToPay')}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
-                    {t('payments.amount')}
-                  </span>
-                  <span className="text-2xl font-black text-[#1463FF] tracking-tight font-sans">
-                    ₹{total}
-                  </span>
-                </div>
-              </div>
-
-              {/* Booking Metadata Strip (Merchant & Booking Ref, No UPI ID) */}
-              <div className="p-3 bg-[#F8FAFC] rounded-2xl border border-slate-200/90 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                    {t('payments.merchant')}
-                  </span>
-                  <span className="font-bold text-zinc-900">{MERCHANT_NAME}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                    {t('payments.bookingId')}
-                  </span>
-                  <span className="font-mono font-bold text-zinc-900">#{bookingRef}</span>
-                </div>
-              </div>
-
-              {/* Native UPI App Deep Link Launchers */}
-              <div className="space-y-2.5 pt-1">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500 block">
-                  {t('payments.chooseUpiApp')}
-                </span>
-
-                {/* 1. PhonePe Direct Launch */}
-                <a
-                  href={phonePeUri}
-                  onClick={handleUpiAppLaunch}
-                  className="w-full h-14 px-4 rounded-2xl bg-[#5F259F] hover:bg-[#521e8c] active:scale-[0.99] text-white font-bold text-sm flex items-center justify-between transition-all duration-150 shadow-xs cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center font-black text-sm text-white shrink-0">
-                      पे
-                    </div>
-                    <div className="text-left">
-                      <span className="block leading-tight">Pay via PhonePe</span>
-                      <span className="text-[11px] text-white/80 font-normal leading-tight">
-                        Autofills ₹{total} · 1-Tap Pay
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-white/80" />
-                </a>
-
-                {/* 2. Google Pay Direct Launch */}
-                <a
-                  href={gPayUri}
-                  onClick={handleUpiAppLaunch}
-                  className="w-full h-14 px-4 rounded-2xl bg-white hover:bg-slate-50 active:scale-[0.99] border border-slate-300 text-zinc-900 font-bold text-sm flex items-center justify-between transition-all duration-150 shadow-xs cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-black text-xs text-blue-600 border border-slate-200 shrink-0">
-                      G
-                    </div>
-                    <div className="text-left">
-                      <span className="block leading-tight">Pay via Google Pay</span>
-                      <span className="text-[11px] text-zinc-500 font-normal leading-tight">
-                        Autofills ₹{total} · GPay Intent
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-zinc-400" />
-                </a>
-
-                {/* 3. Paytm Direct Launch */}
-                <a
-                  href={paytmUri}
-                  onClick={handleUpiAppLaunch}
-                  className="w-full h-13 px-4 rounded-2xl bg-white hover:bg-slate-50 active:scale-[0.99] border border-slate-200 text-zinc-900 font-bold text-sm flex items-center justify-between transition-all duration-150 shadow-xs cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center font-black text-xs border border-sky-200 shrink-0">
-                      P
-                    </div>
-                    <div className="text-left">
-                      <span className="block text-xs leading-tight">Pay via Paytm</span>
-                      <span className="text-[10px] text-zinc-500 font-normal leading-tight">
-                        Instant Paytm Wallet / UPI
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-zinc-400" />
-                </a>
-
-                {/* 4. Any Other UPI App (Generic upi:// intent) */}
-                <a
-                  href={genericUpiUri}
-                  onClick={handleUpiAppLaunch}
-                  className="w-full h-13 px-4 rounded-2xl bg-blue-50 hover:bg-blue-100/80 active:scale-[0.99] border border-blue-200 text-[#1463FF] font-bold text-sm flex items-center justify-between transition-all duration-150 shadow-xs cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-[#1463FF] text-white flex items-center justify-center shrink-0">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <span className="block text-xs leading-tight">Any Other UPI App</span>
-                      <span className="text-[10px] text-blue-700/80 font-normal leading-tight">
-                        BHIM, CRED, Amazon Pay, Any Bank
-                      </span>
-                    </div>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-[#1463FF]/70" />
-                </a>
-              </div>
-
-              {/* Live Status indicator */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50/70 border border-blue-200/60 text-xs text-blue-950">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                  <span className="font-bold">{t('payments.waitingUpi')}</span>
-                </div>
-                <span className="text-[10px] text-blue-700 bg-white px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
-                  {t('payments.autoDetecting')}
-                </span>
-              </div>
-
-              {/* Action Button: Launch Razorpay Checkout */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-xl p-2 text-center font-medium">
-                  Official Razorpay Gateway: Supports UPI, Google Pay, PhonePe, Paytm, Cards & Netbanking.
+        {paymentStep === 'online_review' && (
+          <div className="space-y-5 animate-fade-in">
+            {/* Header & Dynamic Amount */}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl sm:text-2xl font-black text-[#071A3D] tracking-tight leading-tight">
+                  Razorpay Online Checkout
+                </h3>
+                <p className="text-xs text-zinc-500 mt-1 font-medium">
+                  Complete payment via UPI, Credit/Debit Card, or Net Banking
                 </p>
-                <button
-                  type="button"
-                  id="btn-completed-payment-mobile"
-                  onClick={handleConfirmPayment}
-                  disabled={processing}
-                  className="w-full h-13 bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide rounded-full shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {processing ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      <span>{t('payments.openingCheckout')}</span>
-                    </span>
-                  ) : (
-                    <>
-                      <span>{t('payments.proceedRazorpay')}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
               </div>
 
-              <p className="text-center text-[10px] text-zinc-400 pt-1">
-                🛡️ {t('payments.trustBadge')}
-              </p>
+              <div className="text-right shrink-0">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
+                  {t('payments.amount')}
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[#1463FF] tracking-tight font-sans">
+                  ₹{displayAmount}
+                </span>
+              </div>
             </div>
 
-            {/* ────────────────────────────────────────────────────────────
-            2. DESKTOP VIEW (md: and above):
-            • Full 2-column layout matching reference design
-            • QR code + 15-minute countdown timer
-            • NO UPI ID shown (Clean metadata: Merchant Name, Booking ID, Amount)
-            • 5-step numbered walkthrough & train accent card
-            ──────────────────────────────────────────────────────────── */}
-            <div className="hidden md:grid grid-cols-12 gap-6 lg:gap-8 items-start">
-
-              {/* ────────────────────────────────────────────────────────
-              DESKTOP LEFT COLUMN (Col 7): Header, QR Code + Timer, Actions
-              ──────────────────────────────────────────────────────── */}
-              <div className="col-span-7 space-y-4">
-
-                {/* Title & Dynamic Amount Header */}
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-2xl font-black text-[#071A3D] tracking-tight leading-tight">
-                      {t('payments.completePayment')}
-                    </h3>
-                    <p className="text-xs text-zinc-500 mt-1 font-medium">
-                      {t('payments.scanQr')}
-                    </p>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
-                      {t('payments.amount')}
-                    </span>
-                    <span className="text-2xl sm:text-3xl font-black text-[#1463FF] tracking-tight font-sans">
-                      ₹{total}
-                    </span>
-                  </div>
-                </div>
-
-                {/* QR Code Box + Countdown Timer Box Row */}
-                <div className="grid grid-cols-2 gap-3.5 items-stretch">
-
-                  {/* Left Sub-card: Large QR Code */}
-                  <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col items-center justify-center relative">
-                    <div className="relative p-2 bg-white rounded-xl">
-                      <QRCodeSVG
-                        key={qrKey}
-                        value={genericUpiUri}
-                        size={160}
-                        level="M"
-                        marginSize={1}
-                        bgColor="#FFFFFF"
-                        fgColor="#071A3D"
-                        className="rounded-lg"
-                      />
-                      {/* Central Brand Graphic Badge */}
-                      <div className="absolute inset-0 m-auto w-8 h-8 rounded-full bg-white shadow-xs border border-blue-100 flex items-center justify-center pointer-events-none">
-                        <span className="text-sm font-black text-[#1463FF] select-none">∞</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#1463FF] border border-blue-200/70 text-[11px] font-bold shadow-2xs">
-                      <QrCode className="w-3 h-3" />
-                      <span>{t('payments.scanWithAnyUpi')}</span>
-                    </div>
-                  </div>
-
-                  {/* Right Sub-card: Countdown Timer & Regenerate */}
-                  <div className="p-4 bg-[#F8FAFC] rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-3">
-                    {/* Timer Header */}
-                    <div className="flex items-center gap-1.5 text-zinc-700">
-                      <Clock className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-600">
-                        {t('payments.qrExpiresIn')}
-                      </span>
-                    </div>
-
-                    {/* Big Clock Counter */}
-                    <div className="text-center py-1">
-                      <div className="font-mono text-3xl sm:text-4xl font-black text-[#071A3D] tracking-wider tabular-nums">
-                        {String(minutes).padStart(2, '0')} : {String(seconds).padStart(2, '0')}
-                      </div>
-                      <div className="flex justify-center gap-10 text-[10px] uppercase font-bold text-zinc-400 mt-0.5">
-                        <span>{t('payments.min')}</span>
-                        <span>{t('payments.sec')}</span>
-                      </div>
-                    </div>
-
-                    {/* Security Advisory Pill */}
-                    <div className="p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/70 text-[11px] text-blue-900 leading-snug flex items-start gap-1.5">
-                      <Info className="w-3.5 h-3.5 text-[#1463FF] shrink-0 mt-0.5" />
-                      <span>{t('payments.qrSecurityNotice')}</span>
-                    </div>
-
-                    {/* Regenerate Button */}
-                    <button
-                      type="button"
-                      onClick={handleRegenerateQr}
-                      className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-bold text-[#1463FF] flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-[0.99]"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      <span>{t('payments.regenerateQr')}</span>
-                    </button>
-                  </div>
-
-                </div>
-
-                {/* Clean Booking Metadata Strip (UPI ID removed as requested) */}
-                <div className="p-3.5 rounded-2xl bg-[#F8FAFC] border border-slate-200/90 shadow-2xs">
-                  <div className="grid grid-cols-3 gap-2 text-left">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                        {t('payments.merchant')}
-                      </span>
-                      <span className="text-xs font-bold text-zinc-900 truncate block">
-                        {MERCHANT_NAME}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                        {t('payments.bookingId')}
-                      </span>
-                      <span className="font-mono text-xs font-bold text-zinc-900 truncate block">
-                        #{bookingRef}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                        {t('payments.amount')}
-                      </span>
-                      <span className="text-xs font-extrabold text-[#1463FF] block">
-                        ₹{total}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Live Status indicator */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50/70 border border-blue-200/60 text-xs text-blue-950">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                    <span className="font-bold">{t('payments.waitingUpi')}</span>
-                  </div>
-                  <span className="text-[10px] text-blue-700 bg-white px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
-                    {t('payments.autoDetecting')}
+            {/* Order Details Summary Card */}
+            <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-slate-200/90 space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-left">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
+                    Booking Ref
+                  </span>
+                  <span className="font-mono text-xs font-bold text-zinc-900 truncate block">
+                    #{activeBooking?.booking_id || 'Initializing...'}
                   </span>
                 </div>
-
-                {/* Primary Action Button: "Proceed to Pay with Razorpay" */}
-                <div className="space-y-2">
-                  <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-xl p-2 text-center font-medium">
-                    Official Razorpay Gateway: Supports UPI, Google Pay, PhonePe, Paytm, Cards & Netbanking.
-                  </p>
-                  <button
-                    type="button"
-                    id="btn-completed-payment-desktop"
-                    onClick={handleConfirmPayment}
-                    disabled={processing}
-                    className="w-full h-12 sm:h-13 bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide rounded-full shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {processing ? (
-                      <span className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                        <span>{t('payments.openingCheckout')}</span>
-                      </span>
-                    ) : (
-                      <>
-                        <span>{t('payments.proceedRazorpay')}</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
+                    Gateway Order
+                  </span>
+                  <span className="font-mono text-xs font-bold text-zinc-700 truncate block">
+                    {razorpayOrder?.order_id || 'Creating order...'}
+                  </span>
                 </div>
-
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
+                    Station / Train
+                  </span>
+                  <span className="text-xs font-bold text-zinc-900 truncate block">
+                    {bookingData?.station || 'KZJ'} · {bookingData?.selectedTrain?.train_no || '12727'}
+                  </span>
+                </div>
               </div>
 
-              {/* ────────────────────────────────────────────────────────
-              DESKTOP RIGHT COLUMN (Col 5): Safe. Simple. Secure. & Numbered Stepper (1-5)
-              ──────────────────────────────────────────────────────── */}
-              <div className="col-span-5 space-y-4 flex flex-col justify-between h-full pt-1">
-
-                {/* Safe. Simple. Secure. Banner */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-[#F0F7FF] border border-blue-100/90 shadow-2xs flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-100 text-[#1463FF] flex items-center justify-center shrink-0 border border-blue-200/60">
-                    <Train className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-extrabold text-[#071A3D] tracking-tight leading-tight">
-                      {t('payments.safeSimpleSecure')}
-                    </h4>
-                    <p className="text-xs text-zinc-600 mt-0.5 leading-snug">
-                      {t('payments.completePaymentConfirm')}
-                    </p>
-                  </div>
+              {/* Status Indicator */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 text-xs">
+                <div className="flex items-center gap-2">
+                  {orderInitializing || processing ? (
+                    <Loader2 className="w-4 h-4 text-[#1463FF] animate-spin" />
+                  ) : paymentVerified ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+                  )}
+                  <span className="font-bold text-slate-800">
+                    {orderInitializing
+                      ? 'Creating gateway order...'
+                      : processing
+                      ? 'Verifying payment with bank...'
+                      : paymentVerified
+                      ? 'Payment verified!'
+                      : 'Awaiting payment completion'}
+                  </span>
                 </div>
-
-                {/* Numbered Stepper Walkthrough (Steps 1 to 5) */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-3.5 relative">
-                  {[
-                    {
-                      num: 1,
-                      title: t('payments.step1Title'),
-                      desc: t('payments.step1Desc'),
-                    },
-                    {
-                      num: 2,
-                      title: t('payments.step2Title'),
-                      desc: t('payments.step2Desc'),
-                    },
-                    {
-                      num: 3,
-                      title: t('payments.step3Title'),
-                      desc: `₹${total} (OneCoolie Booking)`,
-                    },
-                    {
-                      num: 4,
-                      title: t('payments.step4Title'),
-                      desc: t('payments.step4Desc'),
-                    },
-                    {
-                      num: 5,
-                      title: t('payments.step5Title'),
-                      desc: t('payments.step5Desc'),
-                    },
-                  ].map((step, idx, arr) => (
-                    <div key={step.num} className="relative flex items-start gap-3 group">
-                      {/* Step Connector Dotted Line */}
-                      {idx < arr.length - 1 && (
-                        <div className="absolute left-3 top-6 bottom-0 w-0 border-l border-dashed border-blue-200 -mb-2" />
-                      )}
-
-                      {/* Step Number Badge */}
-                      <div className="w-6 h-6 rounded-full bg-blue-100 text-[#1463FF] font-black text-xs flex items-center justify-center shrink-0 z-10 border border-blue-200/70">
-                        {step.num}
-                      </div>
-
-                      {/* Step Description */}
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#071A3D] leading-tight">
-                          {step.title}
-                        </p>
-                        <p className="text-[11px] text-[#7C8494] leading-tight mt-0.5">
-                          {step.desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* People. Journeys. A Stronger India Accent Card */}
-                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/70 to-slate-50 border border-blue-100/80 shadow-2xs flex items-center justify-between gap-3 overflow-hidden">
-                  {/* Minimal Train Vector Silhouette */}
-                  <div className="relative w-28 h-10 flex items-center shrink-0">
-                    <svg
-                      viewBox="0 0 120 40"
-                      className="w-full h-full text-[#1463FF]"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M5 28C20 28 40 28 65 24C85 20.8 105 12 115 12C118 12 119 14 119 17C119 24 115 28 95 28H5Z"
-                        fill="currentColor"
-                        fillOpacity="0.12"
-                      />
-                      <path
-                        d="M2 28H118M10 20H35M45 20H70M80 18H95"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M100 12C108 12 118 16 118 20C118 25 110 28 95 28C65 28 15 28 2 28"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                      <circle cx="20" cy="28" r="2.5" fill="currentColor" />
-                      <circle cx="45" cy="28" r="2.5" fill="currentColor" />
-                      <circle cx="70" cy="28" r="2.5" fill="currentColor" />
-                    </svg>
-                  </div>
-
-                  {/* National Brand Statement */}
-                  <div className="text-right">
-                    <span className="text-xs font-extrabold text-[#071A3D] block leading-tight">
-                      People. Journeys.
-                    </span>
-                    <span className="text-[11px] font-bold text-zinc-600 block leading-tight">
-                      A Stronger India.
-                    </span>
-                    <div className="flex items-center justify-end gap-1 mt-1">
-                      <span className="w-3 h-0.5 rounded-full bg-[#FF9933]" />
-                      <span className="w-3 h-0.5 rounded-full bg-slate-300" />
-                      <span className="w-3 h-0.5 rounded-full bg-[#128807]" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Subtle Trust Statement */}
-                <div className="text-center pt-1">
-                  <p className="text-[10px] text-zinc-400 flex items-center justify-center gap-1.5 font-medium">
-                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                    <span>{t('payments.trustBadge')}</span>
-                  </p>
-                </div>
-
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1463FF] border border-blue-200/80">
+                  Secure Checkout
+                </span>
               </div>
+            </div>
 
+            {/* Launch Checkout Primary Action */}
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                id="btn-proceed-razorpay-checkout"
+                onClick={handleRetryOnline}
+                disabled={processing || orderInitializing}
+                className="w-full h-13 bg-[#1463FF] hover:bg-[#0d52dd] active:scale-[0.99] text-white font-bold text-sm tracking-wide rounded-full shadow-md shadow-[#1463FF]/25 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {processing || orderInitializing ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Connecting to Razorpay...</span>
+                  </span>
+                ) : (
+                  <>
+                    <span>Open Razorpay Checkout</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCashConfirm}
+                disabled={processing}
+                className="w-full py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Banknote className="w-4 h-4 text-emerald-700" />
+                <span>Switch to Cash on Service instead</span>
+              </button>
+            </div>
+
+            {/* Security Notice */}
+            <div className="pt-2 text-center border-t border-slate-100">
+              <p className="text-[11px] text-zinc-400 flex items-center justify-center gap-1.5 font-medium">
+                <Lock className="w-3.5 h-3.5 text-zinc-500" />
+                <span>Payment is handled directly by Razorpay. No card or UPI details are stored on ONECOOLIE servers.</span>
+              </p>
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

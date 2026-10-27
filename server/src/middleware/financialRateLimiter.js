@@ -85,10 +85,23 @@ const adminPayoutLimiter = rateLimit({
   handler: createRateLimitHandler('Administrative payout request threshold reached. Please wait a few moments.')
 });
 
+/**
+ * Limiter for Assistant Wallet Top-up operations
+ * Max 15 requests per 15 minutes per IP
+ */
+const walletTopupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: createRateLimitHandler('Too many wallet top-up attempts. Please wait 15 minutes.')
+});
+
 module.exports = {
   paymentOrderLimiter,
   paymentVerifyLimiter,
   bookingCancellationLimiter,
   payoutRequestLimiter,
-  adminPayoutLimiter
+  adminPayoutLimiter,
+  walletTopupLimiter
 };
