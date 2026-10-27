@@ -120,6 +120,13 @@ async function initiateRazorpayRefund(gatewayPaymentId, amountInRupees, notes = 
     const razorpay = razorpayConfig.getRazorpayClient();
     const amountInPaise = razorpayConfig.formatRazorpayAmount(amountInRupees);
 
+    if (amountInPaise <= 0) {
+      return {
+        success: false,
+        error: 'Refund amount in paise must be greater than zero.'
+      };
+    }
+
     // Call official Razorpay payments.refund API
     const refundRes = await razorpay.payments.refund(gatewayPaymentId, {
       amount: amountInPaise,
@@ -129,28 +136,32 @@ async function initiateRazorpayRefund(gatewayPaymentId, amountInRupees, notes = 
       }
     });
 
+    const gatewayStatus = refundRes.status || 'processed';
+
     return {
       success: true,
       gatewayRefundId: refundRes.id,
-      gatewayStatus: refundRes.status || 'processed',
+      gatewayStatus: gatewayStatus,
       rawResponse: refundRes
     };
   } catch (gatewayErr) {
     console.error('RAZORPAY REFUND API ERROR:', gatewayErr.message || gatewayErr);
+    const desc = gatewayErr.error?.description || gatewayErr.description || gatewayErr.message || 'Razorpay refund request failed.';
     return {
       success: false,
-      error: gatewayErr.error?.description || gatewayErr.message || 'Razorpay refund request failed.'
+      error: desc
     };
   }
 }
 
 /**
  * Authoritatively executes a booking refund:
- * 1. Checks idempotency & existing refunds
- * 2. Enforces Financial Invariant (total_refunded + amount <= original_payment)
- * 3. Creates pending refund record
- * 4. Calls Razorpay gateway refund API
- * 5. Updates refund record to 'processed' (or 'failed')
+ * 1. Discovers gateway_payment_id from order if missing
+ * 2. Checks idempotency & existing refunds (processed or pending)
+ * 3. Enforces Financial Invariant (total_refunded + amount <= original_payment)
+ * 4. Creates pending refund record
+ * 5. Calls Razorpay gateway refund API
+ * 6. Updates refund record to 'processed', 'pending', or 'failed'
  *
  * @param {object} supabaseClient
  * @param {object} params
@@ -163,8 +174,11 @@ async function initiateRazorpayRefund(gatewayPaymentId, amountInRupees, notes = 
  * @returns {Promise<{
  *   success: boolean,
  *   idempotent?: boolean,
+ *   gatewayStatus?: string,
+ *   gatewayRefundId?: string,
  *   refund?: object,
- *   message?: string
+ *   message?: string,
+ *   error?: string
  * }>}
  */
 async function processBookingRefund(supabaseClient, {
@@ -181,7 +195,41 @@ async function processBookingRefund(supabaseClient, {
 
   const originalAmount = Number(payment.amount || booking.total_price || 0);
 
-  // 1. Check existing refunds for idempotency and cumulative limits
+  // 1. Fallback Payment Discovery: If gateway_payment_id is missing, attempt lookup via order ID
+  let effectiveGatewayPaymentId = payment.gateway_payment_id;
+  if (!effectiveGatewayPaymentId && payment.gateway_order_id && razorpayConfig.isRazorpayConfigured()) {
+    try {
+      const razorpay = razorpayConfig.getRazorpayClient();
+      const orderPayments = await razorpay.orders.fetchPayments(payment.gateway_order_id);
+      if (orderPayments && Array.isArray(orderPayments.items) && orderPayments.items.length > 0) {
+        const captured = orderPayments.items.find(p => p.status === 'captured') ||
+                         orderPayments.items.find(p => p.status === 'authorized');
+        if (captured) {
+          effectiveGatewayPaymentId = captured.id;
+          payment.gateway_payment_id = captured.id;
+          if (captured.status === 'captured') {
+            payment.status = 'paid';
+          }
+          try {
+            await supabaseClient
+              .from('payments')
+              .update({
+                gateway_payment_id: captured.id,
+                status: captured.status === 'captured' ? 'paid' : payment.status,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', payment.id);
+          } catch (syncErr) {
+            console.warn('Could not sync discovered gateway_payment_id to payments table:', syncErr.message);
+          }
+        }
+      }
+    } catch (discErr) {
+      console.warn('Razorpay order fallback discovery notice:', discErr.message);
+    }
+  }
+
+  // 2. Check existing refunds for idempotency and cumulative limits
   const summary = await getRefundSummaryForPayment(supabaseClient, payment.id);
 
   // If already fully refunded, return idempotent success
@@ -189,8 +237,21 @@ async function processBookingRefund(supabaseClient, {
     return {
       success: true,
       idempotent: true,
+      gatewayStatus: 'processed',
       refund: summary.processedRefunds[0] || null,
       message: 'Payment has already been fully refunded.'
+    };
+  }
+
+  // If a refund is already pending or processing, return idempotent pending state
+  if (summary.pendingRefunds && summary.pendingRefunds.length > 0) {
+    const existing = summary.pendingRefunds[0];
+    return {
+      success: true,
+      idempotent: true,
+      gatewayStatus: existing.status || 'pending',
+      refund: existing,
+      message: 'A refund request is already pending or processing for this payment.'
     };
   }
 
@@ -209,9 +270,10 @@ async function processBookingRefund(supabaseClient, {
     return { success: false, message: 'Refund amount must be greater than zero.' };
   }
 
+  const amountInPaise = razorpayConfig.formatRazorpayAmount(finalAmount);
   const nowIso = new Date().toISOString();
 
-  // 2. Create initial 'pending' refund record in database
+  // 3. Create initial 'pending' refund record in database
   let refundRecord = null;
   try {
     const { data: inserted, error: insertErr } = await supabaseClient
@@ -221,16 +283,18 @@ async function processBookingRefund(supabaseClient, {
         payment_id: payment.id,
         passenger_id: booking.passenger_id || actorId,
         amount: finalAmount,
+        amount_paise: amountInPaise,
         currency: payment.currency || 'INR',
         payment_gateway: 'razorpay',
-        gateway_payment_id: payment.gateway_payment_id,
+        gateway_payment_id: effectiveGatewayPaymentId,
         status: 'pending',
         reason,
         metadata: {
           actor_role: actorRole,
           actor_id: actorId,
           original_payment_amount: originalAmount,
-          cumulative_prior_refunds: summary.totalRefunded
+          cumulative_prior_refunds: summary.totalRefunded,
+          amount_paise: amountInPaise
         },
         created_at: nowIso,
         updated_at: nowIso
@@ -247,28 +311,35 @@ async function processBookingRefund(supabaseClient, {
     console.warn('Refunds ledger insert notice:', dbErr.message);
   }
 
-  // 3. Dispatch to Razorpay Gateway API
+  // 4. Dispatch to Razorpay Gateway API
+  const idempotencyRef = `REFUND_${booking.id}_${payment.id}_${amountInPaise}`;
   const gatewayResult = await initiateRazorpayRefund(
-    payment.gateway_payment_id,
+    effectiveGatewayPaymentId,
     finalAmount,
     {
-      booking_id: booking.id,
-      booking_number: booking.booking_id,
-      payment_id: payment.id,
-      refund_record_id: refundRecord?.id || ''
+      booking_id: String(booking.id),
+      booking_number: String(booking.booking_id || ''),
+      payment_id: String(payment.id),
+      refund_record_id: String(refundRecord?.id || ''),
+      refund_idempotency_key: idempotencyRef
     }
   );
 
-  // 4. Update refund record state based on gateway outcome
+  // 5. Update refund record state based on gateway outcome
   if (gatewayResult.success) {
+    const isProcessed = gatewayResult.gatewayStatus === 'processed';
+    const isPending = ['pending', 'processing'].includes(gatewayResult.gatewayStatus);
+    const newRefundStatus = isProcessed ? 'processed' : (isPending ? 'pending' : gatewayResult.gatewayStatus);
+
     if (refundRecord?.id) {
       try {
         const { data: updated } = await supabaseClient
           .from('refunds')
           .update({
-            status: 'processed',
+            status: newRefundStatus,
             gateway_refund_id: gatewayResult.gatewayRefundId,
-            processed_at: new Date().toISOString(),
+            gateway_payment_id: effectiveGatewayPaymentId,
+            processed_at: isProcessed ? new Date().toISOString() : null,
             updated_at: new Date().toISOString()
           })
           .eq('id', refundRecord.id)
@@ -300,8 +371,12 @@ async function processBookingRefund(supabaseClient, {
     return {
       success: true,
       idempotent: false,
+      gatewayStatus: gatewayResult.gatewayStatus,
+      gatewayRefundId: gatewayResult.gatewayRefundId,
       refund: refundRecord,
-      message: `Refund of ₹${finalAmount} processed successfully.`
+      message: isProcessed
+        ? `Refund of ₹${finalAmount} processed successfully.`
+        : `Refund of ₹${finalAmount} initiated and pending provider processing.`
     };
   } else {
     // Gateway call failed
@@ -320,6 +395,7 @@ async function processBookingRefund(supabaseClient, {
 
     return {
       success: false,
+      gatewayStatus: 'failed',
       error: gatewayResult.error,
       refund: refundRecord,
       message: `Gateway refund failed: ${gatewayResult.error}`

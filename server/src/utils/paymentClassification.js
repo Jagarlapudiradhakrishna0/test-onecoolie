@@ -16,7 +16,8 @@ const ONLINE_PAYMENT_METHODS = [
   'upi',
   'online',
   'card',
-  'netbanking'
+  'netbanking',
+  'razorpay'
 ];
 
 /**

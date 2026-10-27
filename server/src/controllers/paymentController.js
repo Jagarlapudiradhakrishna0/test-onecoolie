@@ -421,6 +421,22 @@ async function finalizeVerifiedRazorpayPayment(supabaseClient, {
   // 3. IDEMPOTENCY CHECK:
   // If payment or booking is already paid, acknowledge safely WITHOUT duplicate broadcasts or writes
   if (paymentRecord?.status === 'paid' || booking.payment_status === 'paid') {
+    // If paymentRecord exists but lacked gateway_payment_id, persist it now
+    if (paymentRecord?.id && !paymentRecord.gateway_payment_id && paymentId) {
+      try {
+        await supabaseClient
+          .from('payments')
+          .update({
+            gateway_payment_id: paymentId,
+            status: 'paid',
+            updated_at: nowIso
+          })
+          .eq('id', paymentRecord.id);
+        paymentRecord.gateway_payment_id = paymentId;
+        paymentRecord.status = 'paid';
+      } catch (pUpErr) {}
+    }
+
     return {
       success: true,
       idempotent: true,
@@ -947,13 +963,13 @@ exports.handleWebhook = async (req, res) => {
       }
 
       if (!refundRecord && paymentGatewayId) {
-        const { data: rData } = await supabase
+        const { data: rRows } = await supabase
           .from('refunds')
           .select('*')
           .eq('gateway_payment_id', paymentGatewayId)
           .order('created_at', { ascending: false })
-          .maybeSingle();
-        refundRecord = rData;
+          .limit(1);
+        refundRecord = rRows && rRows.length > 0 ? rRows[0] : null;
       }
 
       const nowIso = new Date().toISOString();

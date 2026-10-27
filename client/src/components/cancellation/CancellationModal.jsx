@@ -259,8 +259,11 @@ export default function CancellationModal({
       const updated = res.data?.booking || res.data;
       setCancellationResult({
         message: res.data?.message || 'Booking cancelled successfully.',
-        refundAmount: quote?.refundAmount ?? (res.data?.quote?.refundAmount ?? 0),
-        cancellationCharge: quote?.cancellationCharge ?? (res.data?.quote?.cancellationCharge ?? 0),
+        refundAmount: res.data?.refund?.refund_amount ?? (quote?.refundAmount ?? (res.data?.quote?.refundAmount ?? 0)),
+        cancellationCharge: res.data?.refund?.cancellation_charge ?? (quote?.cancellationCharge ?? (res.data?.quote?.cancellationCharge ?? 0)),
+        refundStatus: res.data?.refund?.status || 'none',
+        refundId: res.data?.refund?.gateway_refund_id || null,
+        refundError: res.data?.refund?.error || null,
         booking: updated
       });
       setStep('success');
@@ -620,11 +623,31 @@ export default function CancellationModal({
               <h3 className="text-lg font-black text-zinc-900">{t('cancellation.cancelledSuccess') || 'Booking Cancelled Successfully'}</h3>
               <p className="text-xs text-zinc-500 mt-1 max-w-xs mx-auto">{cancellationResult.message}</p>
             </div>
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl max-w-sm mx-auto text-xs space-y-1">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl max-w-sm mx-auto text-xs space-y-1.5">
               <div className="flex items-center justify-between text-zinc-600">
-                <span>{t('cancellation.refund') || 'Refund'}</span>
+                <span>{t('cancellation.refund') || 'Refund Amount'}</span>
                 <span className="font-mono font-bold text-emerald-600">₹{cancellationResult.refundAmount}</span>
               </div>
+              {cancellationResult.refundStatus && cancellationResult.refundStatus !== 'none' && (
+                <div className="flex items-center justify-between text-zinc-600">
+                  <span>Refund Status</span>
+                  <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] uppercase ${
+                    cancellationResult.refundStatus === 'processed'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : cancellationResult.refundStatus === 'failed'
+                        ? 'bg-rose-100 text-rose-700'
+                        : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {cancellationResult.refundStatus}
+                  </span>
+                </div>
+              )}
+              {cancellationResult.refundId && (
+                <div className="flex items-center justify-between text-zinc-600">
+                  <span>Refund ID</span>
+                  <span className="font-mono text-[10px] text-zinc-700">{cancellationResult.refundId}</span>
+                </div>
+              )}
               {cancellationResult.cancellationCharge > 0 && (
                 <div className="flex items-center justify-between text-zinc-600">
                   <span>Cancellation Charge</span>

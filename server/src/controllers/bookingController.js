@@ -521,17 +521,74 @@ exports.cancelBooking = async (req, res) => {
       });
     }
 
-    // 3. Authoritative payment ledger row
+    // 3. Authoritative payment ledger row lookup
     let paymentRecord = null;
     try {
-      const { data: pData } = await supabase
+      const { data: pRows } = await supabase
         .from('payments')
         .select('*')
         .eq('booking_id', booking.id)
         .order('created_at', { ascending: false })
-        .maybeSingle();
-      paymentRecord = pData;
-    } catch (pErr) {}
+        .limit(1);
+      paymentRecord = pRows && pRows.length > 0 ? pRows[0] : null;
+    } catch (pErr) {
+      console.warn('Payment lookup by booking_id error:', pErr.message);
+    }
+
+    if (!paymentRecord && booking.payment_id) {
+      try {
+        const { data: pRows } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('id', booking.payment_id)
+          .limit(1);
+        paymentRecord = pRows && pRows.length > 0 ? pRows[0] : null;
+      } catch (pErr) {}
+    }
+
+    // 3.1 Pre-cancellation Authoritative Gateway Verification:
+    // If the booking was placed online, verify with Razorpay directly whether the customer was charged.
+    // This protects passengers against dropped frontend verify calls, race conditions, or delayed webhooks.
+    const isCash = isCashPayment(booking.payment_method);
+    if (!isCash && (paymentRecord?.gateway_order_id || booking.payment_method === 'online')) {
+      if (paymentRecord?.gateway_order_id && (!paymentRecord?.gateway_payment_id || paymentRecord?.status !== 'paid' || booking.payment_status !== 'paid')) {
+        const razorpayConfig = require('../config/razorpay');
+        if (razorpayConfig.isRazorpayConfigured()) {
+          try {
+            const razorpay = razorpayConfig.getRazorpayClient();
+            const orderPayments = await razorpay.orders.fetchPayments(paymentRecord.gateway_order_id);
+            if (orderPayments && Array.isArray(orderPayments.items) && orderPayments.items.length > 0) {
+              const captured = orderPayments.items.find(p => p.status === 'captured') ||
+                               orderPayments.items.find(p => p.status === 'authorized');
+              if (captured) {
+                paymentRecord.gateway_payment_id = captured.id;
+                paymentRecord.status = 'paid';
+                booking.payment_status = 'paid';
+
+                await supabase
+                  .from('payments')
+                  .update({
+                    gateway_payment_id: captured.id,
+                    status: 'paid',
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', paymentRecord.id);
+
+                await supabase
+                  .from('bookings')
+                  .update({
+                    payment_status: 'paid',
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', booking.id);
+              }
+            }
+          } catch (rzpCheckErr) {
+            console.warn('Pre-cancellation Razorpay order verification error:', rzpCheckErr.message);
+          }
+        }
+      }
+    }
 
     // 4. Centralized Status Rule Check
     const ruleCheck = canPassengerCancel(booking, paymentRecord);
@@ -587,12 +644,28 @@ exports.cancelBooking = async (req, res) => {
 
     // 8. Update booking status & services metadata
     const nowIso = new Date().toISOString();
-    const isCash = isCashPayment(booking.payment_method);
-    const newPaymentStatus = refundResult?.success
-      ? 'refunded'
-      : (isCash || paymentRecord?.status === 'pending')
-        ? 'cancelled'
-        : booking.payment_status;
+    let determinedPaymentStatus = booking.payment_status;
+    let refundDisplayStatus = 'none';
+
+    if (calc.requiresGatewayRefund) {
+      if (refundResult?.success) {
+        if (refundResult.gatewayStatus === 'processed') {
+          determinedPaymentStatus = 'refunded';
+          refundDisplayStatus = 'processed';
+        } else {
+          determinedPaymentStatus = 'refunded';
+          refundDisplayStatus = refundResult.gatewayStatus || 'pending';
+        }
+      } else {
+        // Gateway refund failed or errored:
+        // Never claim 'refunded' if provider call failed. Retain paid/failed state authoritatively.
+        determinedPaymentStatus = (booking.payment_status === 'paid' || paymentRecord?.status === 'paid') ? 'paid' : 'failed';
+        refundDisplayStatus = 'failed';
+      }
+    } else {
+      determinedPaymentStatus = isCash ? 'cancelled' : 'cancelled';
+      refundDisplayStatus = isCash ? 'cod_reconciled' : 'cancelled';
+    }
 
     const cancellationMetadata = {
       reason_category: reasonCategory,
@@ -602,9 +675,9 @@ exports.cancelBooking = async (req, res) => {
       cancellation_charge: calc.cancellationCharge,
       cancelled_by: req.user.id,
       cancelled_at: nowIso,
-      refund_status: refundResult?.success
-        ? 'processed'
-        : (calc.requiresGatewayRefund ? 'failed' : (isCash ? 'cod_reconciled' : 'cancelled')),
+      refund_status: refundDisplayStatus,
+      refund_id: refundResult?.gatewayRefundId || null,
+      refund_error: refundResult?.success ? null : (refundResult?.error || null),
       payment_method: booking.payment_method
     };
 
@@ -615,7 +688,7 @@ exports.cancelBooking = async (req, res) => {
 
     const updatePayload = {
       booking_status: 'cancelled',
-      payment_status: newPaymentStatus,
+      payment_status: determinedPaymentStatus,
       services: updatedServices,
       updated_at: nowIso
     };
@@ -628,7 +701,9 @@ exports.cancelBooking = async (req, res) => {
       .single();
 
     if (updateError && updateError.message?.includes('bookings_payment_status_check')) {
-      const fallbackStatus = refundResult?.success ? 'refunded' : (booking.payment_status === 'paid' ? 'refunded' : 'failed');
+      const fallbackStatus = refundResult?.success
+        ? 'refunded'
+        : ((booking.payment_status === 'paid' || paymentRecord?.status === 'paid') ? 'paid' : 'failed');
       const retryResult = await supabase
         .from('bookings')
         .update({
@@ -648,8 +723,8 @@ exports.cancelBooking = async (req, res) => {
       return res.status(400).json({ message: updateError.message });
     }
 
-    // 9. Update pending payment ledger to cancelled if not charged
-    if (paymentRecord?.id && paymentRecord.status === 'pending') {
+    // 9. Update pending payment ledger to cancelled only if no gateway transaction was attempted
+    if (paymentRecord?.id && paymentRecord.status === 'pending' && !calc.requiresGatewayRefund) {
       try {
         await supabase
           .from('payments')
@@ -732,10 +807,18 @@ exports.cancelBooking = async (req, res) => {
     }
 
     let confirmationMsg = 'Booking cancelled successfully.';
-    if (refundResult?.success) {
-      confirmationMsg = `Booking cancelled successfully. Refund of ₹${calc.refundAmount} has been processed.`;
+    if (calc.requiresGatewayRefund) {
+      if (refundResult?.success) {
+        if (refundResult.gatewayStatus === 'processed') {
+          confirmationMsg = `Booking cancelled successfully. Refund of ₹${calc.refundAmount} has been processed to your original payment method.`;
+        } else {
+          confirmationMsg = `Booking cancelled successfully. Refund of ₹${calc.refundAmount} has been initiated and is pending provider settlement.`;
+        }
+      } else {
+        confirmationMsg = `Booking cancelled. Automatic refund could not be completed (${refundResult?.error || 'Gateway error'}). Support has been notified with Booking #${booking.booking_id}.`;
+      }
     } else if (calc.cancellationCharge > 0) {
-      confirmationMsg = `Booking cancelled. A cancellation charge of ₹${calc.cancellationCharge} (30%) applies. Refund: ₹${calc.refundAmount}.`;
+      confirmationMsg = `Booking cancelled. A cancellation charge of ₹${calc.cancellationCharge} (30%) applies.`;
     }
 
     return res.json({
@@ -743,7 +826,14 @@ exports.cancelBooking = async (req, res) => {
       idempotent: false,
       message: confirmationMsg,
       booking: formatted,
-      refund: refundResult?.refund || null,
+      refund: {
+        required: calc.requiresGatewayRefund,
+        status: refundDisplayStatus,
+        refund_amount: calc.refundAmount,
+        cancellation_charge: calc.cancellationCharge,
+        gateway_refund_id: refundResult?.gatewayRefundId || null,
+        error: refundResult?.success ? null : (refundResult?.error || null)
+      },
       quote: calc,
       ...formatted
     });

@@ -261,7 +261,15 @@ function calculateCancellationRefund(booking, payment, reasonCategory = '', reas
   const cancellationCharge = Math.round((originalAmount * cancellationChargePercent) / 100 * 100) / 100;
 
   let requiresGatewayRefund = false;
-  if (!isCash && paymentStatus === 'paid' && refundAmount > 0) {
+  const isOnlineAttempt = !isCash && (
+    paymentStatus === 'paid' ||
+    Boolean(payment?.gateway_payment_id) ||
+    Boolean(payment?.gateway_order_id) ||
+    Boolean(booking?.payment_id) ||
+    ['online', 'upi', 'card', 'netbanking', 'razorpay'].includes(String(paymentMethod).toLowerCase())
+  );
+
+  if (isOnlineAttempt && refundAmount > 0) {
     requiresGatewayRefund = true;
   }
 
