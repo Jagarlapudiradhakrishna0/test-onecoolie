@@ -345,12 +345,30 @@ runTest('10.1 PaymentModal has zero hardcoded demo UPI IDs or simulated success 
   assert.ok(!content.includes('onecoolie@ybl'), 'Demo UPI ID onecoolie@ybl must not exist in PaymentModal');
   assert.ok(!content.includes('upi://pay'), 'Mock UPI deep link upi://pay must not exist in PaymentModal');
   assert.ok(!content.includes('QRCodeSVG'), 'QRCodeSVG demo QR must not exist in PaymentModal');
+  assert.ok(!content.includes('Regenerate QR'), 'Regenerate QR must not exist in PaymentModal');
+  assert.ok(!content.includes('QR expires in'), 'QR countdown timer must not exist in PaymentModal');
+  assert.ok(!content.includes('Scan QR to Pay'), 'Scan QR text must not exist in PaymentModal');
 
   // Verify Razorpay Standard Checkout launch is integrated
   assert.ok(content.includes('window.Razorpay'), 'PaymentModal must use official window.Razorpay checkout');
   assert.ok(content.includes('create-order'), 'PaymentModal must create order on backend');
   assert.ok(content.includes('/payments/verify'), 'PaymentModal must verify payment on backend');
+
+  // Verify legitimate Cash flow is preserved separately
+  assert.ok(content.includes('handleCashConfirm'), 'Legitimate Cash option must be preserved');
+  assert.ok(content.includes('cashOnPayment'), 'Cash option must be clearly labeled');
 });
+
+runTest('10.2 Client locale files contain zero stale demo QR payment keys', () => {
+  const enLocalePath = path.resolve(__dirname, '../../client/src/locales/en.js');
+  const enContent = fs.readFileSync(enLocalePath, 'utf8');
+
+  assert.ok(!enContent.includes('regenerateQr'), 'en.js must not contain regenerateQr');
+  assert.ok(!enContent.includes('qrExpiresIn'), 'en.js must not contain qrExpiresIn');
+  assert.ok(!enContent.includes('scanQr'), 'en.js must not contain scanQr');
+  assert.ok(!enContent.includes('proceedRazorpay'), 'en.js must not contain proceedRazorpay');
+});
+
 
 // -----------------------------------------------------------------------------
 // 11. Authoritative Fare Source in Backend
