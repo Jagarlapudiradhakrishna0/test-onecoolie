@@ -262,7 +262,8 @@ async function createBookingRecordInDB(supabase, userId, payload) {
     payment_method: normalizedPaymentMethod,
     payment_status: 'pending',
     payment_id: null,
-    booking_status: 'pending'
+    booking_status: 'pending',
+    collection_status: isCashPayment(normalizedPaymentMethod) ? 'awaiting_collection' : 'not_applicable'
   };
 
   const { data: booking, error: bookingErr } = await supabase
@@ -276,41 +277,52 @@ async function createBookingRecordInDB(supabase, userId, payload) {
     throw { status: 400, message: bookingErr.message };
   }
 
-  // 4. Create dedicated Payment record in payments table
+  // 4. CHANNEL SEPARATION:
+  // Offline Cash: Initialize cash_collections ledger entry. Never pollute payments gateway ledger.
+  // Online Payment: Create pending payment record in payments table for gateway order.
   let paymentRecord = null;
-  try {
-    const { data: pData, error: pErr } = await supabase
-      .from('payments')
-      .insert([{
-        booking_id: booking.id,
-        passenger_id: userId,
-        amount: finalTotalPrice,
-        currency: 'INR',
-        payment_method: normalizedPaymentMethod,
-        status: 'pending',
-        metadata: {
-          breakdown: pricingResult.breakdown,
-          subtotal: pricingResult.subtotal,
-          discount: pricingResult.discount,
-          has_journey_protection: journey_protection
-        }
-      }])
-      .select()
-      .maybeSingle();
+  const isCash = isCashPayment(normalizedPaymentMethod);
 
-    if (pErr) {
-      console.warn('Payment insert warning:', pErr.message);
-    } else if (pData?.id) {
-      paymentRecord = pData;
-      // Link payment_id on booking
-      await supabase
-        .from('bookings')
-        .update({ payment_id: pData.id })
-        .eq('id', booking.id);
-      booking.payment_id = pData.id;
+  if (isCash) {
+    const { initializeCashCollection } = require('./cashCollectionService');
+    await initializeCashCollection(supabase, { booking, actorId: userId });
+  } else {
+    try {
+      const amountPaise = formatRazorpayAmount(finalTotalPrice);
+      const { data: pData, error: pErr } = await supabase
+        .from('payments')
+        .insert([{
+          booking_id: booking.id,
+          passenger_id: userId,
+          amount: finalTotalPrice,
+          amount_paise: amountPaise,
+          currency: 'INR',
+          payment_method: normalizedPaymentMethod,
+          channel: 'online',
+          status: 'pending',
+          metadata: {
+            breakdown: pricingResult.breakdown,
+            subtotal: pricingResult.subtotal,
+            discount: pricingResult.discount,
+            has_journey_protection: journey_protection
+          }
+        }])
+        .select()
+        .maybeSingle();
+
+      if (pErr) {
+        console.warn('Online payment ledger insert warning:', pErr.message);
+      } else if (pData?.id) {
+        paymentRecord = pData;
+        await supabase
+          .from('bookings')
+          .update({ payment_id: pData.id })
+          .eq('id', booking.id);
+        booking.payment_id = pData.id;
+      }
+    } catch (payInsertErr) {
+      console.warn('Online payment ledger insert notice:', payInsertErr.message);
     }
-  } catch (payInsertErr) {
-    console.warn('Payment ledger insert notice:', payInsertErr.message);
   }
 
   // 5. If Journey Protection opted in, create pending journey_protection record

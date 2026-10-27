@@ -4319,6 +4319,13 @@ export default function PassengerDashboard() {
                 </div>
               </div>
 
+              {['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(String(confirmedBooking.payment_method).toLowerCase()) && (
+                <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 font-medium flex items-center gap-2">
+                  <Banknote className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>Pay your assistant <strong>₹{confirmedBooking.total_price}</strong> in cash after the service is completed.</span>
+                </div>
+              )}
+
               {/* Row 7: Journey Protection (if opted in) */}
               {confirmedBooking.journey_protection && (
                 <div className="border-t border-slate-100 pt-2.5 space-y-1.5 bg-blue-50/40 p-2.5 rounded-xl border border-blue-100/60 mt-1">

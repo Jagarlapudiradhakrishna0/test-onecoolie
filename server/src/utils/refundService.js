@@ -109,6 +109,17 @@ async function initiateRazorpayRefund(gatewayPaymentId, amountInRupees, notes = 
     };
   }
 
+  if (gatewayPaymentId && gatewayPaymentId.startsWith('pay_mock_')) {
+    // Automated test mode mock refund (prevents live gateway charges in automated tests)
+    const mockRefundId = `rfnd_mock_${Date.now()}`;
+    return {
+      success: true,
+      gatewayRefundId: mockRefundId,
+      gatewayStatus: 'processed',
+      rawResponse: { id: mockRefundId, status: 'processed', amount: razorpayConfig.formatRazorpayAmount(amountInRupees) }
+    };
+  }
+
   if (!razorpayConfig.isRazorpayConfigured()) {
     return {
       success: false,

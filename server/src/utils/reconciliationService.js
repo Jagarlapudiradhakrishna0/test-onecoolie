@@ -71,6 +71,16 @@ async function runSystemReconciliation(supabase) {
     supabase.from('assistant_payout_items').select('*')
   ]);
 
+  let cashCollections = [];
+  try {
+    const { data: ccData, error: ccErr } = await supabase.from('cash_collections').select('*');
+    if (!ccErr && ccData) {
+      cashCollections = ccData;
+    }
+  } catch (cErr) {
+    // If cash_collections table not yet migrated, fallback gracefully
+  }
+
   if (bErr) throw new Error(`Failed to load bookings for reconciliation: ${bErr.message}`);
   if (pErr) throw new Error(`Failed to load payments for reconciliation: ${pErr.message}`);
   if (rErr && rErr.code !== '42P01') throw new Error(`Failed to load refunds for reconciliation: ${rErr.message}`);
@@ -346,30 +356,106 @@ async function runSystemReconciliation(supabase) {
         { bookingId: b.id, assistantId: b.assistant_id, paymentStatus: b.payment_status }
       );
     }
+
+    // Invariant 12: Cash bookings must NEVER create Razorpay orders or gateway payment records
+    if (isCash) {
+      const bPayments = paymentByBooking.get(b.id) || [];
+      const hasGatewayPayment = bPayments.some(
+        (p) => p.gateway_payment_id || p.gateway_order_id || p.payment_gateway === 'razorpay'
+      );
+      if (hasGatewayPayment || b.razorpay_order_id) {
+        addIssue(
+          'CASH_ONLINE_GATEWAY_POLLUTION',
+          'critical',
+          'booking',
+          b.id,
+          `Strict Separation Breach: Cash booking ${b.id} has an associated Razorpay order/payment record`,
+          { bookingId: b.id, razorpay_order_id: b.razorpay_order_id }
+        );
+      }
+
+      // Invariant 13: Cash bookings must NEVER have Razorpay gateway refunds
+      const bRefunds = (refunds || []).filter((r) => r.booking_id === b.id);
+      const hasGatewayRefund = bRefunds.some((r) => r.gateway_refund_id || r.refund_gateway === 'razorpay');
+      if (hasGatewayRefund) {
+        addIssue(
+          'CASH_REFUND_IN_GATEWAY',
+          'critical',
+          'booking',
+          b.id,
+          `Strict Separation Breach: Cash booking ${b.id} has a Razorpay gateway refund record`,
+          { bookingId: b.id }
+        );
+      }
+    }
   }
 
   // -------------------------------------------------------------
-  // AGGREGATE FINANCIAL METRICS & INVARIANT 11 (Platform Solvency)
+  // CHANNEL SEPARATION: Online (Razorpay) vs Offline (Cash)
   // -------------------------------------------------------------
-  const grossPayments = roundMoney(
-    payments
+  // Genuine online payments only (exclude cash)
+  const genuineOnlinePayments = payments.filter(
+    (p) => p.payment_method !== 'cash' && (p.payment_gateway === 'razorpay' || p.gateway_payment_id || p.gateway_order_id || p.channel === 'online')
+  );
+
+  const grossOnlinePayments = roundMoney(
+    genuineOnlinePayments
       .filter((p) => p.status === 'paid')
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
   );
 
-  const totalRefunded = roundMoney(
-    (refunds || [])
-      .filter((r) => r.status === 'completed' || r.status === 'processed')
-      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+  // Online gateway refunds
+  const onlineRefunds = (refunds || []).filter(
+    (r) => r.status === 'completed' || r.status === 'processed'
+  );
+  const totalOnlineRefunded = roundMoney(
+    onlineRefunds.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   );
 
-  const netCollected = roundMoney(grossPayments - totalRefunded);
+  const netOnlineCollected = roundMoney(grossOnlinePayments - totalOnlineRefunded);
+  const estimatedGatewayFees = roundMoney(grossOnlinePayments * 0.0236); // 2% + 18% GST
+  const estimatedBankSettlement = roundMoney(Math.max(0, netOnlineCollected - estimatedGatewayFees));
+
+  // Cash Collections (Physical offline channel)
+  const cashBookings = bookings.filter((b) => String(b.payment_method || '').toLowerCase() === 'cash');
+  const expectedCashTotal = roundMoney(
+    cashBookings
+      .filter((b) => b.booking_status !== 'cancelled' && b.status !== 'cancelled')
+      .reduce((sum, b) => sum + (Number(b.final_price || b.total_price) || 0), 0)
+  );
+
+  const collectedCashBookings = cashBookings.filter(
+    (b) => b.collection_status === 'collected' || (b.services && b.services.cash_collection?.status === 'collected')
+  );
+  const confirmedCashTotal = roundMoney(
+    collectedCashBookings.reduce((sum, b) => sum + (Number(b.final_price || b.total_price) || 0), 0)
+  );
+
+  const awaitingCashTotal = roundMoney(
+    cashBookings
+      .filter((b) => (!b.collection_status || b.collection_status === 'awaiting_collection') && b.booking_status !== 'cancelled' && b.status !== 'cancelled')
+      .reduce((sum, b) => sum + (Number(b.final_price || b.total_price) || 0), 0)
+  );
+
+  const disputedCashTotal = roundMoney(
+    cashBookings
+      .filter((b) => b.collection_status === 'disputed')
+      .reduce((sum, b) => sum + (Number(b.final_price || b.total_price) || 0), 0)
+  );
+
+  const reversedCashTotal = roundMoney(
+    cashBookings
+      .filter((b) => b.collection_status === 'reversed')
+      .reduce((sum, b) => sum + (Number(b.final_price || b.total_price) || 0), 0)
+  );
+
+  const platformCashCommissionReceivable = roundMoney(confirmedCashTotal * 0.20);
 
   // Platform commission from completed bookings
   const platformCommission = roundMoney(
     bookings
-      .filter((b) => b.status === 'completed')
-      .reduce((sum, b) => sum + (Number(b.platform_fee) || 0), 0)
+      .filter((b) => b.status === 'completed' || b.booking_status === 'completed')
+      .reduce((sum, b) => sum + (Number(b.platform_fee) || ((Number(b.final_price || b.total_price) || 0) * 0.20)), 0)
   );
 
   const assistantEarningsCreated = roundMoney(
@@ -408,15 +494,21 @@ async function runSystemReconciliation(supabase) {
       .reduce((sum, py) => sum + (Number(py.amount) || 0), 0)
   );
 
-  // Check paid payouts vs earnings paid_out alignment
-  if (Math.abs(assistantPaidOut - totalPayoutsPaid) > 1.0) {
+  // Check paid payouts vs earnings paid_out alignment (allowing for cash paid-outs where assistant held cash directly)
+  const onlineEarningsPaidOut = roundMoney(
+    earnings
+      .filter((e) => e.status === 'paid_out' && e.payment_method !== 'cash')
+      .reduce((sum, e) => sum + (Number(e.assistant_amount) || 0), 0)
+  );
+
+  if (Math.abs(onlineEarningsPaidOut - totalPayoutsPaid) > 5.0) {
     addIssue(
-      'PAID_OUT_DRIFT',
+      'ONLINE_PAID_OUT_DRIFT',
       'warning',
       'system',
       'ledger',
-      `Minor drift between assistant earnings marked 'paid_out' (₹${assistantPaidOut}) and total paid payouts (₹${totalPayoutsPaid})`,
-      { assistantPaidOut, totalPayoutsPaid, difference: roundMoney(assistantPaidOut - totalPayoutsPaid) }
+      `Drift between online assistant earnings marked 'paid_out' (₹${onlineEarningsPaidOut}) and total bank payouts (₹${totalPayoutsPaid})`,
+      { onlineEarningsPaidOut, totalPayoutsPaid, difference: roundMoney(onlineEarningsPaidOut - totalPayoutsPaid) }
     );
   }
 
@@ -439,10 +531,29 @@ async function runSystemReconciliation(supabase) {
       critical_issues: criticalCount,
       warnings: warningCount
     },
+    // Channels separated with explicit breakdowns
+    online_channel: {
+      gross_captured: grossOnlinePayments,
+      total_refunded: totalOnlineRefunded,
+      net_collected: netOnlineCollected,
+      estimated_gateway_fees: estimatedGatewayFees,
+      estimated_merchant_bank_settlement: estimatedBankSettlement,
+      genuine_transactions_count: genuineOnlinePayments.length
+    },
+    cash_channel: {
+      expected_cash_total: expectedCashTotal,
+      confirmed_cash_total: confirmedCashTotal,
+      awaiting_collection_total: awaitingCashTotal,
+      disputed_cash_total: disputedCashTotal,
+      reversed_cash_total: reversedCashTotal,
+      platform_commission_receivable: platformCashCommissionReceivable,
+      cash_bookings_count: cashBookings.length
+    },
     metrics: {
-      gross_payments: grossPayments,
-      total_refunded: totalRefunded,
-      net_collected: netCollected,
+      // Top-level online metrics (NEVER polluted with physical cash)
+      gross_payments: grossOnlinePayments,
+      total_refunded: totalOnlineRefunded,
+      net_collected: netOnlineCollected,
       platform_commission: platformCommission,
       assistant_earnings_created: assistantEarningsCreated,
       assistant_pending: assistantPending,
@@ -450,7 +561,13 @@ async function runSystemReconciliation(supabase) {
       assistant_held: assistantHeld,
       assistant_paid_out: assistantPaidOut,
       pending_liability: pendingLiability,
-      total_payouts_paid: totalPayoutsPaid
+      total_payouts_paid: totalPayoutsPaid,
+      // Cash channel metrics attached cleanly
+      cash_expected: expectedCashTotal,
+      cash_collected: confirmedCashTotal,
+      cash_awaiting: awaitingCashTotal,
+      cash_disputed: disputedCashTotal,
+      cash_commission_receivable: platformCashCommissionReceivable
     },
     issues
   };

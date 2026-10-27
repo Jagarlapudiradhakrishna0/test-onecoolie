@@ -663,8 +663,24 @@ exports.cancelBooking = async (req, res) => {
         refundDisplayStatus = 'failed';
       }
     } else {
-      determinedPaymentStatus = isCash ? 'cancelled' : 'cancelled';
-      refundDisplayStatus = isCash ? 'cod_reconciled' : 'cancelled';
+      determinedPaymentStatus = 'cancelled';
+      if (isCash) {
+        if (booking.collection_status === 'collected' && calc.refundAmount > 0) {
+          // Cash was already physically handed to the assistant: initiate separate offline reimbursement workflow
+          const { recordCashReimbursementRequest } = require('../utils/cashCollectionService');
+          await recordCashReimbursementRequest(supabase, {
+            bookingId: booking.id,
+            reimbursementAmount: calc.refundAmount,
+            reason: reasonDetails || reasonCategory,
+            actorId: req.user.id
+          });
+          refundDisplayStatus = 'reimbursement_pending';
+        } else {
+          refundDisplayStatus = 'not_applicable';
+        }
+      } else {
+        refundDisplayStatus = 'cancelled';
+      }
     }
 
     const cancellationMetadata = {
@@ -689,6 +705,9 @@ exports.cancelBooking = async (req, res) => {
     const updatePayload = {
       booking_status: 'cancelled',
       payment_status: determinedPaymentStatus,
+      collection_status: isCash
+        ? (booking.collection_status === 'collected' ? 'reimbursement_pending' : 'cancelled')
+        : 'not_applicable',
       services: updatedServices,
       updated_at: nowIso
     };

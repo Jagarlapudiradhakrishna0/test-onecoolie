@@ -929,7 +929,30 @@ exports.cancelBookingByAdmin = async (req, res) => {
     // Refund calculation & gateway dispatch
     const refundEligibility = determineRefundEligibility(booking, paymentRecord, 'admin');
     let refundResult = null;
-    if (refundEligibility.requiresRefund && paymentRecord) {
+    let cashReimbursementResult = null;
+
+    if (isCash) {
+      // Offline Cash Collection cancellation rules:
+      const cashService = require('../utils/cashCollectionService');
+      const isCollected = booking.collection_status === 'collected' || (booking.services && booking.services.cash_collection?.status === 'collected');
+      if (isCollected) {
+        // Cash was physically handed over to assistant; passenger is owed offline reimbursement
+        cashReimbursementResult = await cashService.recordCashReimbursementRequest(supabase, booking.id, {
+          reason: `Admin cancellation: ${reason}`,
+          actorId: req.user?.id || 'admin',
+          actorRole: 'admin',
+          amount: Number(booking.final_price || booking.total_price) || 0
+        });
+      } else {
+        // Cash was never collected, mark collection as cancelled / not due
+        try {
+          await supabase
+            .from('cash_collections')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('booking_id', booking.id);
+        } catch (cErr) {}
+      }
+    } else if (refundEligibility.requiresRefund && paymentRecord) {
       refundResult = await processBookingRefund(supabase, {
         booking,
         payment: paymentRecord,
@@ -944,7 +967,10 @@ exports.cancelBookingByAdmin = async (req, res) => {
     let newPaymentStatus = booking.payment_status;
     let refundDisplayStatus = 'none';
 
-    if (refundEligibility.requiresRefund) {
+    if (isCash) {
+      newPaymentStatus = 'cancelled';
+      refundDisplayStatus = cashReimbursementResult ? 'cash_reimbursement_requested' : 'not_applicable';
+    } else if (refundEligibility.requiresRefund) {
       if (refundResult?.success) {
         newPaymentStatus = 'refunded';
         refundDisplayStatus = refundResult.gatewayStatus || 'processed';
@@ -953,8 +979,8 @@ exports.cancelBookingByAdmin = async (req, res) => {
         refundDisplayStatus = 'failed';
       }
     } else {
-      newPaymentStatus = isCash ? 'cancelled' : 'cancelled';
-      refundDisplayStatus = isCash ? 'cod_reconciled' : 'cancelled';
+      newPaymentStatus = 'cancelled';
+      refundDisplayStatus = 'cancelled';
     }
 
     let { data: updatedBooking, error: updateErr } = await supabase
@@ -1466,26 +1492,57 @@ exports.bulkActionBookings = async (req, res) => {
       updatePayload = { booking_status: 'cancelled', cancelled_at: nowIso, cancellation_reason: reason };
     } else if (action === 'delete') {
       updatePayload = { booking_status: 'deleted', cancelled_at: nowIso, cancellation_reason: reason, deleted_at: nowIso };
-    } else if (action === 'mark_paid') {
-      updatePayload = { payment_status: 'paid', payment_confirmed_at: nowIso };
     } else if (action === 'flag_suspicious') {
       updatePayload = { is_flagged: true, flag_reason: reason, flagged_at: nowIso };
     }
 
-    // Process in batches of 20 to avoid query size limits
-    const BATCH = 20;
-    for (let i = 0; i < ids.length; i += BATCH) {
-      const batchIds = ids.slice(i, i + BATCH);
-      const { data, error } = await supabase
+    if (action === 'mark_paid') {
+      // Fetch bookings to strictly respect channel separation
+      const { data: targetBookings = [] } = await supabase
         .from('bookings')
-        .update(updatePayload)
-        .in('id', batchIds)
-        .select('id');
+        .select('id, payment_method, collection_status, total_price, final_price')
+        .in('id', ids);
 
-      if (error) {
-        errors.push({ batch: i / BATCH + 1, error: error.message });
-      } else {
-        successCount += (data || []).length;
+      const cashService = require('../utils/cashCollectionService');
+      for (const b of targetBookings) {
+        if (b.payment_method === 'cash') {
+          // Cash collection workflow: confirm cash collection, not online payment
+          await cashService.confirmCashCollection(supabase, b.id, {
+            amount: Number(b.final_price || b.total_price) || 0,
+            confirmedByUserId: req.user?.id || 'admin',
+            confirmedByRole: 'admin',
+            notes: `Bulk admin confirmation: ${reason}`
+          });
+          successCount++;
+        } else {
+          // Online payment workflow
+          const { error: pUpErr } = await supabase
+            .from('bookings')
+            .update({ payment_status: 'paid', payment_confirmed_at: nowIso, updated_at: nowIso })
+            .eq('id', b.id);
+          if (pUpErr) {
+            errors.push({ id: b.id, error: pUpErr.message });
+          } else {
+            successCount++;
+          }
+        }
+      }
+    } else {
+      // Process in batches of 20 to avoid query size limits
+      const BATCH = 20;
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batchIds = ids.slice(i, i + BATCH);
+        const { data, error } = await supabase
+          .from('bookings')
+          .update(updatePayload)
+          .in('id', batchIds)
+          .select('id');
+
+        if (error) {
+          errors.push({ batch: i / BATCH + 1, error: error.message });
+        } else {
+          successCount += (data || []).length;
+        }
       }
     }
 

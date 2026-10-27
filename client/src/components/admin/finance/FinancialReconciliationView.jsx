@@ -30,9 +30,12 @@ import {
   CreditCard,
   Webhook,
   FileCheck2,
-  Lock
+  Lock,
+  Banknote
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import OnlinePaymentsSection from './OnlinePaymentsSection';
+import CashCollectionsSection from './CashCollectionsSection';
 
 /* ==========================================================================
    ONECOOLIE FINANCIAL RECONCILIATIONS MASTER CONTROL CENTER
@@ -1362,6 +1365,7 @@ export default function FinancialReconciliationView({
   paymentRecoveryList = [],
   onInspectBooking
 }) {
+  const [activeSubTab, setActiveSubTab] = useState('online'); // 'online' | 'cash' | 'reconciliation' | 'audit'
   const [inspectModalData, setInspectModalData] = useState(null);
   const [copiedKey, setCopiedKey] = useState(null);
 
@@ -1373,10 +1377,13 @@ export default function FinancialReconciliationView({
   };
 
   const handleScrollToDiagnostics = () => {
-    const el = document.getElementById('invariant-diagnostics-section');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    setActiveSubTab('reconciliation');
+    setTimeout(() => {
+      const el = document.getElementById('invariant-diagnostics-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   const handleInspectEntity = (entityType, entityId, fullData) => {
@@ -1420,57 +1427,143 @@ export default function FinancialReconciliationView({
         onRefresh={fetchReconciliation}
       />
 
-      {/* 2. Financial KPI Strip (6 Responsive Cards with Micro-Sparklines) */}
-      <FinancialKpiRow
-        metrics={reconReport?.metrics}
-        loading={reconLoading && !reconReport}
-      />
+      {/* 2. Channel & Control Sub-Navigation Bar (Section 4 Strict Separation) */}
+      <div className="flex items-center gap-2 p-1.5 bg-zinc-100 dark:bg-[#0D111A] rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('online')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'online'
+              ? 'bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-xs'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Online Payments (Razorpay)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 font-mono">
+            Gateway
+          </span>
+        </button>
 
-      {/* 3. Critical Financial Health Status Banner */}
-      <FinancialHealthBanner
-        health={reconReport?.health}
-        issuesCount={reconReport?.issues?.length || 0}
-        reconciledAt={reconReport?.reconciled_at}
-        onViewIssues={handleScrollToDiagnostics}
-      />
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('cash')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'cash'
+              ? 'bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-400 shadow-xs'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+          }`}
+        >
+          <Banknote className="w-4 h-4" />
+          <span>Offline Cash Collections</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 font-mono">
+            Physical Handover
+          </span>
+        </button>
 
-      {/* 4. Invariant Discrepancies & Ledger Diagnostic Results */}
-      <InvariantDiagnostics
-        issues={reconReport?.issues || []}
-        reconciledAt={reconReport?.reconciled_at}
-        onInspectEntity={handleInspectEntity}
-      />
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('reconciliation')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'reconciliation'
+              ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Reconciliation & Invariants</span>
+          {reconReport?.issues?.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 font-mono">
+              {reconReport.issues.length}
+            </span>
+          )}
+        </button>
 
-      {/* 5. 20 / 80 Revenue Split Validation & Platform Solvency */}
-      <RevenueSplitValidation
-        metrics={reconReport?.metrics}
-      />
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('audit')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'audit'
+              ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Financial Audit Trail</span>
+        </button>
+      </div>
 
-      {/* 6. Append-Only Financial Audit Trail */}
-      <FinancialAuditTrail
-        auditLogs={auditLogs}
-        auditFilter={auditFilter}
-        onFilterChange={setAuditFilter}
-        onInspectLog={(log) =>
-          setInspectModalData({
-            title: 'Audit Log Event Payload',
-            subtitle: `${log.action} • #${log.id?.slice(0, 8)}`,
-            data: log
-          })
-        }
-      />
+      {/* 3. SUB-TAB VIEWPORT: Online Payments (Razorpay) */}
+      {activeSubTab === 'online' && (
+        <OnlinePaymentsSection onInspectBooking={onInspectBooking} />
+      )}
 
-      {/* 7. Financial Health Diagnostics Breakdown */}
-      <FinancialHealthDiagnostics
-        financialHealth={financialHealth}
-      />
+      {/* 4. SUB-TAB VIEWPORT: Offline Cash Collections */}
+      {activeSubTab === 'cash' && (
+        <CashCollectionsSection onInspectBooking={onInspectBooking} />
+      )}
 
-      {/* 8. Payment Recovery Center */}
-      <PaymentRecoveryCenter
-        paymentRecoveryList={paymentRecoveryList}
-        onViewPayment={handleViewPayment}
-        onSyncTelemetry={handleSyncTelemetry}
-      />
+      {/* 5. SUB-TAB VIEWPORT: Reconciliation & Invariants Engine */}
+      {activeSubTab === 'reconciliation' && (
+        <div className="space-y-6">
+          {/* Financial KPI Strip */}
+          <FinancialKpiRow
+            metrics={reconReport?.metrics}
+            loading={reconLoading && !reconReport}
+          />
+
+          {/* Critical Financial Health Status Banner */}
+          <FinancialHealthBanner
+            health={reconReport?.health}
+            issuesCount={reconReport?.issues?.length || 0}
+            reconciledAt={reconReport?.reconciled_at}
+            onViewIssues={handleScrollToDiagnostics}
+          />
+
+          {/* Invariant Discrepancies & Ledger Diagnostic Results */}
+          <InvariantDiagnostics
+            issues={reconReport?.issues || []}
+            reconciledAt={reconReport?.reconciled_at}
+            onInspectEntity={handleInspectEntity}
+          />
+
+          {/* 20 / 80 Revenue Split Validation & Platform Solvency */}
+          <RevenueSplitValidation
+            metrics={reconReport?.metrics}
+          />
+
+          {/* Financial Health Diagnostics Breakdown */}
+          <FinancialHealthDiagnostics
+            financialHealth={financialHealth}
+          />
+        </div>
+      )}
+
+      {/* 6. SUB-TAB VIEWPORT: Financial Audit Trail & Recovery */}
+      {activeSubTab === 'audit' && (
+        <div className="space-y-6">
+          {/* Append-Only Financial Audit Trail */}
+          <FinancialAuditTrail
+            auditLogs={auditLogs}
+            auditFilter={auditFilter}
+            onFilterChange={setAuditFilter}
+            onInspectLog={(log) =>
+              setInspectModalData({
+                title: 'Audit Log Event Payload',
+                subtitle: `${log.action} • #${log.id?.slice(0, 8)}`,
+                data: log
+              })
+            }
+          />
+
+          {/* Payment Recovery Center */}
+          <PaymentRecoveryCenter
+            paymentRecoveryList={paymentRecoveryList}
+            onViewPayment={handleViewPayment}
+            onSyncTelemetry={handleSyncTelemetry}
+          />
+        </div>
+      )}
 
       {/* Enterprise Inspection Modal Dialog */}
       {inspectModalData && (

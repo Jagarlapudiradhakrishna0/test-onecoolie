@@ -102,7 +102,12 @@ const {
   getPaymentRecoveryList,
   getRefundMonitoringList,
   getPayoutMonitoringList,
-  getProductionReadiness
+  getProductionReadiness,
+  getOnlinePayments,
+  getCashCollections,
+  confirmCashCollectionAdmin,
+  disputeCashCollectionAdmin,
+  reimburseCashAdmin
 } = require('../controllers/financeController');
 
 router.get('/finance/reconciliation', requirePermission('finance.view'), getReconciliationReport);
@@ -116,6 +121,13 @@ router.get('/finance/payment-recovery', requirePermission('finance.view'), getPa
 router.get('/finance/refund-monitoring', requirePermission('finance.view'), getRefundMonitoringList);
 router.get('/finance/payout-monitoring', requirePermission('finance.view'), getPayoutMonitoringList);
 router.get('/finance/production-readiness', requirePermission('finance.view'), getProductionReadiness);
+
+// Production-Grade Online/Offline Channel Separation Routes (Section 4)
+router.get('/finance/online-payments', requirePermission('finance.view'), getOnlinePayments);
+router.get('/finance/cash-collections', requirePermission('finance.view'), getCashCollections);
+router.post('/finance/cash-collections/:bookingId/confirm', requirePermission('finance.manage'), confirmCashCollectionAdmin);
+router.post('/finance/cash-collections/:bookingId/dispute', requirePermission('finance.manage'), disputeCashCollectionAdmin);
+router.post('/finance/cash-collections/:bookingId/reimburse', requirePermission('finance.manage'), reimburseCashAdmin);
 
 // Financial Incident Management (Phase 5)
 const {

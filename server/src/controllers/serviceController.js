@@ -425,67 +425,20 @@ exports.markPaid = async (req, res) => {
       });
     }
 
-    // Update or create dedicated payment ledger entry (Phase 1)
-    let paymentRecordId = booking.payment_id || null;
-    try {
-      const { data: existingPayment } = await supabase
-        .from('payments')
-        .select('id')
-        .eq('booking_id', booking.id)
-        .maybeSingle();
+    // Authoritatively confirm cash collection in cash_collections ledger
+    const { confirmCashCollection } = require('../utils/cashCollectionService');
+    const collectResult = await confirmCashCollection(supabase, {
+      bookingId: booking.id,
+      actorId: req.user.id,
+      actorRole: 'assistant',
+      amountCollected: booking.total_price
+    });
 
-      if (existingPayment) {
-        paymentRecordId = existingPayment.id;
-        await supabase
-          .from('payments')
-          .update({
-            status: 'paid',
-            payment_method: normalizedMethod,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingPayment.id);
-      } else {
-        const { data: newPayment } = await supabase
-          .from('payments')
-          .insert([{
-            booking_id: booking.id,
-            passenger_id: booking.passenger_id,
-            amount: Number(booking.total_price) || 0,
-            currency: 'INR',
-            payment_method: normalizedMethod,
-            status: 'paid',
-            metadata: { note: 'Payment recorded by assistant during service' }
-          }])
-          .select('id')
-          .maybeSingle();
-        if (newPayment) paymentRecordId = newPayment.id;
-      }
-    } catch (payLedgerErr) {
-      console.warn('Payment update notice:', payLedgerErr.message);
+    if (!collectResult.success) {
+      return res.status(400).json({ message: collectResult.error });
     }
 
-    // ── Record payment atomically on booking
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({
-        payment_status: 'paid',
-        payment_method: normalizedMethod,
-        payment_id: paymentRecordId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', booking.id)
-      .eq('assistant_id', req.user.id)
-      .eq('payment_status', 'pending')  // atomic guard against double-payment
-      .select('*, passenger:passenger_id(id, name, email, phone)')
-      .single();
-
-    if (error) {
-      return res.status(400).json({ message: error.message });
-    }
-
-    if (!data) {
-      return res.status(409).json({ message: 'Payment was already recorded (concurrent request).' });
-    }
+    const data = collectResult.booking;
 
     // ── Journey Protection Cash Activation (Server Authoritative) ──
     try {

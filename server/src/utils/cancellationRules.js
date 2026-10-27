@@ -141,11 +141,17 @@ function validateCancellationReason(reasonCategory, reasonDetails, isAssigned) {
 /**
  * Evaluates whether a passenger is permitted to cancel the booking.
  */
-function canPassengerCancel(booking, payment) {
+function canPassengerCancel(booking, paymentOrUserId) {
   if (!booking) {
     return { allowed: false, reason: 'Booking not found.' };
   }
 
+  // If a user ID was provided, enforce booking ownership
+  if (typeof paymentOrUserId === 'string' && booking.passenger_id && booking.passenger_id !== paymentOrUserId) {
+    return { allowed: false, reason: 'You are not authorized to cancel this booking.' };
+  }
+
+  const payment = typeof paymentOrUserId === 'object' ? paymentOrUserId : null;
   const bookingStatus = String(booking.booking_status || '').toLowerCase();
   const paymentStatus = String(payment?.status || booking.payment_status || '').toLowerCase();
   const paymentMethod = booking.payment_method;
@@ -345,6 +351,30 @@ function evaluateAssistantAssignmentForRebooking(originalBooking, updatedDetails
   };
 }
 
+/**
+ * Evaluates whether an administrator is permitted to cancel the booking.
+ */
+function canAdminCancel(booking) {
+  if (!booking) {
+    return { allowed: false, reason: 'Booking not found.' };
+  }
+  const status = String(booking.booking_status || '').toLowerCase();
+  if (status === 'cancelled') {
+    return {
+      allowed: false,
+      isAlreadyCancelled: true,
+      reason: 'Booking is already cancelled.'
+    };
+  }
+  if (status === 'deleted') {
+    return {
+      allowed: false,
+      reason: 'Booking is deleted.'
+    };
+  }
+  return { allowed: true };
+}
+
 module.exports = {
   CANCELLATION_POLICY_CONFIG,
   UNASSIGNED_REFUND_PERCENTAGE,
@@ -359,6 +389,7 @@ module.exports = {
   validateCancellationReason,
   canPassengerCancel,
   canAssistantCancel,
+  canAdminCancel,
   calculateCancellationRefund,
   determineRefundEligibility,
   evaluateAssistantAssignmentForRebooking

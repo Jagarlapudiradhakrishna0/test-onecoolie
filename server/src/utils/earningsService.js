@@ -27,8 +27,10 @@ async function recordAssistantEarningOnCompletion(supabase, booking) {
     return { earning: null, error: { message: 'Cannot record earning: No assistant assigned.' } };
   }
 
-  if (booking.payment_status !== 'paid') {
-    return { earning: null, error: { message: 'Cannot record earning: Booking payment is not paid.' } };
+  const isCash = ['cash', 'cod', 'pay_on_arrival'].includes(String(booking.payment_method || '').toLowerCase().trim());
+  const isPaidOrCollected = booking.payment_status === 'paid' || (isCash && (booking.collection_status === 'collected' || booking.booking_status === 'completed'));
+  if (!isPaidOrCollected) {
+    return { earning: null, error: { message: 'Cannot record earning: Booking payment or cash collection is not verified.' } };
   }
 
   // 1. Check if an earning record already exists for this booking
@@ -73,8 +75,8 @@ async function recordAssistantEarningOnCompletion(supabase, booking) {
     platform_commission_percent: split.platformCommissionPercent,
     platform_commission_amount: split.platformCommissionAmount,
     assistant_amount: split.assistantAmount,
-    status: initialStatus,
-    available_at: availableAt
+    status: isCash ? 'paid_out' : initialStatus,
+    available_at: isCash ? completedAt : availableAt
   };
 
   try {
