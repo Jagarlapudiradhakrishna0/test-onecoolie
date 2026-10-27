@@ -181,7 +181,7 @@ async function runAsyncTest(name, fn) {
 
     const req = {
       user: { id: 'pass-1', role: 'passenger' },
-      params: { id: 'bk-test-accepted' },
+      params: { id: 'a0000000-0000-0000-0000-000000000001' },
       body: {
         station_code: 'WL', // trying to change station from KZJ to WL
         train_number: '12738',
@@ -204,7 +204,8 @@ async function runAsyncTest(name, fn) {
     const originalResolve = require('../src/utils/bookingResolver').resolveBooking;
     require('../src/utils/bookingResolver').resolveBooking = async () => ({
       booking: {
-        id: 'bk-test-accepted',
+        id: 'a0000000-0000-0000-0000-000000000001',
+        booking_id: 'bk-test-accepted',
         passenger_id: 'pass-1',
         assistant_id: 'ast-99',
         assistant_status: 'accepted',
@@ -237,7 +238,7 @@ async function runAsyncTest(name, fn) {
 
     const req = {
       user: { id: 'pass-1', role: 'passenger' },
-      params: { id: 'bk-test-accepted-2' },
+      params: { id: 'a0000000-0000-0000-0000-000000000002' },
       body: {
         station_code: 'KZJ', // same station (not changed)
         destination: 'BZA',   // same destination (not changed)
@@ -262,7 +263,8 @@ async function runAsyncTest(name, fn) {
     const originalResolve = require('../src/utils/bookingResolver').resolveBooking;
     require('../src/utils/bookingResolver').resolveBooking = async () => ({
       booking: {
-        id: 'bk-test-accepted-2',
+        id: 'a0000000-0000-0000-0000-000000000002',
+        booking_id: 'bk-test-accepted-2',
         passenger_id: 'pass-1',
         assistant_id: 'ast-99',
         assistant_status: 'accepted',

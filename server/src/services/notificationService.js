@@ -144,7 +144,7 @@ async function syncUserNotifications(user) {
       if (user.station_code) {
         const { data: pendingRequests } = await supabase
           .from('bookings')
-          .select('id, booking_id, train_no, coach, seat_number, passenger_name, station_code, created_at')
+          .select('id, booking_id, train_number, services, station_code, created_at, passenger:passenger_id(name)')
           .eq('station_code', user.station_code)
           .eq('booking_status', 'pending')
           .is('assistant_id', null)
@@ -162,11 +162,16 @@ async function syncUserNotifications(user) {
               .maybeSingle();
 
             if (!existing) {
+              const coach = req.services?.coach || req.coach || 'TBD';
+              const seat = req.services?.seat_number || req.seat_number || 'TBD';
+              const pName = req.passenger?.name || req.passenger_name || 'Passenger';
+              const trainNo = req.train_number || 'Express';
+
               await supabase.from('notifications').insert({
                 user_id: userId,
                 booking_id: req.id,
-                title: `New Dispatch: ${req.passenger_name || 'Passenger'}`,
-                message: `Train ${req.train_no || 'Express'} · Coach ${req.coach || 'TBD'} · Seat ${req.seat_number || 'TBD'}`,
+                title: `New Dispatch: ${pName}`,
+                message: `Train ${trainNo} · Coach ${coach} · Seat ${seat}`,
                 type: 'request',
                 is_read: false,
                 is_dismissed: false,
@@ -181,7 +186,7 @@ async function syncUserNotifications(user) {
       // 2. Sync completed jobs for this assistant
       const { data: completedJobs } = await supabase
         .from('bookings')
-        .select('id, booking_id, train_no, total_price, updated_at, created_at')
+        .select('id, booking_id, train_number, total_price, updated_at, created_at')
         .eq('assistant_id', userId)
         .eq('booking_status', 'completed')
         .order('created_at', { ascending: false })
@@ -251,7 +256,7 @@ async function syncUserNotifications(user) {
       // Sync recent bookings for passenger
       const { data: myBookings } = await supabase
         .from('bookings')
-        .select('id, booking_id, train_no, coach, seat_number, booking_status, created_at, updated_at')
+        .select('id, booking_id, train_number, services, booking_status, created_at, updated_at')
         .eq('passenger_id', userId)
         .order('created_at', { ascending: false })
         .limit(10);
@@ -267,12 +272,15 @@ async function syncUserNotifications(user) {
 
           if (!existing) {
             const status = b.booking_status;
+            const trainNo = b.train_number || 'Express';
+            const coach = b.services?.coach || '--';
+            const seat = b.services?.seat_number || '--';
             const title = status === 'completed'
-              ? `Trip Completed · Train ${b.train_no || 'Express'}`
+              ? `Trip Completed · Train ${trainNo}`
               : status === 'cancelled'
-                ? `Booking Cancelled · Train ${b.train_no || 'Express'}`
-                : `Booking Confirmed · Train ${b.train_no || 'Express'}`;
-            const message = `Coach ${b.coach || '--'}, Seat ${b.seat_number || '--'}. Booking #${b.booking_id || b.id.slice(0, 8)}.`;
+                ? `Booking Cancelled · Train ${trainNo}`
+                : `Booking Confirmed · Train ${trainNo}`;
+            const message = `Coach ${coach}, Seat ${seat}. Booking #${b.booking_id || b.id.slice(0, 8)}.`;
 
             await supabase.from('notifications').insert({
               user_id: userId,
@@ -292,8 +300,8 @@ async function syncUserNotifications(user) {
       // Sync active SOS alerts for admin
       const { data: activeSos } = await supabase
         .from('bookings')
-        .select('id, booking_id, train_no, coach, seat_number, passenger_name, station_code, updated_at')
-        .eq('is_sos', true)
+        .select('id, booking_id, train_number, services, station_code, updated_at, passenger:passenger_id(name)')
+        .eq('sos_triggered', true)
         .order('updated_at', { ascending: false })
         .limit(5);
 
@@ -308,11 +316,16 @@ async function syncUserNotifications(user) {
             .maybeSingle();
 
           if (!existing) {
+            const pName = sos.passenger?.name || 'Passenger';
+            const coach = sos.services?.coach || '—';
+            const seat = sos.services?.seat_number || '—';
+            const trainNo = sos.train_number || 'Express';
+
             await supabase.from('notifications').insert({
               user_id: userId,
               booking_id: sos.id,
-              title: `Emergency SOS Alert · Train ${sos.train_no || 'Express'}`,
-              message: `Passenger ${sos.passenger_name || 'Passenger'} at Coach ${sos.coach || '—'}, Seat ${sos.seat_number || '—'} (${sos.station_code || 'station'}).`,
+              title: `Emergency SOS Alert · Train ${trainNo}`,
+              message: `Passenger ${pName} at Coach ${coach}, Seat ${seat} (${sos.station_code || 'station'}).`,
               type: 'sos',
               is_read: false,
               is_dismissed: false,

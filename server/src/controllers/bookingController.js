@@ -1130,16 +1130,21 @@ exports.rebookBooking = async (req, res) => {
 
     updatePayload.services = mergedServices;
 
-    const { data: updated, error: updateError } = await supabase
-      .from('bookings')
-      .update(updatePayload)
-      .eq('id', booking.id)
-      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
-      .single();
+    const isIdUUID = bookingResolver.isUUID(booking.id);
+    let updateQuery = supabase.from('bookings').update(updatePayload);
+    if (isIdUUID) {
+      updateQuery = updateQuery.eq('id', booking.id);
+    } else {
+      updateQuery = updateQuery.eq('booking_id', booking.booking_id || booking.id);
+    }
 
-    if (updateError) {
-      console.error('REBOOK UPDATE ERROR:', updateError);
-      return res.status(400).json({ message: updateError.message });
+    const { data: updated, error: updateError } = await updateQuery
+      .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
+      .maybeSingle();
+
+    if (updateError || !updated) {
+      if (updateError) console.error('REBOOK UPDATE ERROR:', updateError);
+      return res.status(updateError ? 400 : 404).json({ message: updateError?.message || 'Booking update failed or booking not found.' });
     }
 
     const formatted = formatBooking(updated, { includeOTP: true });
