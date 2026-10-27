@@ -12,6 +12,7 @@
  */
 
 const razorpayConfig = require('../config/razorpay');
+const defaultDb = require('../config/db');
 
 /**
  * Calculates refund amount rounded to 2 decimal places.
@@ -40,6 +41,7 @@ function calculateRefundAmount(originalAmount, percent) {
  * }>}
  */
 async function getRefundSummaryForPayment(supabaseClient, paymentId) {
+  const client = supabaseClient || defaultDb;
   if (!paymentId) {
     return {
       totalRefunded: 0,
@@ -50,7 +52,7 @@ async function getRefundSummaryForPayment(supabaseClient, paymentId) {
   }
 
   try {
-    const { data: refunds, error } = await supabaseClient
+    const { data: refunds, error } = await client
       .from('refunds')
       .select('*')
       .eq('payment_id', paymentId);
@@ -192,7 +194,7 @@ async function initiateRazorpayRefund(gatewayPaymentId, amountInRupees, notes = 
  *   error?: string
  * }>}
  */
-async function processBookingRefund(supabaseClient, {
+async function processBookingRefund(supabaseClientParam, {
   booking,
   payment,
   refundAmount,
@@ -200,6 +202,7 @@ async function processBookingRefund(supabaseClient, {
   actorRole = 'passenger',
   actorId = null
 }) {
+  const supabaseClient = supabaseClientParam || defaultDb;
   if (!booking || !payment) {
     return { success: false, message: 'Valid booking and payment records are required for refund.' };
   }

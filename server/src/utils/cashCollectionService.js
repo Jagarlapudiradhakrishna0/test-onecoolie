@@ -12,6 +12,7 @@
  */
 
 const { formatRazorpayAmount } = require('../config/razorpay');
+const defaultDb = require('../config/db');
 
 /**
  * Initializes a cash collection ledger entry for an offline booking.
@@ -22,7 +23,8 @@ const { formatRazorpayAmount } = require('../config/razorpay');
  * @param {string} [params.actorId]
  * @returns {Promise<{ success: boolean, collection?: object, error?: string }>}
  */
-async function initializeCashCollection(supabase, optionsOrBooking, maybeActorId = null) {
+async function initializeCashCollection(supabaseClient, optionsOrBooking, maybeActorId = null) {
+  const supabase = supabaseClient || defaultDb;
   let booking = null;
   let actorId = null;
 
@@ -119,7 +121,8 @@ async function initializeCashCollection(supabase, optionsOrBooking, maybeActorId
 /**
  * Authoritatively confirms receipt of physical cash by the assigned assistant or admin.
  */
-async function confirmCashCollection(supabase, arg1, arg2) {
+async function confirmCashCollection(supabaseClient, arg1, arg2) {
+  const supabase = supabaseClient || defaultDb;
   let bookingId, actorId, actorRole, amountCollected, notes;
   if (typeof arg1 === 'string') {
     bookingId = arg1;
@@ -296,12 +299,13 @@ async function confirmCashCollection(supabase, arg1, arg2) {
  * @param {string} params.reason
  * @returns {Promise<{ success: boolean, collection?: object, error?: string }>}
  */
-async function disputeCashCollection(supabase, {
+async function disputeCashCollection(supabaseClient, {
   bookingId,
   actorId,
   actorRole = 'assistant',
   reason
 }) {
+  const supabase = supabaseClient || defaultDb;
   if (!bookingId || !reason) {
     return { success: false, error: 'bookingId and dispute reason are required.' };
   }
@@ -356,7 +360,8 @@ async function disputeCashCollection(supabase, {
  * @param {string} params.actorId
  * @returns {Promise<{ success: boolean, message: string }>}
  */
-async function recordCashReimbursementRequest(supabase, arg1, arg2) {
+async function recordCashReimbursementRequest(supabaseClient, arg1, arg2) {
+  const supabase = supabaseClient || defaultDb;
   let bookingId, reimbursementAmount, reason, actorId;
   if (typeof arg1 === 'string') {
     bookingId = arg1;
@@ -421,7 +426,8 @@ async function recordCashReimbursementRequest(supabase, arg1, arg2) {
  * @param {object} [arg2]
  * @returns {Promise<{ success: boolean, collection?: object, message: string }>}
  */
-async function confirmCashReimbursement(supabase, arg1, arg2) {
+async function confirmCashReimbursement(supabaseClient, arg1, arg2) {
+  const supabase = supabaseClient || defaultDb;
   let bookingId, amount, notes, adminId;
   if (typeof arg1 === 'string') {
     bookingId = arg1;

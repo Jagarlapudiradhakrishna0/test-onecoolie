@@ -8,6 +8,8 @@
  * assistant earnings, payouts, and wallet liabilities.
  */
 
+const defaultSupabase = require('../config/db');
+
 /**
  * Rounds a monetary amount to 2 decimal places to prevent floating point inaccuracies.
  * @param {number} val
@@ -33,10 +35,11 @@ function roundMoney(val) {
  * 10. Radar Isolation Invariant: Unpaid online bookings or cancelled bookings must never leak onto assistant radar
  * 11. Platform Balance Reconciliation: Net Revenue == Gross - Refunds - Sahayak Paid Out - Sahayak Liabilities
  *
- * @param {object} supabase - Supabase database client
+ * @param {object} [supabaseClient] - Optional Supabase database client
  * @returns {Promise<object>} Reconciliation Report
  */
-async function runSystemReconciliation(supabase) {
+async function runSystemReconciliation(supabaseClient) {
+  const supabase = supabaseClient || defaultSupabase;
   const issues = [];
   const timestamp = new Date().toISOString();
 
@@ -575,11 +578,20 @@ async function runSystemReconciliation(supabase) {
 
 /**
  * Reconciles a single booking and its downstream financial records.
- * @param {object} supabase
- * @param {string} bookingId
+ * @param {object|string} supabaseOrBookingId
+ * @param {string} [maybeBookingId]
  * @returns {Promise<object>} Single booking reconciliation report
  */
-async function reconcileBooking(supabase, bookingId) {
+async function reconcileBooking(supabaseOrBookingId, maybeBookingId) {
+  let supabase = supabaseOrBookingId;
+  let bookingId = maybeBookingId;
+  if (typeof supabaseOrBookingId === 'string' && !maybeBookingId) {
+    bookingId = supabaseOrBookingId;
+    supabase = defaultSupabase;
+  } else {
+    supabase = supabaseOrBookingId || defaultSupabase;
+  }
+
   const issues = [];
   const timestamp = new Date().toISOString();
 
