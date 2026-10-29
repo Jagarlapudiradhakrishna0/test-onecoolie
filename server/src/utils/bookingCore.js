@@ -11,7 +11,13 @@
  */
 
 const { calculateBookingPrice } = require('../config/pricing');
-const { normalizePaymentMethod, isValidPaymentMethod } = require('./paymentClassification');
+const { formatRazorpayAmount } = require('../config/razorpay');
+const {
+  normalizePaymentMethod,
+  isValidPaymentMethod,
+  isCashPayment,
+  isOnlinePayment
+} = require('./paymentClassification');
 const {
   JOURNEY_PROTECTION_CONFIG,
   generateProtectionId,

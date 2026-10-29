@@ -18,6 +18,11 @@ import toast from 'react-hot-toast';
 import oneCoolieLogo from '../assets/onecoolie-logo.png';
 import axios from '../api/axios';
 import { loadRazorpayScript } from '../utils/razorpay';
+import {
+  isCashPayment,
+  isOnlinePayment,
+  normalizePaymentMethod
+} from '../utils/paymentClassification';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -35,6 +40,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
   const { user } = useAuth();
   const { t } = useLanguage();
 
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null); // 'online' | 'cash'
   const [processing, setProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState('select'); // 'select' | 'online_review'
   const [activeBooking, setActiveBooking] = useState(null);
@@ -56,6 +62,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
   // Reset state on modal open
   useEffect(() => {
     if (open) {
+      setSelectedPaymentMethod(null);
       setPaymentVerified(false);
       setPaymentError(null);
       setPaymentStep('select');
@@ -163,6 +170,26 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
 
   // Initialize or fetch existing order from server
   const initializeOnlineOrder = async () => {
+    // 1. Validate payment method: cash methods must never enter Razorpay flow
+    const methodToCheck = normalizePaymentMethod(
+      selectedPaymentMethod || bookingData?.payment_method || bookingData?.paymentMethod || 'online'
+    );
+    if (isCashPayment(methodToCheck)) {
+      const errMsg = 'Cash on service cannot be processed via online payment gateway.';
+      setPaymentError(errMsg);
+      toast.error(errMsg);
+      return null;
+    }
+
+    // 2. Validate payable amount
+    const numericTotal = Number(total || 0);
+    if (!numericTotal || numericTotal <= 0) {
+      const errMsg = 'A valid payable amount is required to create a payment order.';
+      setPaymentError(errMsg);
+      toast.error(errMsg);
+      return null;
+    }
+
     setOrderInitializing(true);
     setPaymentError(null);
 
@@ -332,7 +359,13 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
 
   // Passenger clicks "Online Payment"
   const handleSelectOnline = async () => {
+    if (orderInitializing || processing) return;
+    setSelectedPaymentMethod('online');
     setPaymentStep('online_review');
+    if (activeBooking && razorpayOrder) {
+      await launchRazorpayCheckout(activeBooking, razorpayOrder);
+      return;
+    }
     const orderResult = await initializeOnlineOrder();
     if (orderResult && orderResult.razorpay) {
       await launchRazorpayCheckout(orderResult.booking, orderResult.razorpay);
@@ -341,6 +374,8 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
 
   // Re-open checkout button
   const handleRetryOnline = async () => {
+    if (orderInitializing || processing) return;
+    setSelectedPaymentMethod('online');
     if (activeBooking && razorpayOrder) {
       await launchRazorpayCheckout(activeBooking, razorpayOrder);
     } else {
@@ -353,10 +388,18 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
 
   // Passenger chooses Cash on Service
   const handleCashConfirm = async () => {
+    if (orderInitializing || processing) return;
+    setSelectedPaymentMethod('cash');
     setProcessing(true);
+    setPaymentError(null);
     try {
       sessionStorage.removeItem('onecoolie_active_payment');
       await onPaid('cash');
+    } catch (err) {
+      console.error('Cash booking confirmation error:', err);
+      const msg = err.response?.data?.message || err.message || 'Cash booking confirmation failed.';
+      setPaymentError(msg);
+      toast.error(msg);
     } finally {
       if (isMountedRef.current) setProcessing(false);
     }
@@ -366,6 +409,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
     try {
       sessionStorage.removeItem('onecoolie_active_payment');
     } catch (e) { }
+    setSelectedPaymentMethod(null);
     onClose();
   };
 
@@ -405,7 +449,10 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
             {paymentStep === 'online_review' && (
               <button
                 type="button"
-                onClick={() => setPaymentStep('select')}
+                onClick={() => {
+                  setPaymentStep('select');
+                  setPaymentError(null);
+                }}
                 className="px-2.5 sm:px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-zinc-700 hover:text-zinc-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                 aria-label="Back to payment methods"
               >
@@ -631,7 +678,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     Booking Ref
                   </span>
                   <span className="font-mono text-xs font-bold text-zinc-900 truncate block">
-                    #{activeBooking?.booking_id || 'Initializing...'}
+                    {activeBooking?.booking_id
+                      ? `#${activeBooking.booking_id}`
+                      : paymentError
+                      ? '#Error'
+                      : '#Initializing...'}
                   </span>
                 </div>
                 <div>
@@ -639,7 +690,7 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     Gateway Order
                   </span>
                   <span className="font-mono text-xs font-bold text-zinc-700 truncate block">
-                    {razorpayOrder?.order_id || 'Creating order...'}
+                    {razorpayOrder?.order_id || (paymentError ? 'Order creation failed' : 'Creating order...')}
                   </span>
                 </div>
                 <div>
@@ -659,6 +710,8 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     <Loader2 className="w-4 h-4 text-[#1463FF] animate-spin" />
                   ) : paymentVerified ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  ) : paymentError ? (
+                    <AlertTriangle className="w-4 h-4 text-rose-500" />
                   ) : (
                     <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
                   )}
@@ -669,6 +722,8 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                       ? 'Verifying payment with bank...'
                       : paymentVerified
                       ? 'Payment verified!'
+                      : paymentError
+                      ? 'Order creation failed. Please retry.'
                       : 'Awaiting payment completion'}
                   </span>
                 </div>
@@ -692,6 +747,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
                     <span>Connecting to Razorpay...</span>
                   </span>
+                ) : paymentError && !razorpayOrder ? (
+                  <>
+                    <span>Retry Online Order</span>
+                    <RefreshCw className="w-4 h-4" />
+                  </>
                 ) : (
                   <>
                     <span>Open Razorpay Checkout</span>
