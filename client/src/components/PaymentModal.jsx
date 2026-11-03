@@ -59,34 +59,60 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
     };
   }, []);
 
-  // Reset state on modal open
+  // Reset state on modal open and synchronize with current total
   useEffect(() => {
     if (open) {
       setSelectedPaymentMethod(null);
       setPaymentVerified(false);
       setPaymentError(null);
       setPaymentStep('select');
-      setActiveBooking(null);
-      setRazorpayOrder(null);
       setVerifiedPaymentId(null);
       setProcessing(false);
       setOrderInitializing(false);
+
+      const expectedPaise = Math.round(Number(total || 0) * 100);
 
       // Check if there is an active incomplete payment session saved
       try {
         const raw = sessionStorage.getItem('onecoolie_active_payment');
         if (raw) {
           const saved = JSON.parse(raw);
-          if (saved && saved.activeBooking && saved.bookingId) {
+          const savedPaise = saved?.razorpayOrder?.amount ? Number(saved.razorpayOrder.amount) : null;
+          const savedTotal = Number(saved?.total ?? 0);
+
+          // Strictly check that the saved session matches the CURRENT total
+          const isSessionMatching = Boolean(
+            saved &&
+            saved.activeBooking &&
+            saved.bookingId &&
+            saved.razorpayOrder &&
+            savedPaise === expectedPaise &&
+            Math.abs(savedTotal - Number(total || 0)) < 0.01
+          );
+
+          if (isSessionMatching) {
             setActiveBooking(saved.activeBooking);
-            if (saved.razorpayOrder) setRazorpayOrder(saved.razorpayOrder);
+            setRazorpayOrder(saved.razorpayOrder);
+          } else {
+            // Invalidate stale payment session immediately
+            sessionStorage.removeItem('onecoolie_active_payment');
+            setActiveBooking(null);
+            setRazorpayOrder(null);
           }
+        } else {
+          setActiveBooking(null);
+          setRazorpayOrder(null);
         }
       } catch (e) {
-        // ignore
+        setActiveBooking(null);
+        setRazorpayOrder(null);
       }
+    } else {
+      setSelectedPaymentMethod(null);
+      setActiveBooking(null);
+      setRazorpayOrder(null);
     }
-  }, [open]);
+  }, [open, total]);
 
   // Real-time Socket.IO Listener and Controlled Polling Fallback
   useEffect(() => {
@@ -333,6 +359,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
           ondismiss: function () {
             if (isMountedRef.current) {
               setProcessing(false);
+              try {
+                sessionStorage.removeItem('onecoolie_active_payment');
+              } catch (e) {}
+              setActiveBooking(null);
+              setRazorpayOrder(null);
               const cancelMsg = 'Payment was not completed. Your booking has not been confirmed. Please try again.';
               setPaymentError(cancelMsg);
               toast.error(cancelMsg);
@@ -351,6 +382,11 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
         const cancelMsg = 'Payment was not completed. Your booking has not been confirmed. Please try again.';
         setPaymentError(`${cancelMsg} (${desc})`);
         toast.error(cancelMsg);
+        try {
+          sessionStorage.removeItem('onecoolie_active_payment');
+        } catch (e) {}
+        setActiveBooking(null);
+        setRazorpayOrder(null);
         axios.post('/payments/cancel-checkout', {
           booking_id: targetBookingId,
           reason: `Gateway failure: ${desc}`
@@ -373,10 +409,19 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
     if (orderInitializing || processing) return;
     setSelectedPaymentMethod('online');
     setPaymentStep('online_review');
-    if (activeBooking && razorpayOrder) {
+
+    const expectedPaise = Math.round(Number(total || 0) * 100);
+    const isCurrentOrderValid = Boolean(
+      activeBooking &&
+      razorpayOrder &&
+      Number(razorpayOrder.amount) === expectedPaise
+    );
+
+    if (isCurrentOrderValid) {
       await launchRazorpayCheckout(activeBooking, razorpayOrder);
       return;
     }
+
     const orderResult = await initializeOnlineOrder();
     if (orderResult && orderResult.razorpay) {
       await launchRazorpayCheckout(orderResult.booking, orderResult.razorpay);
@@ -387,7 +432,15 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
   const handleRetryOnline = async () => {
     if (orderInitializing || processing) return;
     setSelectedPaymentMethod('online');
-    if (activeBooking && razorpayOrder) {
+
+    const expectedPaise = Math.round(Number(total || 0) * 100);
+    const isCurrentOrderValid = Boolean(
+      activeBooking &&
+      razorpayOrder &&
+      Number(razorpayOrder.amount) === expectedPaise
+    );
+
+    if (isCurrentOrderValid) {
       await launchRazorpayCheckout(activeBooking, razorpayOrder);
     } else {
       const orderResult = await initializeOnlineOrder();
@@ -421,6 +474,8 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
       sessionStorage.removeItem('onecoolie_active_payment');
     } catch (e) { }
     setSelectedPaymentMethod(null);
+    setActiveBooking(null);
+    setRazorpayOrder(null);
     onClose();
   };
 

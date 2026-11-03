@@ -161,6 +161,78 @@ const normalizeBookingPayload = (body) => {
  * @param {object} payload - Normalized booking payload
  * @returns {Promise<{ booking: object, paymentRecord: object, pricingResult: object }>}
  */
+/**
+ * Authoritatively calculates booking price, taxes, and optional Journey Protection.
+ * Single source of truth for both order creation and booking record creation.
+ *
+ * @param {object} services - Normalized services object
+ * @param {boolean} journey_protection - Whether Journey Protection is opted in
+ * @returns {{ pricingResult: object, finalTotalPrice: number, amountInPaise: number }}
+ */
+function calculateAuthoritativeBookingTotal(services = {}, journey_protection = false) {
+  const pricingResult = calculateBookingPrice(services);
+  let finalTotalPrice = pricingResult.total;
+  if (journey_protection) {
+    finalTotalPrice = Number((pricingResult.total + JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE).toFixed(2));
+    pricingResult.total = finalTotalPrice;
+    pricingResult.breakdown.push({
+      service: 'journey_protection',
+      label: 'ONECOOLIE Journey Protection (Pre-Launch)',
+      quantity: 1,
+      unit_price: JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE,
+      total: JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE
+    });
+  }
+  return {
+    pricingResult,
+    finalTotalPrice,
+    amountInPaise: formatRazorpayAmount(finalTotalPrice)
+  };
+}
+
+/**
+ * Compares two service payloads to determine if the exact selected services match.
+ * Prevents reusing orders when passenger modifies any service, even if total fare is identical.
+ *
+ * @param {object} servicesA
+ * @param {object} servicesB
+ * @param {boolean} journeyProtA
+ * @param {boolean} journeyProtB
+ * @returns {boolean}
+ */
+function areBookingServicesIdentical(servicesA = {}, servicesB = {}, journeyProtA = false, journeyProtB = false) {
+  if (!servicesA && !servicesB) return true;
+  if (!servicesA || !servicesB) return false;
+
+  const sA = typeof servicesA === 'object' ? servicesA : {};
+  const sB = typeof servicesB === 'object' ? servicesB : {};
+
+  // Check boolean services
+  const boolKeys = ['escort', 'wheelchair', 'language', 'snacks', 'transport'];
+  for (const k of boolKeys) {
+    if (Boolean(sA[k]) !== Boolean(sB[k])) return false;
+  }
+
+  // Check luggage counts
+  const lcA = sA.luggageCounts || {};
+  const lcB = sB.luggageCounts || {};
+  if (
+    Number(lcA.small || 0) !== Number(lcB.small || 0) ||
+    Number(lcA.medium || 0) !== Number(lcB.medium || 0) ||
+    Number(lcA.large || 0) !== Number(lcB.large || 0) ||
+    Number(sA.luggage || 0) !== Number(sB.luggage || 0)
+  ) {
+    return false;
+  }
+
+  // Check journey protection
+  const protA = Boolean(journeyProtA ?? sA.has_journey_protection ?? sA.journey_protection);
+  const protB = Boolean(journeyProtB ?? sB.has_journey_protection ?? sB.journey_protection);
+  if (protA !== protB) return false;
+
+  return true;
+}
+
 async function createBookingRecordInDB(supabase, userId, payload) {
   const {
     train_number,
@@ -207,21 +279,7 @@ async function createBookingRecordInDB(supabase, userId, payload) {
   }
 
   // 1. Authoritative price calculation (ignoring any client total_price / amount)
-  const pricingResult = calculateBookingPrice(services);
-
-  // If Journey Protection opted in, authoritatively add ₹0.50 customer price
-  let finalTotalPrice = pricingResult.total;
-  if (journey_protection) {
-    finalTotalPrice = Number((pricingResult.total + JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE).toFixed(2));
-    pricingResult.total = finalTotalPrice;
-    pricingResult.breakdown.push({
-      service: 'journey_protection',
-      label: 'ONECOOLIE Journey Protection (Pre-Launch)',
-      quantity: 1,
-      unit_price: JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE,
-      total: JOURNEY_PROTECTION_CONFIG.CUSTOMER_PRICE
-    });
-  }
+  const { pricingResult, finalTotalPrice } = calculateAuthoritativeBookingTotal(services, journey_protection);
 
   // 2. Build service labels and description
   const selectedServices = buildServiceData(services);
@@ -381,6 +439,8 @@ async function createBookingRecordInDB(supabase, userId, payload) {
 }
 
 module.exports = {
+  calculateAuthoritativeBookingTotal,
+  areBookingServicesIdentical,
   generateBookingId,
   buildServiceData,
   buildServiceDescription,

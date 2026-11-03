@@ -25,7 +25,9 @@ const crypto = require('crypto');
 const { formatBooking } = require('../utils/bookingFormatter');
 const {
   createBookingRecordInDB,
-  normalizeBookingPayload
+  normalizeBookingPayload,
+  calculateAuthoritativeBookingTotal,
+  areBookingServicesIdentical
 } = require('../utils/bookingCore');
 
 /**
@@ -115,14 +117,50 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    // 5. Idempotency Check: prevent duplicate active orders for the same passenger/trip within 15 minutes
+    // 5. Authoritative price calculation for the current request
     const normalizedPayload = normalizeBookingPayload(req.body);
+    if (!normalizedPayload.services) {
+      return res.status(400).json({
+        success: false,
+        stage: 'PRICING_FAILURE',
+        message: 'Services specification is required.'
+      });
+    }
+
+    let authoritativeCalc;
+    try {
+      authoritativeCalc = calculateAuthoritativeBookingTotal(
+        normalizedPayload.services,
+        normalizedPayload.journey_protection
+      );
+    } catch (pricingErr) {
+      console.error('PRICING_CALCULATION_FAILURE:', pricingErr.message);
+      return res.status(400).json({
+        success: false,
+        stage: 'PRICING_FAILURE',
+        message: pricingErr.message || 'Invalid booking services.'
+      });
+    }
+
+    const { pricingResult, finalTotalPrice, amountInPaise } = authoritativeCalc;
+
+    if (!Number.isInteger(amountInPaise) || amountInPaise < 100) {
+      return res.status(400).json({
+        success: false,
+        stage: 'PRICING_FAILURE',
+        message: `Amount must be an integer of at least 100 paise. Calculated: ${amountInPaise}`
+      });
+    }
+
+    // 5b. Smart Idempotency & Stale Order Invalidation:
+    // If passenger retries with identical services and fare within 15 min, reuse active order.
+    // If services, quantities, or amount changed, invalidate old order and generate a fresh one!
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
     if (normalizedPayload.train_no && normalizedPayload.journey_date && normalizedPayload.station_code) {
       const { data: existingBookings } = await supabase
         .from('bookings')
-        .select('id, booking_id, train_number, station_code, journey_date, total_price, payment_status, booking_status, payment_id')
+        .select('id, booking_id, train_number, station_code, journey_date, total_price, payment_status, booking_status, payment_id, services')
         .eq('passenger_id', req.user.id)
         .eq('train_number', String(normalizedPayload.train_no))
         .eq('journey_date', String(normalizedPayload.journey_date))
@@ -135,7 +173,7 @@ exports.createOrder = async (req, res) => {
 
       if (existingBookings && existingBookings.length > 0) {
         const existingBooking = existingBookings[0];
-        // Check if an existing payment record with a valid order already exists
+        // Check if an existing payment record with a valid order exists
         const { data: existingPayment } = await supabase
           .from('payments')
           .select('*')
@@ -144,39 +182,80 @@ exports.createOrder = async (req, res) => {
           .maybeSingle();
 
         if (existingPayment && existingPayment.gateway_order_id) {
-          // Return existing active order to ensure idempotency
-          return res.json({
-            success: true,
-            booking: {
-              id: existingBooking.id,
-              booking_id: existingBooking.booking_id,
-              train_number: existingBooking.train_number,
-              station_code: existingBooking.station_code,
-              journey_date: existingBooking.journey_date,
-              total_price: existingBooking.total_price
-            },
-            payment: {
-              id: existingPayment.id,
-              amount: existingPayment.amount,
-              currency: existingPayment.currency,
-              status: existingPayment.status
-            },
-            payment_mode: paymentMode,
-            isTestMode,
-            test_order_id: isTestMode ? existingPayment.gateway_order_id : null,
-            razorpay: razorpayAvailable ? {
-              key_id: process.env.RAZORPAY_KEY_ID,
-              order_id: existingPayment.gateway_order_id,
-              amount: formatRazorpayAmount(existingPayment.amount),
-              currency: existingPayment.currency || 'INR'
-            } : null,
-            idempotent: true
-          });
+          const orderAmountPaise = Number(existingPayment.amount_paise || formatRazorpayAmount(existingPayment.amount));
+          const bookingTotalPrice = Number(existingBooking.total_price);
+
+          const isAmountIdentical = (
+            orderAmountPaise === amountInPaise &&
+            Math.abs(bookingTotalPrice - finalTotalPrice) < 0.01
+          );
+
+          const areServicesIdentical = areBookingServicesIdentical(
+            existingBooking.services,
+            normalizedPayload.services,
+            existingBooking.services?.has_journey_protection,
+            normalizedPayload.journey_protection
+          );
+
+          if (isAmountIdentical && areServicesIdentical) {
+            // SAFE IDEMPOTENT REUSE: Exact same services and exact same amount within active window
+            return res.json({
+              success: true,
+              booking: {
+                id: existingBooking.id,
+                booking_id: existingBooking.booking_id,
+                train_number: existingBooking.train_number,
+                station_code: existingBooking.station_code,
+                journey_date: existingBooking.journey_date,
+                total_price: existingBooking.total_price
+              },
+              payment: {
+                id: existingPayment.id,
+                amount: existingPayment.amount,
+                currency: existingPayment.currency,
+                status: existingPayment.status
+              },
+              payment_mode: paymentMode,
+              isTestMode,
+              test_order_id: isTestMode ? existingPayment.gateway_order_id : null,
+              razorpay: razorpayAvailable ? {
+                key_id: process.env.RAZORPAY_KEY_ID,
+                order_id: existingPayment.gateway_order_id,
+                amount: formatRazorpayAmount(existingPayment.amount),
+                currency: existingPayment.currency || 'INR'
+              } : null,
+              idempotent: true
+            });
+          } else {
+            // STALE ORDER DETECTED: Services, luggage counts, or fare have changed!
+            // Invalidate the old pending payment and old pending booking so they cannot be paid or confirmed.
+            try {
+              await supabase
+                .from('payments')
+                .update({
+                  status: 'cancelled',
+                  failure_reason: `Superseded by updated services/pricing. Old: ₹${existingBooking.total_price}, New: ₹${finalTotalPrice}`,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', existingPayment.id);
+
+              await supabase
+                .from('bookings')
+                .update({
+                  booking_status: 'cancelled',
+                  payment_status: 'cancelled',
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', existingBooking.id);
+            } catch (invErr) {
+              console.warn('[ORDER_STALE_INVALIDATION_WARN]:', invErr.message);
+            }
+          }
         }
       }
     }
 
-    // 6. Create ONECOOLIE booking and initial payment ledger record
+    // 6. Create ONECOOLIE booking and initial payment ledger record with the updated services
     let bookingRecordResult;
     try {
       bookingRecordResult = await createBookingRecordInDB(supabase, req.user.id, req.body);
@@ -189,23 +268,7 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    const { booking, paymentRecord, pricingResult } = bookingRecordResult;
-
-    // 7. Calculate Razorpay amount in integer paise
-    let amountInPaise;
-    try {
-      amountInPaise = formatRazorpayAmount(pricingResult.total);
-      if (!Number.isInteger(amountInPaise) || amountInPaise < 100) {
-        throw new Error(`Amount must be an integer of at least 100 paise. Calculated: ${amountInPaise}`);
-      }
-    } catch (pricingErr) {
-      console.error('PRICING_FAILURE:', pricingErr.message);
-      return res.status(400).json({
-        success: false,
-        stage: 'PRICING_FAILURE',
-        message: pricingErr.message || 'Invalid booking amount for online payment.'
-      });
-    }
+    const { booking, paymentRecord } = bookingRecordResult;
 
     // 8. Create Gateway order (Razorpay official SDK or Dev Test Order)
     let razorpayOrder = null;
@@ -296,6 +359,14 @@ exports.createOrder = async (req, res) => {
             updated_at: new Date().toISOString()
           })
           .eq('id', paymentRecord.id);
+
+        await supabase
+          .from('bookings')
+          .update({
+            order_id: orderIdToSave,
+            razorpay_order_id: orderIdToSave
+          })
+          .eq('id', booking.id);
 
         if (updateErr) {
           console.error('PAYMENT UPDATE ORDER ID ERROR:', updateErr);
@@ -586,6 +657,14 @@ exports.verifyPayment = async (req, res) => {
     const { booking, error: resolveErr } = await resolveBooking(supabase, booking_id);
     if (resolveErr || !booking) {
       return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    // Verify booking is not cancelled or superseded
+    if (booking.booking_status === 'cancelled' || booking.payment_status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification failed: This booking checkout session was cancelled or superseded by an updated booking.'
+      });
     }
 
     // Ensure authorization (passenger who owns the booking or admin)

@@ -628,6 +628,13 @@ export default function PassengerDashboard() {
     return journeyProtectionOptedIn ? Number((base + 0.5).toFixed(2)) : base;
   };
 
+  // Invalidate any incomplete cached payment session whenever passenger modifies services or options
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('onecoolie_active_payment');
+    } catch (e) {}
+  }, [services, luggageCounts, journeyProtectionOptedIn]);
+
 
   const handleCardClick = (s, e) => {
     if (e.target.closest('button, select, input')) return;
@@ -782,6 +789,9 @@ export default function PassengerDashboard() {
   const handleNextStep = (targetStep) => {
     if (targetStep <= bookingStep) {
       setBookingStep(targetStep);
+      try {
+        sessionStorage.removeItem('onecoolie_active_payment');
+      } catch (e) {}
       return;
     }
     if (targetStep === 2) {
