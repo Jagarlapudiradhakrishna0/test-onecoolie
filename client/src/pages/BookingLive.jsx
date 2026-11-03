@@ -64,7 +64,7 @@ export default function BookingLive() {
   }, []);
 
   const activeBookings = (allBookings || []).filter((b) =>
-    ['pending', 'accepted', 'arrived', 'arriving', 'reached', 'in_progress', 'in_service', 'allocated', 'assigned'].includes((b.booking_status || b.status || '').toLowerCase())
+    ['pending', 'confirmed', 'accepted', 'arrived', 'arriving', 'reached', 'in_progress', 'in_service', 'allocated', 'assigned'].includes((b.booking_status || b.status || '').toLowerCase())
   );
 
   const [fetchError, setFetchError] = useState(null);

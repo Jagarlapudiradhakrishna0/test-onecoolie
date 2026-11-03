@@ -187,6 +187,7 @@ exports.getMyBookings = async (req, res) => {
     // Only bookings meeting confirmed/paid eligibility criteria appear in My Trips:
     // 1. Cash bookings: Created legitimately for Cash on Service.
     // 2. Online bookings: MUST have payment_status === 'paid' (or 'refunded' if legitimately cancelled).
+    // 3. Cancelled online bookings with payment/cancellation proof: Visible in booking history.
     // Unpaid, pending, abandoned, or failed online checkout attempts are strictly excluded.
     const confirmedBookings = (bookings || []).filter((b) => {
       if (!b) return false;
@@ -195,7 +196,20 @@ exports.getMyBookings = async (req, res) => {
         return true;
       }
       const payStatus = String(b.payment_status || '').toLowerCase();
-      return payStatus === 'paid' || payStatus === 'refunded';
+      if (payStatus === 'paid' || payStatus === 'refunded') {
+        return true;
+      }
+      const bStatus = String(b.booking_status || '').toLowerCase();
+      const hasPaidProof = Boolean(
+        b.payment_id ||
+        b.services?.paid_at ||
+        b.services?.cancellation ||
+        b.services?.razorpay_payment_id
+      );
+      if (bStatus === 'cancelled' && hasPaidProof) {
+        return true;
+      }
+      return false;
     });
 
     const result = confirmedBookings.map((b) =>
@@ -328,7 +342,20 @@ exports.getBookingById = async (req, res) => {
     }
 
     // Unpaid online booking security guard: do not expose unconfirmed checkout attempts
-    if (isPassenger && !isAdmin && isOnlinePayment(booking.payment_method) && booking.payment_status !== 'paid' && booking.payment_status !== 'refunded') {
+    const hasPaidProof = Boolean(
+      booking.payment_id ||
+      booking.services?.paid_at ||
+      booking.services?.cancellation ||
+      booking.services?.razorpay_payment_id
+    );
+    if (
+      isPassenger &&
+      !isAdmin &&
+      isOnlinePayment(booking.payment_method) &&
+      booking.payment_status !== 'paid' &&
+      booking.payment_status !== 'refunded' &&
+      !(booking.booking_status === 'cancelled' && hasPaidProof)
+    ) {
       return res.status(404).json({
         message: 'Booking not found or payment has not been completed.'
       });
@@ -1611,7 +1638,20 @@ exports.getBookingSummary = async (req, res) => {
     }
 
     // Unpaid online booking security guard: do not expose unconfirmed checkout attempts
-    if (isPassenger && !isAdmin && isOnlinePayment(booking.payment_method) && booking.payment_status !== 'paid' && booking.payment_status !== 'refunded') {
+    const hasPaidProof = Boolean(
+      booking.payment_id ||
+      booking.services?.paid_at ||
+      booking.services?.cancellation ||
+      booking.services?.razorpay_payment_id
+    );
+    if (
+      isPassenger &&
+      !isAdmin &&
+      isOnlinePayment(booking.payment_method) &&
+      booking.payment_status !== 'paid' &&
+      booking.payment_status !== 'refunded' &&
+      !(booking.booking_status === 'cancelled' && hasPaidProof)
+    ) {
       return res.status(404).json({
         success: false,
         message: 'Trip summary not found or payment has not been completed.'

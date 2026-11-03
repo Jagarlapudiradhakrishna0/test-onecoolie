@@ -10,14 +10,26 @@
  *           broadcast to assistants -> accepted -> arrives -> OTP verified -> completed -> earnings
  */
 
-const CASH_PAYMENT_METHODS = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery', 'cash_on_service', 'cash_on_delivery'];
+const CASH_PAYMENT_METHODS = [
+  'cash',
+  'cod',
+  'pay_on_arrival',
+  'pay_on_delivery',
+  'cash_on_service',
+  'cash on service',
+  'cash_on_delivery',
+  'cash on delivery',
+  'offline'
+];
 
 const ONLINE_PAYMENT_METHODS = [
   'upi',
   'online',
   'card',
   'netbanking',
-  'razorpay'
+  'razorpay',
+  'online payment (razorpay)',
+  'online payment'
 ];
 
 /**
@@ -37,7 +49,7 @@ function normalizePaymentMethod(method) {
  */
 function isCashPayment(method) {
   const normalized = normalizePaymentMethod(method);
-  return CASH_PAYMENT_METHODS.includes(normalized);
+  return CASH_PAYMENT_METHODS.includes(normalized) || normalized.includes('cash') || normalized === 'offline';
 }
 
 /**
@@ -47,7 +59,7 @@ function isCashPayment(method) {
  */
 function isOnlinePayment(method) {
   const normalized = normalizePaymentMethod(method);
-  return ONLINE_PAYMENT_METHODS.includes(normalized);
+  return ONLINE_PAYMENT_METHODS.includes(normalized) || normalized.includes('razorpay') || normalized.includes('online');
 }
 
 /**

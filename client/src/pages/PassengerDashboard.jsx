@@ -143,7 +143,7 @@ const SERVICE_META = [
   },
 ];
 
-const ACTIVE_STATUSES = ['pending', 'accepted', 'arriving', 'reached', 'in_service', 'assigned'];
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'accepted', 'arriving', 'reached', 'in_service', 'assigned'];
 
 
 
@@ -1020,11 +1020,27 @@ export default function PassengerDashboard() {
     return (bookings || []).filter((b) => {
       if (!b) return false;
       const method = String(b.payment_method || '').toLowerCase();
-      const isCash = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(method);
+      const isCash = [
+        'cash',
+        'cod',
+        'pay_on_arrival',
+        'pay_on_delivery',
+        'cash on service',
+        'cash_on_service'
+      ].includes(method) || method.includes('cash');
       if (isCash) return true;
       // Online bookings must be authoritatively paid (or refunded from cancellation)
       const pStatus = String(b.payment_status || '').toLowerCase();
-      return pStatus === 'paid' || pStatus === 'refunded';
+      if (pStatus === 'paid' || pStatus === 'refunded') return true;
+      const bStatus = String(b.booking_status || b.status || '').toLowerCase();
+      const hasPaidProof = Boolean(
+        b.payment_id ||
+        b.services?.paid_at ||
+        b.services?.cancellation ||
+        b.services?.razorpay_payment_id
+      );
+      if (bStatus === 'cancelled' && hasPaidProof) return true;
+      return false;
     });
   }, [bookings]);
 
