@@ -476,18 +476,61 @@ async function finalizeVerifiedRazorpayPayment(supabaseClient, {
     }
   }
 
-  // 5. Update booking payment_status to 'paid' (booking_status stays 'pending', assistant_id = null)
-  const { data: updatedBooking, error: bUpdateErr } = await supabaseClient
+  // 5. Update booking payment_status to 'paid' and confirm booking with actual Razorpay payment ID
+  const existingServices = (booking.services && typeof booking.services === 'object') ? booking.services : {};
+  const updatedServices = {
+    ...existingServices,
+    razorpay_order_id: orderId || paymentRecord?.gateway_order_id || null,
+    razorpay_payment_id: paymentId || paymentRecord?.gateway_payment_id || null,
+    payment_method_label: 'Online Payment (Razorpay)',
+    amount_paid: Number(paymentRecord?.amount || booking.total_price),
+    currency: paymentRecord?.currency || 'INR',
+    paid_at: nowIso
+  };
+
+  const bookingUpdateData = {
+    payment_status: 'paid',
+    payment_method: paymentRecord?.payment_method || booking.payment_method || 'online',
+    payment_id: paymentId || paymentRecord?.gateway_payment_id || booking.payment_id,
+    booking_status: 'confirmed',
+    services: updatedServices,
+    updated_at: nowIso
+  };
+
+  let { data: updatedBooking, error: bUpdateErr } = await supabaseClient
     .from('bookings')
-    .update({
-      payment_status: 'paid',
-      payment_method: paymentRecord?.payment_method || booking.payment_method || 'upi',
-      payment_id: updatedPayment?.id || booking.payment_id,
-      updated_at: nowIso
-    })
+    .update(bookingUpdateData)
     .eq('id', booking.id)
     .select('*, passenger:passenger_id(id, name, email, phone)')
     .single();
+
+  // If DB check constraint on booking_status does not yet include 'confirmed', safely fallback to 'pending'
+  if (bUpdateErr && bUpdateErr.message && bUpdateErr.message.includes('booking_status')) {
+    console.warn('Falling back booking_status to pending due to DB check constraint:', bUpdateErr.message);
+    bookingUpdateData.booking_status = 'pending';
+    const retryResult = await supabaseClient
+      .from('bookings')
+      .update(bookingUpdateData)
+      .eq('id', booking.id)
+      .select('*, passenger:passenger_id(id, name, email, phone)')
+      .single();
+    updatedBooking = retryResult.data;
+    bUpdateErr = retryResult.error;
+  }
+
+  // Also activate Journey Protection if attached
+  try {
+    await supabaseClient
+      .from('journey_protection')
+      .update({
+        status: 'active',
+        gateway_order_id: orderId || paymentRecord?.gateway_order_id || null,
+        gateway_payment_id: paymentId || paymentRecord?.gateway_payment_id || null,
+        activated_at: nowIso,
+        updated_at: nowIso
+      })
+      .eq('booking_id', booking.id);
+  } catch (protUpErr) {}
 
   if (bUpdateErr) {
     console.error('BOOKING FINALIZATION UPDATE ERROR:', bUpdateErr);
@@ -1131,10 +1174,33 @@ exports.getPaymentStatus = async (req, res) => {
     // Fetch authoritative payment ledger row
     const { data: payment } = await supabase
       .from('payments')
-      .select('id, amount, currency, payment_method, payment_gateway, gateway_order_id, status, failure_reason, created_at, updated_at')
+      .select('id, amount, currency, payment_method, payment_gateway, gateway_order_id, gateway_payment_id, status, failure_reason, created_at, updated_at')
       .eq('booking_id', booking.id)
       .order('created_at', { ascending: false })
       .maybeSingle();
+
+    // AUTO-RECOVERY RECONCILIATION:
+    // If the payment record shows paid, but the booking was temporarily stuck as pending, reconcile immediately!
+    if (payment && payment.status === 'paid' && booking.payment_status !== 'paid') {
+      try {
+        await supabase
+          .from('bookings')
+          .update({
+            payment_status: 'paid',
+            booking_status: 'confirmed',
+            payment_id: payment.gateway_payment_id || booking.payment_id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', booking.id);
+        booking.payment_status = 'paid';
+        booking.booking_status = 'confirmed';
+        if (payment.gateway_payment_id) {
+          booking.payment_id = payment.gateway_payment_id;
+        }
+      } catch (syncErr) {
+        console.warn('Auto-heal payment sync warning:', syncErr.message);
+      }
+    }
 
     const formattedBooking = formatBooking(booking, { includeOTP: true });
 
@@ -1149,6 +1215,8 @@ exports.getPaymentStatus = async (req, res) => {
       currency: payment ? payment.currency : 'INR',
       booking_status: booking.booking_status,
       gateway_order_id: payment?.gateway_order_id || null,
+      gateway_payment_id: payment?.gateway_payment_id || null,
+      razorpay_payment_id: payment?.gateway_payment_id || null,
       failure_reason: payment?.failure_reason || null,
       booking: formattedBooking
     });
@@ -1359,6 +1427,62 @@ exports.notifyPaymentVerified = (booking) => {
     }
   } catch (err) {
     console.warn('Phase 2 broadcast hook notice:', err.message);
+  }
+};
+
+/**
+ * POST /api/payments/cancel-checkout
+ *
+ * Records payment checkout cancellation or failure when the passenger closes the gateway modal
+ * or encounters a client-side payment failure.
+ */
+exports.cancelCheckout = async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+
+    const { booking_id, reason } = req.body;
+    if (!booking_id) {
+      return res.status(400).json({ message: 'Booking ID is required.' });
+    }
+
+    const { booking, error: resolveErr } = await resolveBooking(supabase, booking_id);
+    if (resolveErr || !booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    if (booking.passenger_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+
+    // Never cancel an already paid booking
+    if (booking.payment_status === 'paid') {
+      return res.json({
+        success: true,
+        message: 'Payment was already verified and captured.'
+      });
+    }
+
+    const failureReason = reason || 'Payment cancelled or modal closed by passenger';
+
+    // Update payment record to cancelled / failed
+    await supabase
+      .from('payments')
+      .update({
+        status: 'cancelled',
+        failure_reason: failureReason,
+        updated_at: new Date().toISOString()
+      })
+      .eq('booking_id', booking.id);
+
+    return res.json({
+      success: true,
+      message: 'Checkout cancellation recorded.'
+    });
+  } catch (err) {
+    console.error('CANCEL CHECKOUT SERVER ERROR:', err);
+    return res.status(500).json({ message: 'Server error cancelling checkout.' });
   }
 };
 

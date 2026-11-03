@@ -10,7 +10,7 @@
  *           broadcast to assistants -> accepted -> arrives -> OTP verified -> completed -> earnings
  */
 
-const CASH_PAYMENT_METHODS = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'];
+const CASH_PAYMENT_METHODS = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery', 'cash_on_service', 'cash_on_delivery'];
 
 const ONLINE_PAYMENT_METHODS = [
   'upi',
@@ -71,11 +71,20 @@ function isValidPaymentMethod(method) {
  * @param {object} booking
  * @returns {boolean}
  */
-function isBookingAvailableToAssistants(booking) {
-  if (!booking) return false;
+function isBookingAvailableToAssistants(bookingOrStatus, paymentMethodArg, paymentStatusArg) {
+  if (!bookingOrStatus) return false;
+
+  let booking = bookingOrStatus;
+  if (typeof bookingOrStatus === 'string') {
+    booking = {
+      booking_status: bookingOrStatus,
+      payment_method: paymentMethodArg,
+      payment_status: paymentStatusArg
+    };
+  }
 
   const bookingStatus = String(booking.booking_status || '').toLowerCase();
-  if (bookingStatus !== 'pending') {
+  if (!['pending', 'confirmed'].includes(bookingStatus)) {
     return false;
   }
 
@@ -88,7 +97,7 @@ function isBookingAvailableToAssistants(booking) {
   const paymentStatus = String(booking.payment_status || '').toLowerCase();
 
   if (isCashPayment(method)) {
-    // Cash bookings are available while pending
+    // Cash bookings are available while pending or confirmed
     return true;
   }
 

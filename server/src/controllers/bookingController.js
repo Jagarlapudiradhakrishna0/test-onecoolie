@@ -183,7 +183,22 @@ exports.getMyBookings = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    const result = (bookings || []).map((b) =>
+    // STRICT PAYMENT & BOOKING CONFIRMATION FILTER FOR MY TRIPS:
+    // Only bookings meeting confirmed/paid eligibility criteria appear in My Trips:
+    // 1. Cash bookings: Created legitimately for Cash on Service.
+    // 2. Online bookings: MUST have payment_status === 'paid' (or 'refunded' if legitimately cancelled).
+    // Unpaid, pending, abandoned, or failed online checkout attempts are strictly excluded.
+    const confirmedBookings = (bookings || []).filter((b) => {
+      if (!b) return false;
+      const method = normalizePaymentMethod(b.payment_method);
+      if (isCashPayment(method)) {
+        return true;
+      }
+      const payStatus = String(b.payment_status || '').toLowerCase();
+      return payStatus === 'paid' || payStatus === 'refunded';
+    });
+
+    const result = confirmedBookings.map((b) =>
       formatBooking(b, { includeOTP: true })
     );
 
@@ -309,6 +324,13 @@ exports.getBookingById = async (req, res) => {
     ) {
       return res.status(403).json({
         message: 'You are not authorized to view this booking.'
+      });
+    }
+
+    // Unpaid online booking security guard: do not expose unconfirmed checkout attempts
+    if (isPassenger && !isAdmin && isOnlinePayment(booking.payment_method) && booking.payment_status !== 'paid' && booking.payment_status !== 'refunded') {
+      return res.status(404).json({
+        message: 'Booking not found or payment has not been completed.'
       });
     }
 
@@ -1585,6 +1607,14 @@ exports.getBookingSummary = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to view this trip summary.'
+      });
+    }
+
+    // Unpaid online booking security guard: do not expose unconfirmed checkout attempts
+    if (isPassenger && !isAdmin && isOnlinePayment(booking.payment_method) && booking.payment_status !== 'paid' && booking.payment_status !== 'refunded') {
+      return res.status(404).json({
+        success: false,
+        message: 'Trip summary not found or payment has not been completed.'
       });
     }
 

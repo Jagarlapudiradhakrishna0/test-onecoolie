@@ -556,6 +556,33 @@ export default function TripSummaryPage() {
                 </span>
               </div>
 
+              {(booking.razorpay_payment_id || (booking.payment_id && !booking.payment_id.includes('-'))) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500 font-medium">Razorpay Payment ID</span>
+                  <span className="font-mono text-[11px] font-bold text-emerald-700 select-all">
+                    {booking.razorpay_payment_id || booking.payment_id}
+                  </span>
+                </div>
+              )}
+
+              {(booking.razorpay_order_id || booking.order_id) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500 font-medium">Razorpay Order ID</span>
+                  <span className="font-mono text-[11px] text-zinc-700 select-all">
+                    {booking.razorpay_order_id || booking.order_id}
+                  </span>
+                </div>
+              )}
+
+              {booking.currency && (
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500 font-medium">Currency</span>
+                  <span className="font-bold text-zinc-900">
+                    {booking.currency || 'INR'}
+                  </span>
+                </div>
+              )}
+
               {booking.payment_id && (
                 <div className="flex items-center justify-between">
                   <span className="text-zinc-500 font-medium">Transaction ID</span>

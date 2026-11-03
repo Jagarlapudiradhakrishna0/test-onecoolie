@@ -15,7 +15,8 @@ const {
   getPaymentStatus,
   getBookingRefunds,
   getPaymentByBookingId,
-  getPaymentById
+  getPaymentById,
+  cancelCheckout
 } = require('../controllers/paymentController');
 
 const { paymentOrderLimiter, paymentVerifyLimiter } = require('../middleware/financialRateLimiter');
@@ -31,6 +32,9 @@ router.post('/create-order', paymentOrderLimiter, protect, createOrder);
 
 // Protected Razorpay payment verification (Phase 2B/2C & 5)
 router.post('/verify', paymentVerifyLimiter, protect, verifyPayment);
+
+// Protected Razorpay payment cancellation / window close handler
+router.post('/cancel-checkout', protect, cancelCheckout);
 
 // Protected payment recovery & status check (Phase 2C)
 router.get('/:bookingId/status', protect, getPaymentStatus);

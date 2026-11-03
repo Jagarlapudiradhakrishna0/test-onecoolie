@@ -333,7 +333,13 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
           ondismiss: function () {
             if (isMountedRef.current) {
               setProcessing(false);
-              toast('Checkout was closed. You can retry anytime.', { icon: 'ℹ️' });
+              const cancelMsg = 'Payment was not completed. Your booking has not been confirmed. Please try again.';
+              setPaymentError(cancelMsg);
+              toast.error(cancelMsg);
+              axios.post('/payments/cancel-checkout', {
+                booking_id: targetBookingId,
+                reason: 'Checkout window closed by passenger'
+              }).catch(() => {});
             }
           }
         }
@@ -342,8 +348,13 @@ export default function PaymentModal({ open, total = 0, onClose, onPaid, booking
       const rzpInstance = new window.Razorpay(options);
       rzpInstance.on('payment.failed', function (resp) {
         const desc = resp?.error?.description || 'Transaction cancelled or failed at gateway';
-        setPaymentError(`Payment failed: ${desc}`);
-        toast.error(`Payment failed: ${desc}`);
+        const cancelMsg = 'Payment was not completed. Your booking has not been confirmed. Please try again.';
+        setPaymentError(`${cancelMsg} (${desc})`);
+        toast.error(cancelMsg);
+        axios.post('/payments/cancel-checkout', {
+          booking_id: targetBookingId,
+          reason: `Gateway failure: ${desc}`
+        }).catch(() => {});
         if (isMountedRef.current) setProcessing(false);
       });
 

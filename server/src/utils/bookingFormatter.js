@@ -45,6 +45,8 @@
  *
  * If the DB already stores an object (future-proof), we pass it through.
  */
+const { isCashPayment, isOnlinePayment } = require('./paymentClassification');
+
 function parseServices(serviceField) {
   // Already an object → return as-is
   if (serviceField && typeof serviceField === 'object' && !Array.isArray(serviceField)) {
@@ -158,11 +160,22 @@ function formatBooking(booking, { includeOTP = false } = {}) {
 
     // ─── Payment ─────────────────────────────────────────────────────────────
     payment_status: booking.payment_status || 'pending',
-    payment_method: booking.payment_method || null,
-    payment_id: booking.payment_id || null,
+    payment_method: isCashPayment(booking.payment_method)
+      ? 'Cash on Service'
+      : (booking.services?.payment_method_label || (isOnlinePayment(booking.payment_method) ? 'Online Payment (Razorpay)' : booking.payment_method || null)),
+    payment_id: (String(booking.payment_id || '').startsWith('pay_'))
+      ? booking.payment_id
+      : (booking.services?.razorpay_payment_id || booking.payment?.gateway_payment_id || booking.payment_id || null),
+    razorpay_payment_id: booking.razorpay_payment_id || booking.services?.razorpay_payment_id || (String(booking.payment_id || '').startsWith('pay_') ? booking.payment_id : booking.payment?.gateway_payment_id || null),
+    razorpay_order_id: booking.razorpay_order_id || booking.order_id || booking.services?.razorpay_order_id || booking.payment?.gateway_order_id || null,
+    amount_paid: Number(booking.services?.amount_paid ?? (booking.payment_status === 'paid' ? booking.total_price : 0)),
+    currency: booking.services?.currency || booking.payment?.currency || 'INR',
+    payment_date: booking.services?.paid_at || booking.paid_at || (booking.payment_status === 'paid' ? (booking.updated_at || booking.created_at) : null),
 
     // ─── Status ───────────────────────────────────────────────────────────────
-    booking_status: booking.booking_status || 'pending',
+    booking_status: (booking.booking_status === 'pending' && booking.payment_status === 'paid')
+      ? 'confirmed'
+      : (booking.booking_status || 'pending'),
     assistant_status: booking.assistant_status || 'pending',
 
     // ─── SOS Emergency ────────────────────────────────────────────────────────

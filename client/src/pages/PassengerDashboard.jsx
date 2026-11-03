@@ -1006,21 +1006,31 @@ export default function PassengerDashboard() {
     }
   }, [user?.id, bookings]);
 
+  const allDisplayBookings = useMemo(() => {
+    return (bookings || []).filter((b) => {
+      if (!b) return false;
+      const method = String(b.payment_method || '').toLowerCase();
+      const isCash = ['cash', 'cod', 'pay_on_arrival', 'pay_on_delivery'].includes(method);
+      if (isCash) return true;
+      // Online bookings must be authoritatively paid (or refunded from cancellation)
+      const pStatus = String(b.payment_status || '').toLowerCase();
+      return pStatus === 'paid' || pStatus === 'refunded';
+    });
+  }, [bookings]);
+
   const active = useMemo(() => {
-    return bookings.filter((b) => {
+    return allDisplayBookings.filter((b) => {
       const s = (b.booking_status || b.status || '').toLowerCase();
       return ACTIVE_STATUSES.includes(s);
     });
-  }, [bookings]);
+  }, [allDisplayBookings]);
 
   const history = useMemo(() => {
-    return bookings.filter((b) => {
+    return allDisplayBookings.filter((b) => {
       const s = (b.booking_status || b.status || '').toLowerCase();
       return !ACTIVE_STATUSES.includes(s);
     });
-  }, [bookings]);
-
-  const allDisplayBookings = useMemo(() => bookings || [], [bookings]);
+  }, [allDisplayBookings]);
 
   const isOngoingTrip = (b) => {
     const status = (b.booking_status || b.status || '').toLowerCase();
@@ -3480,6 +3490,11 @@ export default function PassengerDashboard() {
                               <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
                                 {t('trips.assistanceFee')}
                               </div>
+                              {b.razorpay_payment_id && (
+                                <div className="text-[10px] font-mono text-emerald-600 font-bold mt-1 select-all" title="Razorpay Payment ID">
+                                  Ref: {b.razorpay_payment_id}
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -3819,6 +3834,11 @@ export default function PassengerDashboard() {
                               <div className="text-[11px] sm:text-xs text-zinc-400 font-semibold mt-1">
                                 {t('trips.assistanceFee')}
                               </div>
+                              {b.razorpay_payment_id && (
+                                <div className="text-[10px] font-mono text-emerald-600 font-bold mt-1 select-all" title="Razorpay Payment ID">
+                                  Ref: {b.razorpay_payment_id}
+                                </div>
+                              )}
                             </div>
 
                             {/* Bottom: View Trip + Quick Actions */}

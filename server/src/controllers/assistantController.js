@@ -138,7 +138,7 @@ exports.getAvailableBookings = async (req, res) => {
       .from('bookings')
       .select('*, passenger:passenger_id(id, name, email, phone)')
       .eq('station_code', user.station_code)
-      .eq('booking_status', 'pending')
+      .in('booking_status', ['pending', 'confirmed'])
       .is('assistant_id', null)
       .gte('created_at', new Date(Date.now() - FRESH_WINDOW_MS).toISOString())
       .order('created_at', { ascending: false });
@@ -249,7 +249,7 @@ exports.acceptBooking = async (req, res) => {
         updated_at: nowIso,
       })
       .eq('id', targetBooking.id)
-      .eq('booking_status', 'pending')  // atomic guard: only accept pending jobs
+      .in('booking_status', ['pending', 'confirmed'])  // atomic guard: only accept pending jobs
       .select('*, passenger:passenger_id(id, name, email, phone), assistant:assistant_id(id, name, email, phone, station_code)')
       .single();
 

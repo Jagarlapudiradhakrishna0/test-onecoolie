@@ -1662,6 +1662,24 @@ export default function ActiveBooking({ booking, onUpdate, distance = 500 }) {
                 <span className="font-bold text-zinc-900">{paymentMethod}</span>
               </div>
 
+              {(booking?.razorpay_payment_id || (booking?.payment_id && !booking?.payment_id?.includes('-'))) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500 font-medium">Razorpay Payment ID</span>
+                  <span className="font-mono text-[11px] font-bold text-emerald-700 select-all">
+                    {booking?.razorpay_payment_id || booking?.payment_id}
+                  </span>
+                </div>
+              )}
+
+              {(booking?.razorpay_order_id || booking?.order_id) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500 font-medium">Razorpay Order ID</span>
+                  <span className="font-mono text-[11px] text-zinc-700 select-all">
+                    {booking?.razorpay_order_id || booking?.order_id}
+                  </span>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500 font-medium">Paid on</span>
                 <span className="font-bold text-zinc-900">{paidOnFormatted}</span>
